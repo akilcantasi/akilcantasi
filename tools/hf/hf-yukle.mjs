@@ -9695,7 +9695,8 @@ async function main() {
     await uploadFile({
       repo: REPO,
       accessToken: token,
-      file: { path: "README.md", content: new Blob([card(done, dirOf)]) },
+      // Veri kartı depodaki bütün paketleri listeler (yalnız bu çalışmada yüklenenleri değil)
+      file: { path: "README.md", content: new Blob([card(manifest.packs.filter((p) => updates.has(p.id) || p.urls.some((u) => u.startsWith(HF_BASE))), dirOf)]) },
       commitTitle: "Veri kart\u0131"
     });
     for (const mp of mpaths) {

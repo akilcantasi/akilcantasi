@@ -247,7 +247,8 @@ async function main() {
     await uploadFile({
       repo: REPO,
       accessToken: token,
-      file: { path: 'README.md', content: new Blob([card(done, dirOf)]) },
+      // Veri kartı depodaki bütün paketleri listeler (yalnız bu çalışmada yüklenenleri değil)
+      file: { path: 'README.md', content: new Blob([card((manifest.packs as Entry[]).filter((p) => updates.has(p.id) || p.urls.some((u) => u.startsWith(HF_BASE))), dirOf)]) },
       commitTitle: 'Veri kartı',
     });
     // Katalog: Hugging Face adresi öne; ölü akilcantasi.com adresleri çıkar
