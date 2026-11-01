@@ -1,0 +1,1162 @@
+{
+  "version": 2,
+  "updated": "2026-11-01",
+  "note": "Boyutlar yaklaşık (sizeApprox). sha256 boş ise indirme sonrası doğrulama yapılmaz. Kiwix dosya adlarındaki _2026-10 tarihi yayın öncesi güncel sürümle değiştirilmelidir. Fener modelleri: 2 GB'ı aşan modeller llama-gguf-split ile parçalara bölünür; parçalar aynı 'group' değerini taşır ve hepsi kurulunca tek model olarak kullanılır. 'ses' paketleri Whisper ONNX dosyalarını içeren tek bir tar dosyasıdır; içerik ve kaynak adresleri 'contents' alanındadır. Ayrıntı: docs/FENER_MODELLER.md",
+  "packs": [
+    {
+      "id": "wikipedia-tr-mini",
+      "kind": "zim",
+      "name": "Vikipedi Türkçe (özet)",
+      "desc": "Tüm Türkçe Vikipedi maddelerinin giriş bölümleri, resimsiz. En küçük ve en hızlı seçenek.",
+      "file": "wikipedia_tr_all_mini_2026-09.zim",
+      "size": 1220962214,
+      "sizeApprox": false,
+      "sha256": "62a003593d9d152162fb0e4d6eb7fbe2927768b8f0f7bcd73df17c17af5bdc05",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_all_mini_2026-09.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_all_mini_2026-09.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_all_mini_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi",
+      "featured": true
+    },
+    {
+      "id": "wikipedia-tr-nopic",
+      "kind": "zim",
+      "name": "Vikipedi Türkçe (tam metin)",
+      "desc": "Tüm Türkçe Vikipedi maddelerinin tam metni, resimsiz.",
+      "file": "wikipedia_tr_all_nopic_2026-09.zim",
+      "size": 3746434106,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_all_nopic_2026-09.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_all_nopic_2026-09.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_all_nopic_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "wikipedia-tr-maxi",
+      "kind": "zim",
+      "name": "Vikipedi Türkçe (resimli)",
+      "desc": "Tüm Türkçe Vikipedi, resimlerle birlikte. Bilgi noktası (bilgisayar) için önerilir.",
+      "file": "wikipedia_tr_all_maxi_2026-09.zim",
+      "size": 8907256395,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_all_maxi_2026-09.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_all_maxi_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "wikimed-en-nopic",
+      "kind": "zim",
+      "name": "WikiMed tıp ansiklopedisi (İngilizce, resimsiz)",
+      "desc": "Vikipedi'nin tıp maddeleri: hastalıklar, ilaçlar, anatomi, ilk yardım. Türkçe sürümü yok.",
+      "file": "wikipedia_en_medicine_nopic_2026-10.zim",
+      "size": 1047708415,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_nopic_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_nopic_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "wikimed-en-maxi",
+      "kind": "zim",
+      "name": "WikiMed tıp ansiklopedisi (İngilizce, resimli)",
+      "desc": "WikiMed'in resimli sürümü. Resimsiz sürümü indirdiyseniz buna gerek yok.",
+      "file": "wikipedia_en_medicine_maxi_2026-10.zim",
+      "size": 1864210320,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "mdwiki-en-maxi",
+      "kind": "zim",
+      "name": "MDWiki tıp ansiklopedisi (İngilizce)",
+      "desc": "Doktorların düzenlediği tıp ansiklopedisi (WikiProjectMed); WikiMed'den daha klinik.",
+      "file": "mdwiki_en_all_maxi_2025-11.zim",
+      "size": 2302838768,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/other/mdwiki_en_all_maxi_2025-11.zim",
+        "https://download.kiwix.org/zim/other/mdwiki_en_all_maxi_2025-11.zim"
+      ],
+      "license": "CC BY-SA 4.0 (WikiProjectMed / mdwiki katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "nhs-ilac",
+      "kind": "zim",
+      "name": "İlaç rehberi — NHS (İngilizce)",
+      "desc": "İngiltere sağlık servisinin ilaç rehberi: ne işe yarar, nasıl kullanılır, yan etkiler. Etken madde adıyla arayın (ör. paracetamol).",
+      "file": "nhs.uk_en_medicines_2026-09b.zim",
+      "size": 15322705,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/nhs.uk_en_medicines_2026-09b.zim",
+        "https://mirror.download.kiwix.org/zim/zimit/nhs.uk_en_medicines_2026-09b.zim",
+        "https://download.kiwix.org/zim/zimit/nhs.uk_en_medicines_2026-09b.zim"
+      ],
+      "license": "Open Government Licence v3.0 (NHS)",
+      "source": "Kiwix — https://download.kiwix.org/zim/zimit/",
+      "shelf": "saglik",
+      "featured": true
+    },
+    {
+      "id": "sahra-tibbi",
+      "kind": "zim",
+      "name": "Askeri sahra tıbbı el kitapları (İngilizce)",
+      "desc": "ABD ordusunun sahada travma, yaralı bakımı ve hayatta kalma tıbbı kılavuzları (PDF).",
+      "file": "fas-military-medicine_en_2025-06.zim",
+      "size": 81455189,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/fas-military-medicine_en_2025-06.zim",
+        "https://mirror.download.kiwix.org/zim/zimit/fas-military-medicine_en_2025-06.zim",
+        "https://download.kiwix.org/zim/zimit/fas-military-medicine_en_2025-06.zim"
+      ],
+      "license": "ABD kamu belgeleri (kamu malı), FAS arşivi",
+      "source": "Kiwix — https://download.kiwix.org/zim/zimit/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "kitap-tip",
+      "kind": "zim",
+      "name": "Tıp kitaplığı (İngilizce)",
+      "desc": "Temel tıp, ilk yardım ve sağlık el kitapları (PDF).",
+      "file": "zimgit-medicine_en_2024-08.zim",
+      "size": 70179585,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-medicine_en_2024-08.zim",
+        "https://mirror.download.kiwix.org/zim/other/zimgit-medicine_en_2024-08.zim",
+        "https://download.kiwix.org/zim/other/zimgit-medicine_en_2024-08.zim"
+      ],
+      "license": "Belgelerin kendi lisansları (çoğu kamu malı / serbest)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "kitap-su",
+      "kind": "zim",
+      "name": "Su arıtma kitaplığı (İngilizce)",
+      "desc": "İçme suyu bulma, arıtma ve saklama üzerine el kitapları (PDF).",
+      "file": "zimgit-water_en_2024-08.zim",
+      "size": 20924451,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-water_en_2024-08.zim",
+        "https://mirror.download.kiwix.org/zim/other/zimgit-water_en_2024-08.zim",
+        "https://download.kiwix.org/zim/other/zimgit-water_en_2024-08.zim"
+      ],
+      "license": "Belgelerin kendi lisansları (çoğu kamu malı / serbest)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "hayatta",
+      "featured": true
+    },
+    {
+      "id": "kitap-dugum",
+      "kind": "zim",
+      "name": "Düğümler kitaplığı (İngilizce)",
+      "desc": "Düğüm çeşitleri ve kullanım alanları (PDF).",
+      "file": "zimgit-knots_en_2024-08.zim",
+      "size": 27945133,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-knots_en_2024-08.zim",
+        "https://mirror.download.kiwix.org/zim/other/zimgit-knots_en_2024-08.zim",
+        "https://download.kiwix.org/zim/other/zimgit-knots_en_2024-08.zim"
+      ],
+      "license": "Belgelerin kendi lisansları (çoğu kamu malı / serbest)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "hayatta"
+    },
+    {
+      "id": "kitap-gida",
+      "kind": "zim",
+      "name": "Gıda hazırlama ve saklama kitaplığı (İngilizce)",
+      "desc": "Konserve, kurutma ve uzun süreli gıda saklama (PDF).",
+      "file": "zimgit-food-preparation_en_2025-04.zim",
+      "size": 97822565,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-food-preparation_en_2025-04.zim",
+        "https://mirror.download.kiwix.org/zim/other/zimgit-food-preparation_en_2025-04.zim",
+        "https://download.kiwix.org/zim/other/zimgit-food-preparation_en_2025-04.zim"
+      ],
+      "license": "Belgelerin kendi lisansları (çoğu kamu malı / serbest)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "hayatta",
+      "featured": true
+    },
+    {
+      "id": "kitap-afet-sonrasi",
+      "kind": "zim",
+      "name": "Afet sonrası kitaplığı (İngilizce)",
+      "desc": "Barınak, enerji, tarım, sağlık ve yeniden yapılanma üzerine kitaplar (PDF).",
+      "file": "zimgit-post-disaster_en_2024-05.zim",
+      "size": 644665513,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-post-disaster_en_2024-05.zim",
+        "https://mirror.download.kiwix.org/zim/other/zimgit-post-disaster_en_2024-05.zim",
+        "https://download.kiwix.org/zim/other/zimgit-post-disaster_en_2024-05.zim"
+      ],
+      "license": "Belgelerin kendi lisansları (çoğu kamu malı / serbest)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "hayatta"
+    },
+    {
+      "id": "readygov",
+      "kind": "zim",
+      "name": "Ready.gov afet hazırlık rehberleri (İngilizce)",
+      "desc": "ABD'nin resmi afet hazırlık sitesi: deprem, sel, yangın, salgın, kesintiler.",
+      "file": "ready.gov_en_all_2026-10.zim",
+      "size": 2063895408,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/zimit/ready.gov_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/zimit/ready.gov_en_all_2026-10.zim"
+      ],
+      "license": "ABD kamu içeriği (kamu malı)",
+      "source": "Kiwix — https://download.kiwix.org/zim/zimit/",
+      "shelf": "hayatta"
+    },
+    {
+      "id": "lowtech",
+      "kind": "zim",
+      "name": "Low-tech Magazine (İngilizce)",
+      "desc": "Elektriksiz ve düşük teknolojili pratik çözümler: ısınma, aydınlatma, enerji.",
+      "file": "solar.lowtechmagazine.com_mul_all_2025-01.zim",
+      "size": 700555670,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/zimit/solar.lowtechmagazine.com_mul_all_2025-01.zim",
+        "https://download.kiwix.org/zim/zimit/solar.lowtechmagazine.com_mul_all_2025-01.zim"
+      ],
+      "license": "CC BY-NC-SA (Low-tech Magazine)",
+      "source": "Kiwix — https://download.kiwix.org/zim/zimit/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "appropedia",
+      "kind": "zim",
+      "name": "Appropedia — uygun teknoloji (İngilizce)",
+      "desc": "Su, sanitasyon, enerji, barınak ve tarım için kendin yap çözümleri.",
+      "file": "appropedia_en_all_maxi_2026-02.zim",
+      "size": 581641351,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/other/appropedia_en_all_maxi_2026-02.zim",
+        "https://download.kiwix.org/zim/other/appropedia_en_all_maxi_2026-02.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Appropedia katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/other/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "ifixit-tr",
+      "kind": "zim",
+      "name": "iFixit tamir kılavuzları (Türkçe)",
+      "desc": "Telefon, bilgisayar, ev aleti ve araç tamiri için adım adım resimli kılavuzlar.",
+      "file": "ifixit_tr_all_2026-03.zim",
+      "size": 3633665919,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/ifixit_tr_all_2026-03.zim",
+        "https://mirror.download.kiwix.org/zim/ifixit/ifixit_tr_all_2026-03.zim",
+        "https://download.kiwix.org/zim/ifixit/ifixit_tr_all_2026-03.zim"
+      ],
+      "license": "CC BY-NC-SA 3.0 (iFixit)",
+      "source": "Kiwix — https://download.kiwix.org/zim/ifixit/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "ifixit-en",
+      "kind": "zim",
+      "name": "iFixit tamir kılavuzları (İngilizce)",
+      "desc": "iFixit'in İngilizce arşivi; Türkçe sürümden daha çok kılavuz içerir.",
+      "file": "ifixit_en_all_2025-12.zim",
+      "size": 3570695757,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/ifixit/ifixit_en_all_2025-12.zim",
+        "https://download.kiwix.org/zim/ifixit/ifixit_en_all_2025-12.zim"
+      ],
+      "license": "CC BY-NC-SA 3.0 (iFixit)",
+      "source": "Kiwix — https://download.kiwix.org/zim/ifixit/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-diy",
+      "kind": "zim",
+      "name": "Ev tamiri soru-cevap (İngilizce)",
+      "desc": "Stack Exchange ev tamiri: elektrik, tesisat, yapı.",
+      "file": "diy.stackexchange.com_en_all_2026-10.zim",
+      "size": 2086024326,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/diy.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/diy.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-bahce",
+      "kind": "zim",
+      "name": "Bahçecilik soru-cevap (İngilizce)",
+      "desc": "Sebze yetiştirme, toprak ve bitki hastalıkları.",
+      "file": "gardening.stackexchange.com_en_all_2026-10.zim",
+      "size": 933097375,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/gardening.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/gardening.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-yemek",
+      "kind": "zim",
+      "name": "Yemek ve gıda güvenliği soru-cevap (İngilizce)",
+      "desc": "Pişirme teknikleri, saklama ve gıda güvenliği.",
+      "file": "cooking.stackexchange.com_en_all_2026-10.zim",
+      "size": 238098128,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/cooking.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/cooking.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-telsiz",
+      "kind": "zim",
+      "name": "Amatör telsiz soru-cevap (İngilizce)",
+      "desc": "Telsiz kurulumu, anten ve haberleşme.",
+      "file": "ham.stackexchange.com_en_all_2026-10.zim",
+      "size": 77108284,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/ham.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/ham.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-arac",
+      "kind": "zim",
+      "name": "Araç bakımı soru-cevap (İngilizce)",
+      "desc": "Motor, fren ve araç arızaları.",
+      "file": "mechanics.stackexchange.com_en_all_2026-10.zim",
+      "size": 341672133,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/mechanics.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/mechanics.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-doga",
+      "kind": "zim",
+      "name": "Doğa ve kamp soru-cevap (İngilizce)",
+      "desc": "Kamp, yürüyüş, doğada yön bulma ve hayatta kalma.",
+      "file": "outdoors.stackexchange.com_en_all_2026-10.zim",
+      "size": 141820374,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/outdoors.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/outdoors.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "hayatta"
+    },
+    {
+      "id": "se-surdurulebilir",
+      "kind": "zim",
+      "name": "Sürdürülebilirlik soru-cevap (İngilizce)",
+      "desc": "Enerji, su ve kaynak tasarrufu.",
+      "file": "sustainability.stackexchange.com_en_all_2026-10.zim",
+      "size": 27687333,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/sustainability.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/sustainability.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "se-tip",
+      "kind": "zim",
+      "name": "Tıp bilimleri soru-cevap (İngilizce)",
+      "desc": "Hastalıklar, ilaçlar ve tedaviler üzerine kaynaklı yanıtlar.",
+      "file": "medicalsciences.stackexchange.com_en_all_2026-10.zim",
+      "size": 60659941,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/stack_exchange/medicalsciences.stackexchange.com_en_all_2026-10.zim",
+        "https://download.kiwix.org/zim/stack_exchange/medicalsciences.stackexchange.com_en_all_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Stack Exchange katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/stack_exchange/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "vikisozluk-tr",
+      "kind": "zim",
+      "name": "Vikisözlük (Türkçe, resimsiz)",
+      "desc": "Türkçe sözlük: anlamlar, eş anlamlılar, çeviriler.",
+      "file": "wiktionary_tr_all_nopic_2026-10.zim",
+      "size": 812544663,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wiktionary_tr_all_nopic_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wiktionary/wiktionary_tr_all_nopic_2026-10.zim",
+        "https://download.kiwix.org/zim/wiktionary/wiktionary_tr_all_nopic_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikisözlük katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wiktionary/",
+      "shelf": "dil"
+    },
+    {
+      "id": "vikikitap-tr",
+      "kind": "zim",
+      "name": "Vikikitap (Türkçe)",
+      "desc": "Türkçe ders kitapları ve el kitapları.",
+      "file": "wikibooks_tr_all_maxi_2026-09.zim",
+      "size": 26888953,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikibooks_tr_all_maxi_2026-09.zim",
+        "https://mirror.download.kiwix.org/zim/wikibooks/wikibooks_tr_all_maxi_2026-09.zim",
+        "https://download.kiwix.org/zim/wikibooks/wikibooks_tr_all_maxi_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikikitap katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikibooks/",
+      "shelf": "kitap",
+      "featured": true
+    },
+    {
+      "id": "vikikaynak-tr",
+      "kind": "zim",
+      "name": "Vikikaynak (Türkçe, resimsiz)",
+      "desc": "Türkçe kaynak metinler: kanunlar, tarihî belgeler, edebî eserler.",
+      "file": "wikisource_tr_all_nopic_2026-10.zim",
+      "size": 46015182,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikisource_tr_all_nopic_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikisource/wikisource_tr_all_nopic_2026-10.zim",
+        "https://download.kiwix.org/zim/wikisource/wikisource_tr_all_nopic_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 / kamu malı (Vikikaynak)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikisource/",
+      "shelf": "kitap",
+      "featured": true
+    },
+    {
+      "id": "wikivoyage-en",
+      "kind": "zim",
+      "name": "Wikivoyage gezi rehberi (İngilizce, resimsiz)",
+      "desc": "Şehir ve bölge rehberleri: ulaşım, konaklama, sağlık ve güvenlik bilgileri.",
+      "file": "wikivoyage_en_all_nopic_2026-09.zim",
+      "size": 272495142,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikivoyage/wikivoyage_en_all_nopic_2026-09.zim",
+        "https://download.kiwix.org/zim/wikivoyage/wikivoyage_en_all_nopic_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Wikivoyage katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikivoyage/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "wikipedia-en-nopic",
+      "kind": "zim",
+      "name": "Wikipedia (İngilizce, resimsiz)",
+      "desc": "İngilizce Vikipedi'nin tamamı, resimsiz (52 GB). Telefon için değil; bilgi noktası bilgisayarı ya da Raspberry Pi için.",
+      "file": "wikipedia_en_all_nopic_2026-06.zim",
+      "size": 52690706555,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-06.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-06.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Wikipedia katkıcıları)",
+      "source": "Kiwix — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "wikipedia-en-mini",
+      "kind": "zim",
+      "name": "Wikipedia (İngilizce, özet)",
+      "desc": "Tüm İngilizce Wikipedia maddelerinin giriş bölümleri, resimsiz. Dünyanın en büyük ansiklopedisinin hafif hâli.",
+      "file": "wikipedia_en_all_mini_2026-09.zim",
+      "size": 14386799064,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_all_mini_2026-09.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_en_all_mini_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Wikipedia katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikidia-en",
+      "kind": "zim",
+      "name": "Vikidia — çocuk ansiklopedisi (İngilizce)",
+      "desc": "8–13 yaş için sade dille yazılmış resimli ansiklopedi.",
+      "file": "vikidia_en_all_maxi_2026-09.zim",
+      "size": 77565163,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/vikidia_en_all_maxi_2026-09.zim",
+        "https://mirror.download.kiwix.org/zim/vikidia/vikidia_en_all_maxi_2026-09.zim",
+        "https://download.kiwix.org/zim/vikidia/vikidia_en_all_maxi_2026-09.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikidia katkıcıları)",
+      "source": "Kiwix / Vikidia — https://download.kiwix.org/zim/vikidia/",
+      "shelf": "ansiklopedi",
+      "featured": true
+    },
+    {
+      "id": "vikipedi-tr-tarih",
+      "kind": "zim",
+      "name": "Vikipedi: Tarih (Türkçe, resimli)",
+      "desc": "Türkçe Vikipedi'nin tarih maddeleri.",
+      "file": "wikipedia_tr_history_maxi_2026-10.zim",
+      "size": 226242489,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_history_maxi_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_history_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_history_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikipedi-tr-cografya",
+      "kind": "zim",
+      "name": "Vikipedi: Coğrafya (Türkçe, resimli)",
+      "desc": "Türkçe Vikipedi'nin coğrafya maddeleri: ülkeler, şehirler, doğal yapılar.",
+      "file": "wikipedia_tr_geography_maxi_2026-10.zim",
+      "size": 106822010,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_geography_maxi_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_geography_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_geography_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikipedi-tr-fizik",
+      "kind": "zim",
+      "name": "Vikipedi: Fizik (Türkçe, resimli)",
+      "desc": "Türkçe Vikipedi'nin fizik maddeleri.",
+      "file": "wikipedia_tr_physics_maxi_2026-10.zim",
+      "size": 161962756,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_physics_maxi_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_physics_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_physics_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikipedi-tr-kimya",
+      "kind": "zim",
+      "name": "Vikipedi: Kimya (Türkçe, resimli)",
+      "desc": "Türkçe Vikipedi'nin kimya maddeleri.",
+      "file": "wikipedia_tr_chemistry_maxi_2026-10.zim",
+      "size": 58297242,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_chemistry_maxi_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_chemistry_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_chemistry_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikipedi-tr-matematik",
+      "kind": "zim",
+      "name": "Vikipedi: Matematik (Türkçe, resimli)",
+      "desc": "Türkçe Vikipedi'nin matematik maddeleri.",
+      "file": "wikipedia_tr_mathematics_maxi_2026-10.zim",
+      "size": 86780672,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_mathematics_maxi_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_mathematics_maxi_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_tr_mathematics_maxi_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikipedi katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "ansiklopedi"
+    },
+    {
+      "id": "vikisoz-tr",
+      "kind": "zim",
+      "name": "Vikisöz (Türkçe)",
+      "desc": "Özlü sözler, atasözleri ve deyimler derlemesi.",
+      "file": "wikiquote_tr_all_2026-08.zim",
+      "size": 70457805,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikiquote_tr_all_2026-08.zim",
+        "https://mirror.download.kiwix.org/zim/wikiquote/wikiquote_tr_all_2026-08.zim",
+        "https://download.kiwix.org/zim/wikiquote/wikiquote_tr_all_2026-08.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Vikisöz katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikiquote/",
+      "shelf": "dil"
+    },
+    {
+      "id": "medlineplus",
+      "kind": "zim",
+      "name": "MedlinePlus — ilaçlar ve hastalıklar (İngilizce)",
+      "desc": "ABD Ulusal Tıp Kütüphanesi: ilaç ve bitkisel ürün rehberi, hastalıklar, tıbbi testler, ilk yardım. Kamu malı.",
+      "file": "medlineplus.gov_en_all_2025-01.zim",
+      "size": 1944841111,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/zimit/medlineplus.gov_en_all_2025-01.zim",
+        "https://download.kiwix.org/zim/zimit/medlineplus.gov_en_all_2025-01.zim"
+      ],
+      "license": "Kamu malı (ABD Ulusal Tıp Kütüphanesi); bazı bölümlerin kendi lisansı vardır",
+      "source": "Kiwix / medlineplus.gov — https://download.kiwix.org/zim/zimit/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "wikimed-en-mini",
+      "kind": "zim",
+      "name": "WikiMed tıp ansiklopedisi (İngilizce, özet)",
+      "desc": "Tıp maddelerinin giriş bölümleri. En küçük tıp ansiklopedisi.",
+      "file": "wikipedia_en_medicine_mini_2026-10.zim",
+      "size": 174350854,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_en_medicine_mini_2026-10.zim",
+        "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_mini_2026-10.zim",
+        "https://download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_mini_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Wikipedia katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
+      "shelf": "saglik",
+      "featured": true
+    },
+    {
+      "id": "cdc-saglik",
+      "kind": "zim",
+      "name": "CDC seyahat ve salgın sağlığı (İngilizce)",
+      "desc": "Bulaşıcı hastalıklar, aşılar, su ve gıda güvenliği. ABD Hastalık Kontrol Merkezi.",
+      "file": "wwwnc.cdc.gov_en_all_2024-11.zim",
+      "size": 178326622,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/zimit/wwwnc.cdc.gov_en_all_2024-11.zim",
+        "https://download.kiwix.org/zim/zimit/wwwnc.cdc.gov_en_all_2024-11.zim"
+      ],
+      "license": "Kamu malı (ABD CDC)",
+      "source": "Kiwix / cdc.gov — https://download.kiwix.org/zim/zimit/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "libretexts-tip",
+      "kind": "zim",
+      "name": "Tıp ders kitapları — LibreTexts (İngilizce)",
+      "desc": "Açık lisanslı tıp ve hemşirelik ders kitapları.",
+      "file": "libretexts.org_en_med_2025-01.zim",
+      "size": 1192567339,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/libretexts/libretexts.org_en_med_2025-01.zim",
+        "https://download.kiwix.org/zim/libretexts/libretexts.org_en_med_2025-01.zim"
+      ],
+      "license": "CC BY-NC-SA (LibreTexts; kitaba göre değişir)",
+      "source": "Kiwix / LibreTexts — https://download.kiwix.org/zim/libretexts/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "wikivet",
+      "kind": "zim",
+      "name": "WikiVet — hayvan sağlığı (İngilizce)",
+      "desc": "Veteriner hekimlik ansiklopedisi: evcil ve çiftlik hayvanları.",
+      "file": "wikivet.net_en_all_maxi_2026-07a.zim",
+      "size": 56980345,
+      "sizeApprox": false,
+      "tier": "standart",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/other/wikivet.net_en_all_maxi_2026-07a.zim",
+        "https://download.kiwix.org/zim/other/wikivet.net_en_all_maxi_2026-07a.zim"
+      ],
+      "license": "CC BY-SA (WikiVet)",
+      "source": "Kiwix / WikiVet — https://download.kiwix.org/zim/other/",
+      "shelf": "saglik"
+    },
+    {
+      "id": "gutenberg-tip",
+      "kind": "zim",
+      "name": "Gutenberg: tıp kitapları (İngilizce)",
+      "desc": "Project Gutenberg'in telifi dolmuş tıp ve sağlık kitapları.",
+      "file": "gutenberg_en_lcc-r_2026-03.zim",
+      "size": 2019297662,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-r_2026-03.zim",
+        "https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-r_2026-03.zim"
+      ],
+      "license": "Kamu malı (Project Gutenberg)",
+      "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
+      "shelf": "kitap"
+    },
+    {
+      "id": "gutenberg-tarim",
+      "kind": "zim",
+      "name": "Gutenberg: tarım ve hayvancılık kitapları (İngilizce)",
+      "desc": "Telifi dolmuş tarım, bahçe, hayvancılık ve ormancılık kitapları.",
+      "file": "gutenberg_en_lcc-s_2026-03.zim",
+      "size": 4532683039,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-s_2026-03.zim",
+        "https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-s_2026-03.zim"
+      ],
+      "license": "Kamu malı (Project Gutenberg)",
+      "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
+      "shelf": "kitap"
+    },
+    {
+      "id": "gutenberg-teknik",
+      "kind": "zim",
+      "name": "Gutenberg: teknoloji ve zanaat kitapları (İngilizce)",
+      "desc": "Telifi dolmuş mühendislik, yapı, el sanatları ve ev ekonomisi kitapları.",
+      "file": "gutenberg_en_lcc-t_2026-03.zim",
+      "size": 13154803470,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-t_2026-03.zim",
+        "https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-t_2026-03.zim"
+      ],
+      "license": "Kamu malı (Project Gutenberg)",
+      "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
+      "shelf": "kitap"
+    },
+    {
+      "id": "gutenberg-egitim",
+      "kind": "zim",
+      "name": "Gutenberg: eğitim kitapları (İngilizce)",
+      "desc": "Telifi dolmuş eğitim ve öğretim kitapları.",
+      "file": "gutenberg_en_lcc-l_2026-03.zim",
+      "size": 628986048,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-l_2026-03.zim",
+        "https://download.kiwix.org/zim/gutenberg/gutenberg_en_lcc-l_2026-03.zim"
+      ],
+      "license": "Kamu malı (Project Gutenberg)",
+      "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
+      "shelf": "kitap"
+    },
+    {
+      "id": "wikibooks-en",
+      "kind": "zim",
+      "name": "Wikibooks (İngilizce, resimsiz)",
+      "desc": "Açık lisanslı ders ve el kitapları: dil, bilim, yemek, tamir.",
+      "file": "wikibooks_en_all_nopic_2026-10.zim",
+      "size": 3544612812,
+      "sizeApprox": false,
+      "tier": "tam",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/wikibooks/wikibooks_en_all_nopic_2026-10.zim",
+        "https://download.kiwix.org/zim/wikibooks/wikibooks_en_all_nopic_2026-10.zim"
+      ],
+      "license": "CC BY-SA 4.0 (Wikibooks katkıcıları)",
+      "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikibooks/",
+      "shelf": "kitap"
+    },
+    {
+      "id": "based-cooking",
+      "kind": "zim",
+      "name": "Basit yemek tarifleri (İngilizce)",
+      "desc": "Reklamsız, kısa ve sade yemek tarifleri.",
+      "file": "based.cooking_en_all_2026-08.zim",
+      "size": 15774733,
+      "sizeApprox": false,
+      "tier": "temel",
+      "urls": [
+        "https://mirror.download.kiwix.org/zim/zimit/based.cooking_en_all_2026-08.zim",
+        "https://download.kiwix.org/zim/zimit/based.cooking_en_all_2026-08.zim"
+      ],
+      "license": "Kamu malı (based.cooking)",
+      "source": "Kiwix / based.cooking — https://download.kiwix.org/zim/zimit/",
+      "shelf": "pratik"
+    },
+    {
+      "id": "fener-qwen2.5-0.5b",
+      "kind": "model",
+      "name": "Fener modeli — en küçük (Qwen2.5 0.5B)",
+      "desc": "2 GB RAM'li eski telefonlar için. Kısa, basit yanıtlar; kendi bilgisiyle cevapta zayıf.",
+      "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "size": 491400032,
+      "sizeApprox": false,
+      "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+      "tier": "temel",
+      "minRamGB": 2,
+      "urls": [
+        "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Qwen (Alibaba Cloud) — https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF"
+    },
+    {
+      "id": "fener-qwen3.5-0.8b",
+      "kind": "model",
+      "name": "Fener modeli — küçük (Qwen3.5 0.8B)",
+      "desc": "3–4 GB RAM'li telefonlar için. 0.5B'den daha iyi Türkçe, hâlâ hızlı.",
+      "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
+      "size": 532517120,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "temel",
+      "minRamGB": 3,
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF/resolve/main/Qwen3.5-0.8B-Q4_K_M.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-0.8B-GGUF"
+    },
+    {
+      "id": "fener-qwen3.5-2b",
+      "kind": "model",
+      "name": "Fener modeli — orta (Qwen3.5 2B)",
+      "desc": "4–6 GB RAM'li telefonlar için önerilen model. İyi Türkçe, tutarlı yanıtlar; tek dosya (1,3 GB).",
+      "file": "Qwen3.5-2B-Q4_K_M.gguf",
+      "size": 1280835840,
+      "sizeApprox": false,
+      "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "tier": "standart",
+      "minRamGB": 4,
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-2B-GGUF"
+    },
+    {
+      "id": "fener-qwen3.5-4b",
+      "kind": "model",
+      "name": "Fener modeli — büyük (Qwen3.5 4B)",
+      "desc": "Bilgisayar ve 8 GB+ RAM için en iyi yanıt kalitesi. 2,7 GB tek dosya; yüklenirken Fener kendisi parçalara böler.",
+      "file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "size": 2740937888,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "minRamGB": 8,
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
+    },
+    {
+      "id": "fener-gemma-4-e2b",
+      "kind": "model",
+      "name": "Fener modeli — Gemma 4 E2B",
+      "desc": "Google Gemma 4 (2B etkin parametre, 140+ dilde eğitim). 2B hızında ama 3,1 GB bellek ister; bilgisayar için. Tek dosya; yüklenirken Fener kendisi böler.",
+      "file": "gemma-4-E2B-it-Q4_K_M.gguf",
+      "size": 3106738272,
+      "sizeApprox": false,
+      "sha256": "",
+      "tier": "tam",
+      "minRamGB": 8,
+      "urls": [
+        "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Google DeepMind, GGUF: Unsloth — https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF"
+    },
+    {
+      "id": "ses-whisper-base",
+      "kind": "ses",
+      "name": "Sesli soru — Whisper base (çok dilli)",
+      "desc": "Konuşmayı cihazda yazıya çevirir (internet gerekmez). Telefonlar için: küçük ve hızlı, kısa sorularda yeterli.",
+      "file": "whisper-base-ses.tar",
+      "size": 79677440,
+      "sizeApprox": true,
+      "sha256": "",
+      "tier": "standart",
+      "minRamGB": 3,
+      "urls": [
+        "https://akilcantasi.com/packs/whisper-base-ses.tar"
+      ],
+      "license": "MIT (OpenAI Whisper; ONNX dönüşümü: onnx-community)",
+      "source": "OpenAI Whisper, ONNX: https://huggingface.co/onnx-community/whisper-base",
+      "contents": [
+        {
+          "path": "config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/config.json",
+          "size": 2243
+        },
+        {
+          "path": "generation_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/generation_config.json",
+          "size": 3832
+        },
+        {
+          "path": "preprocessor_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/preprocessor_config.json",
+          "size": 339
+        },
+        {
+          "path": "tokenizer.json",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/tokenizer.json",
+          "size": 2480466
+        },
+        {
+          "path": "tokenizer_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/tokenizer_config.json",
+          "size": 282682
+        },
+        {
+          "path": "onnx/encoder_model_quantized.onnx",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/onnx/encoder_model_quantized.onnx",
+          "size": 23201314
+        },
+        {
+          "path": "onnx/decoder_model_merged_quantized.onnx",
+          "url": "https://huggingface.co/onnx-community/whisper-base/resolve/main/onnx/decoder_model_merged_quantized.onnx",
+          "size": 53693315
+        }
+      ],
+      "howto": "contents'teki dosyaları aynı klasör yapısıyla (onnx/ alt klasörü dahil) indirip tek bir tar yapın: tar -cf whisper-base-ses.tar config.json generation_config.json preprocessor_config.json tokenizer.json tokenizer_config.json onnx (ayrıntı: docs/FENER_MODELLER.md)."
+    },
+    {
+      "id": "ses-whisper-small",
+      "kind": "ses",
+      "name": "Sesli soru — Whisper small (çok dilli)",
+      "desc": "Daha doğru Türkçe tanıma; bilgi noktası bilgisayarı ve güçlü telefonlar için. Base'in üç katı büyüklükte ve daha yavaş.",
+      "file": "whisper-small-ses.tar",
+      "size": 251863040,
+      "sizeApprox": true,
+      "sha256": "",
+      "tier": "tam",
+      "minRamGB": 6,
+      "urls": [
+        "https://akilcantasi.com/packs/whisper-small-ses.tar"
+      ],
+      "license": "MIT (OpenAI Whisper; ONNX dönüşümü: onnx-community)",
+      "source": "OpenAI Whisper, ONNX: https://huggingface.co/onnx-community/whisper-small",
+      "contents": [
+        {
+          "path": "config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/config.json",
+          "size": 2227
+        },
+        {
+          "path": "generation_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/generation_config.json",
+          "size": 3893
+        },
+        {
+          "path": "preprocessor_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/preprocessor_config.json",
+          "size": 339
+        },
+        {
+          "path": "tokenizer.json",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/tokenizer.json",
+          "size": 2480466
+        },
+        {
+          "path": "tokenizer_config.json",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/tokenizer_config.json",
+          "size": 282683
+        },
+        {
+          "path": "onnx/encoder_model_quantized.onnx",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/onnx/encoder_model_quantized.onnx",
+          "size": 92326160
+        },
+        {
+          "path": "onnx/decoder_model_merged_quantized.onnx",
+          "url": "https://huggingface.co/onnx-community/whisper-small/resolve/main/onnx/decoder_model_merged_quantized.onnx",
+          "size": 156750845
+        }
+      ],
+      "howto": "contents'teki dosyaları aynı klasör yapısıyla (onnx/ alt klasörü dahil) indirip tek bir tar yapın: tar -cf whisper-small-ses.tar config.json generation_config.json preprocessor_config.json tokenizer.json tokenizer_config.json onnx (ayrıntı: docs/FENER_MODELLER.md)."
+    },
+    {
+      "id": "harita-tr-genel",
+      "kind": "map",
+      "name": "Türkiye haritası — genel (z0–10)",
+      "desc": "İl, ilçe ve ana yollar. Mahalle ve sokak ayrıntısı yok.",
+      "file": "turkiye-genel-z10.pmtiles",
+      "size": 51121188,
+      "sizeApprox": false,
+      "sha256": "281b8b6231a11f8e0b2cc1aec9924f47edb8f060b4ca18a49b19615c24bb6017",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye-genel-z10.pmtiles"
+      ],
+      "license": "ODbL 1.0 (© OpenStreetMap katkıcıları)",
+      "source": "OpenStreetMap, Protomaps şemasıyla — https://www.openstreetmap.org/copyright"
+    },
+    {
+      "id": "harita-tr-detay",
+      "kind": "map",
+      "name": "Türkiye haritası — sokak ayrıntılı (z0–14)",
+      "desc": "Sokaklar, binalar ve yürüme yolları dahil tüm Türkiye (z0–14).",
+      "file": "turkiye.pmtiles",
+      "size": 856688321,
+      "sizeApprox": false,
+      "sha256": "23cc8cd62f0ff3b151e320f6abed85957ea68c21495fad407dc222f6f42c7850",
+      "tier": "standart",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye.pmtiles"
+      ],
+      "license": "ODbL 1.0 (© OpenStreetMap katkıcıları)",
+      "source": "OpenStreetMap, Protomaps şemasıyla — https://www.openstreetmap.org/copyright"
+    },
+    {
+      "id": "poi-tr-afet",
+      "kind": "poi",
+      "name": "Afet noktaları — Türkiye",
+      "desc": "Toplanma alanları, hastane ve sağlık ocakları, eczaneler, içme suyu noktaları ve barınaklar. Hazır paket olarak hızlıca iner; gerekirse cihazda OpenStreetMap'ten yeniden oluşturulur.",
+      "file": "turkiye-afet-noktalari.geojson",
+      "size": 10397936,
+      "sizeApprox": false,
+      "sha256": "6019bedb6f12fa15659dcc45c259aa30e84831e59dfc5e06f061279ed1084ce0",
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/noktalar/turkiye-afet-noktalari.geojson",
+        "osm:turkiye"
+      ],
+      "license": "ODbL 1.0 (© OpenStreetMap katkıcıları)",
+      "source": "OpenStreetMap (amenity=hospital/pharmacy/drinking_water, emergency=assembly_point)",
+      "howto": "Ayrı bir indirme sunucusu gerekmez: uygulama Overpass API ile Türkiye'yi 24 bölgede sorgular ve sonucu tek GeoJSON dosyası olarak kaydeder."
+    }
+  ]
+}

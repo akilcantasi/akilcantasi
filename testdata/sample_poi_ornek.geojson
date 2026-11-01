@@ -1,0 +1,882 @@
+{
+ "type": "FeatureCollection",
+ "name": "Örnek noktalar (sentetik)",
+ "features": [
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.799715,
+     39.88023
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 1",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.874539,
+     39.878006
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 2",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.847448,
+     39.898906
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 3",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.775981,
+     39.8794
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 4",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.817772,
+     39.898763
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 5",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.87544,
+     39.884154
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 6",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.85136,
+     39.900982
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 7",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.843193,
+     39.955243
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 8",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.839043,
+     39.898475
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 9",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.838434,
+     39.948303
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 10",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.870278,
+     39.886979
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 11",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.785498,
+     39.896596
+    ]
+   },
+   "properties": {
+    "name": "Örnek toplanma alanı 12",
+    "type": "toplanma",
+    "note": "Açık alan — sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.869213,
+     39.933382
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 1",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.805526,
+     39.878643
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 2",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.856893,
+     39.941077
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 3",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.851138,
+     39.942617
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 4",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.728212,
+     39.878522
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 5",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.791236,
+     39.886775
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 6",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.733758,
+     39.884564
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 7",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.845255,
+     39.959407
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 8",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.840637,
+     39.887884
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 9",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.771499,
+     39.886608
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 10",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.77493,
+     39.876326
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 11",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.848565,
+     39.933873
+    ]
+   },
+   "properties": {
+    "name": "Örnek sağlık noktası 12",
+    "type": "saglik",
+    "note": "Sentetik test noktası"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.836648,
+     39.958704
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 1",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.846105,
+     39.943323
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 2",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.838217,
+     39.937629
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 3",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.731779,
+     39.876492
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 4",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.869998,
+     39.912462
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 5",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.865515,
+     39.958971
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 6",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.86965,
+     39.905359
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 7",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.8433,
+     39.915235
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 8",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.859249,
+     39.941278
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 9",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.873481,
+     39.908042
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 10",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.816704,
+     39.88862
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 11",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.858116,
+     39.943359
+    ]
+   },
+   "properties": {
+    "name": "Örnek eczane 12",
+    "type": "eczane"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.87547,
+     39.930525
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 1",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.680126,
+     39.875225
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 2",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.873305,
+     39.929872
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 3",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.840016,
+     39.89215
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 4",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.770407,
+     39.875609
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 5",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.859872,
+     39.912119
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 6",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.866702,
+     39.896325
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 7",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.8432,
+     39.885794
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 8",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.830305,
+     39.951144
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 9",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.801859,
+     39.886296
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 10",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.853052,
+     39.957209
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 11",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.87767,
+     39.94559
+    ]
+   },
+   "properties": {
+    "name": "Örnek su noktası 12",
+    "type": "su",
+    "note": "Sentetik — içme suyu olduğu varsayılır"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.816095,
+     39.875676
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 1",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.831324,
+     39.957566
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 2",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.838365,
+     39.89624
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 3",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.824685,
+     39.898937
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 4",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.76502,
+     39.889299
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 5",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.72981,
+     39.875562
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 6",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.707603,
+     39.87532
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 7",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.864968,
+     39.88314
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 8",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.838352,
+     39.911167
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 9",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.850224,
+     39.931667
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 10",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.873703,
+     39.921048
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 11",
+    "type": "barinma"
+   }
+  },
+  {
+   "type": "Feature",
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     32.659583,
+     39.875934
+    ]
+   },
+   "properties": {
+    "name": "Örnek barınma noktası 12",
+    "type": "barinma"
+   }
+  }
+ ]
+}

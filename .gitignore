@@ -1,0 +1,15 @@
+node_modules/
+dist/
+testdata/*.gguf
+testdata/*.zim
+testdata/*.pmtiles
+android/app/build/
+*.log
+.DS_Store
+# Büyük içerik ve yerel dosyalar (paketler Hugging Face'te: akilcantasi/paketler)
+data/
+*.apk
+_to_delete/
+_gecici/
+testdata/_*
+tools/__pycache__/

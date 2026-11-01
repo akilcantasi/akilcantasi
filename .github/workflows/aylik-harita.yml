@@ -1,0 +1,103 @@
+# Akıl Çantası — ayda bir Türkiye haritasını ve afet noktalarını yeniler, Hugging Face'e yükler.
+#
+#  1) Protomaps'in günlük dünya haritasından (OpenStreetMap) yalnızca Türkiye + KKTC sınırı içini keser
+#  2) Bundan genel haritayı (z0–10) üretir
+#  3) Afet noktalarını OpenStreetMap'ten (Overpass) toplar
+#  4) Üçünü akilcantasi/paketler (Hugging Face) deposuna yükler, kataloğu günceller
+#  5) Güncellenen public/packs-manifest.json'ı bu depoya geri işler (sonraki derlemeye girsin)
+#
+# Gereken gizli değişken: HF_TOKEN (Hugging Face, "Write" yetkili).
+# Elle çalıştırmak için: Actions → "Aylık harita ve afet noktaları" → Run workflow.
+name: Aylık harita ve afet noktaları
+
+on:
+  schedule:
+    - cron: '17 2 3 * *' # her ayın 3'ü, 02:17 UTC
+  workflow_dispatch:
+    inputs:
+      maxzoom:
+        description: 'Sokak ayrıntılı haritanın en büyük yakınlaştırması (14 ya da 15)'
+        default: '14'
+        required: true
+      sadece:
+        description: 'Yalnız bunları yükle (boş = hepsi): harita-tr-genel,harita-tr-detay,poi-tr-afet'
+        default: ''
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aylik-harita
+  cancel-in-progress: false
+
+jobs:
+  uret:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      MAXZOOM: ${{ github.event.inputs.maxzoom || '14' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: go-pmtiles
+        run: |
+          set -e
+          url=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest \
+            | grep -o 'https://[^"]*Linux_x86_64.tar.gz' | head -1)
+          [ -n "$url" ] || url=https://github.com/protomaps/go-pmtiles/releases/download/v1.31.2/go-pmtiles_1.31.2_Linux_x86_64.tar.gz
+          curl -fsSL "$url" | tar xz -C /usr/local/bin pmtiles
+          pmtiles version || true
+
+      - name: Türkiye haritası (sokak ayrıntılı)
+        run: |
+          set -e
+          mkdir -p data/maps
+          for i in $(seq 0 20); do
+            d=$(date -u -d "-$i day" +%Y%m%d)
+            if curl -sfI "https://build.protomaps.com/$d.pmtiles" >/dev/null; then src="https://build.protomaps.com/$d.pmtiles"; break; fi
+          done
+          [ -n "$src" ] || { echo "Protomaps derlemesine ulaşılamadı"; exit 1; }
+          echo "Kaynak: $src (z0–$MAXZOOM)"
+          pmtiles extract "$src" data/maps/turkiye.pmtiles --region=tools/turkiye-sinir.geojson --maxzoom="$MAXZOOM" --download-threads=8
+          test "$(stat -c %s data/maps/turkiye.pmtiles)" -gt 100000000
+          ls -la data/maps
+
+      - name: Genel harita (z0–10)
+        run: pmtiles extract data/maps/turkiye.pmtiles data/maps/turkiye-genel-z10.pmtiles --maxzoom=10
+
+      - name: Afet noktaları
+        id: noktalar
+        continue-on-error: true
+        run: |
+          # Overpass sunucuları meşgulse betik eksik bölgeleri ara kayıtta tutar; birkaç kez denenir
+          for deneme in 1 2 3; do
+            if node tools/pi/afet-noktalari.mjs data/maps/turkiye-afet-noktalari.geojson; then exit 0; fi
+            echo "Deneme $deneme bitmedi, 2 dk sonra eksik bölgeler yeniden denenecek"; sleep 120
+          done
+          exit 1
+
+      - name: Hugging Face'e yükle
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -e
+          liste="${{ github.event.inputs.sadece }}"
+          if [ -z "$liste" ]; then
+            liste="harita-tr-genel,harita-tr-detay"
+            [ -f data/maps/turkiye-afet-noktalari.geojson ] && liste="$liste,poi-tr-afet"
+          fi
+          node tools/hf/hf-yukle.mjs --kok . --sadece "$liste"
+
+      - name: Kataloğu depoya işle
+        run: |
+          if git diff --quiet -- public/packs-manifest.json; then echo "Katalog değişmedi"; exit 0; fi
+          git config user.name "akilcantasi-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/packs-manifest.json
+          git commit -m "Katalog: aylık harita ve afet noktaları ($(date -u +%Y-%m-%d))"
+          git push
