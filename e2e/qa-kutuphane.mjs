@@ -195,7 +195,9 @@ await step('çoklu: Tümü + kaynak seçici + üstveri kartı + yeniden yükleme
   await p.waitForSelector(tid('lib-search'));
   assert.deepEqual(await p.$$eval(tid('lib-src'), (b) => b.map((x) => x.textContent.trim())), ['Vikipedi', 'WikiMed']);
   assert.equal(await p.getAttribute(tid('lib-src-all'), 'aria-pressed'), 'true');
-  assert.equal((await p.$$(tid('lib-meta-row'))).length, 2);
+  // Yüklü kaynaklar büyük liste yerine kapak kutucukları; durum kartı ve setler görünür
+  assert.ok(await p.isVisible(tid('lib-status')));
+  assert.equal((await p.$$(tid('lib-set'))).length, 5);
   assert.equal((await p.$$(tid('lib-main'))).length, 2);
   await p.click(`${tid('lib-src')}[data-src="sample_med_en.zim"]`);
   assert.equal(await p.textContent(tid('lib-meta-count')), '12 madde');

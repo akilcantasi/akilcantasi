@@ -33,9 +33,8 @@ const chips = await page.$$eval(tid('lib-src'), (b) => b.map((x) => x.textConten
 console.log('kaynaklar:', chips);
 assert.deepEqual(chips, ['Vikipedi', 'WikiMed']);
 assert.equal(await page.getAttribute(tid('lib-src-all'), 'aria-pressed'), 'true');
-const rows = await page.$$eval(tid('lib-meta-row'), (r) => r.map((x) => x.textContent));
-assert.ok(rows[0].includes('Vikipedi') && /700\.883 madde/.test(rows[0]) && rows[0].includes('Türkçe'), rows[0]);
-assert.ok(rows[1].includes('WikiMed') && rows[1].includes('İngilizce'), rows[1]);
+// Kaynak ayrıntısı (madde sayısı, dil) kaynak seçilince üstveri kartında gösterilir
+assert.ok(await page.isVisible(tid('lib-status')));
 await shot('01-tumu');
 
 // 2) Türkçe duyarsız, kelime içi arama (Tümü)

@@ -1175,5 +1175,70 @@
       "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir).",
       "sha256": "3a91f616429963abf84dce424129503284fa7c20befe43f664c43cbcfbf1accc"
     }
+  ],
+  "sets": [
+    {
+      "id": "temel",
+      "title": "Temel set",
+      "desc": "Herkes için ilk iniş: ansiklopedi, ilaç, su, gıda, kitaplar",
+      "ids": [
+        "wikipedia-tr-mini",
+        "nhs-ilac",
+        "kitap-su",
+        "kitap-gida",
+        "vikikitap-tr",
+        "vikikaynak-tr",
+        "vikidia-en",
+        "wikimed-en-mini"
+      ]
+    },
+    {
+      "id": "hayatta",
+      "title": "Hayatta kalma seti",
+      "desc": "Su, gıda, düğüm, doğada kalma ve afet sonrası",
+      "ids": [
+        "kitap-su",
+        "kitap-gida",
+        "kitap-dugum",
+        "kitap-afet-sonrasi",
+        "se-doga",
+        "readygov"
+      ]
+    },
+    {
+      "id": "saglik",
+      "title": "Sağlık seti",
+      "desc": "Hekimin olmadığı yerde: tıp ansiklopedileri ve el kitapları",
+      "ids": [
+        "wikimed-en-mini",
+        "nhs-ilac",
+        "sahra-tibbi",
+        "kitap-tip",
+        "wikimed-en-nopic",
+        "medlineplus"
+      ]
+    },
+    {
+      "id": "okur",
+      "title": "Okur seti",
+      "desc": "Telifsiz roman, öykü, şiir, sözlük ve özdeyişler",
+      "ids": [
+        "vikikaynak-tr",
+        "vikikitap-tr",
+        "vikisozluk-tr",
+        "vikisoz-tr",
+        "gutenberg-egitim"
+      ]
+    },
+    {
+      "id": "usta",
+      "title": "Usta seti",
+      "desc": "Tamir, uygun teknoloji ve elle yapılan işler",
+      "ids": [
+        "ifixit-tr",
+        "appropedia",
+        "lowtech"
+      ]
+    }
   ]
 }

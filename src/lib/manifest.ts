@@ -68,6 +68,8 @@ export interface Manifest {
   version: number;
   updated: string;
   packs: ManifestPack[];
+  /** Kütüphane paket setleri (Kütüphane sekmesi); yoksa uygulamadaki varsayılanlar */
+  sets?: { id: string; title: string; desc: string; ids: string[] }[];
 }
 
 export const KINDS: PackKind[] = ['zim', 'model', 'map', 'poi', 'ses', 'hava'];
@@ -164,7 +166,7 @@ export function validateManifest(input: unknown): { ok: boolean; errors: string[
   return {
     ok: errors.length === 0,
     errors,
-    manifest: { version: Number(m.version) || 0, updated: String(m.updated ?? ''), packs },
+    manifest: { version: Number(m.version) || 0, updated: String(m.updated ?? ''), packs, ...(Array.isArray(m.sets) ? { sets: m.sets } : {}) },
   };
 }
 

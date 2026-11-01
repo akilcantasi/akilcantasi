@@ -13,15 +13,15 @@ import { MAX_YAKIN, initials, loadYakinlar, multiSmsHref, newId, saveYakinlar, t
 
 export const QUICK_CSS = `
 .qs { display: flex; flex-direction: column; gap: 10px; }
-.qs-112 { display: flex; gap: 8px; align-items: stretch; }
-.qs-112-btn { flex: 1; min-height: 76px; border: 0; border-radius: 20px; padding: 12px 16px; text-align: left; color: #fff; background: linear-gradient(160deg, #f0565b, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; align-items: center; gap: 14px; }
+.qs-112 { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.qs-112-btn { flex: 1 1 220px; min-width: 0; min-height: 76px; border: 0; border-radius: 20px; padding: 12px 16px; text-align: left; color: #fff; background: linear-gradient(160deg, #f0565b, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; align-items: center; gap: 14px; }
 .qs-112-btn:active { transform: scale(0.985); }
 .qs-112-btn:disabled { opacity: 0.85; }
 .qs-112-ic { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.qs-112-t { display: flex; flex-direction: column; gap: 2px; }
+.qs-112-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .qs-112-t b { font-size: 17px; line-height: 1.25; }
 .qs-112-t small { font-size: 12.5px; opacity: 0.95; line-height: 1.35; }
-.qs-call { width: 76px; flex-shrink: 0; border-radius: 20px; border: 1px solid rgba(229,72,77,0.55); background: rgba(229,72,77,0.1); color: #ffd1cb; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.qs-call { flex: 0 0 76px; min-height: 76px; border-radius: 20px; border: 1px solid rgba(229,72,77,0.55); background: rgba(229,72,77,0.1); color: #ffd1cb; text-decoration: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; font-weight: 600; }
 .qs-status { font-size: 13px; color: var(--text2); margin: 0; min-height: 18px; }
 .qs-status.bad { color: #ffb4a8; }
 .qs-fam { background: var(--card); border: 1px solid var(--line2); border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }

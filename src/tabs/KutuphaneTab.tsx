@@ -41,6 +41,16 @@ const CSS_BASE = `
 .kt-chips::-webkit-scrollbar { display: none; }
 .kt-chips .chip { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .kt-chip-n { font-family: var(--mono); font-size: 11px; opacity: 0.75; }
+/* Rafım: yüklü kaynaklar kapak kutucukları olarak (dokununca arama o kaynakla sınırlanır) */
+.kt-covers { gap: 10px; }
+.kt-covers .chip { min-height: 76px; width: 108px; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 2px; border-radius: 14px; padding: 10px 11px; white-space: normal; text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.2; color: #fff; border: 1px solid rgba(255,255,255,0.1); background: linear-gradient(160deg, #2f4a72, #22385a); }
+.kt-covers .chip:nth-child(5n+2) { background: linear-gradient(160deg, #1f5f5b, #174845); }
+.kt-covers .chip:nth-child(5n+3) { background: linear-gradient(160deg, #7a3b2e, #5c2c22); }
+.kt-covers .chip:nth-child(5n+4) { background: linear-gradient(160deg, #3d5a3a, #2c432a); }
+.kt-covers .chip:nth-child(5n) { background: linear-gradient(160deg, #6b4c8a, #4f3866); }
+.kt-covers .chip:first-child { background: linear-gradient(160deg, rgba(245,165,36,0.28), rgba(245,165,36,0.1)); color: var(--text); }
+.kt-covers .chip[aria-pressed='true'] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kt-covers .kt-chip-n { font-family: inherit; font-size: 11px; font-weight: 500; opacity: 0.85; }
 .kt-field { display: flex; flex-direction: column; gap: 8px; }
 .kt-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .kt-actions .btn { display: inline-flex; align-items: center; gap: 8px; }
@@ -68,6 +78,7 @@ const CSS_BASE = `
 .kt-hero p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2); }
 .kt-manage { color: var(--accent2); font-weight: 500; }
 .kt-store { margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--line2); }
+.kt-store-top { margin-top: 0; padding-top: 0; border-top: 0; }
 .kt-body { font-size: 16px; line-height: 1.6; color: var(--text2); overflow-wrap: anywhere; }
 .kt-body.kt-size-1 { font-size: 18.5px; }
 .kt-body.kt-size-2 { font-size: 21px; line-height: 1.65; }
@@ -416,34 +427,6 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
       data-q={doneQ}
       data-state={searching ? 'searching' : textLoading ? 'text' : 'idle'}
     >
-      {sources.length > 1 && (
-        <div class="kt-chips" role="group" aria-label="Kaynak seçimi" data-testid="lib-sources">
-          <button class="chip" aria-pressed={effective === 'all'} data-testid="lib-src-all" onClick={() => chooseSource('all')}>
-            Tümü <span class="kt-chip-n">{sources.length}</span>
-          </button>
-          {sources.map((src) => (
-            <button
-              key={src.id}
-              class="chip"
-              aria-pressed={effective === src.id}
-              data-testid="lib-src"
-              data-src={src.id}
-              title={src.title}
-              onClick={() => chooseSource(src.id)}
-            >
-              {src.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {!q && (selected ? <SourceCard src={selected} /> : <AllSourcesCard sources={sources} />)}
-      {err && (
-        <p class="warn" style="margin:0" data-testid="lib-error">
-          Bazı paketler açılamadı: {err}
-        </p>
-      )}
-
       <div class="kt-field">
         <label class="label" for="lib-search">
           Çevrimdışı ara
@@ -470,6 +453,35 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
           enterKeyHint="search"
         />
       </div>
+
+      {sources.length > 1 && (
+        <div class="kt-chips kt-covers" role="group" aria-label="Rafım: aranacak kaynak" data-testid="lib-sources">
+          <button class="chip" aria-pressed={effective === 'all'} data-testid="lib-src-all" onClick={() => chooseSource('all')}>
+            Tümü <span class="kt-chip-n">{sources.length}</span>
+          </button>
+          {sources.map((src) => (
+            <button
+              key={src.id}
+              class="chip"
+              aria-pressed={effective === src.id}
+              data-testid="lib-src"
+              data-src={src.id}
+              title={src.title}
+              onClick={() => chooseSource(src.id)}
+            >
+              {src.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!q && selected && <SourceCard src={selected} />}
+      {err && (
+        <p class="warn" style="margin:0" data-testid="lib-error">
+          Bazı paketler açılamadı: {err}
+        </p>
+      )}
+
 
       {q ? (
         <>
@@ -531,6 +543,9 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
         </>
       ) : (
         <>
+          <div class="kt-store kt-store-top">
+            <LibraryStore />
+          </div>
           <div class="kt-actions">
             <button class="btn" data-testid="lib-random" disabled={randomState === 'busy'} onClick={random}>
               <IcoDice />
@@ -577,6 +592,7 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
             </>
           )}
 
+
           <p class="empty" style="margin:0">
             Madde başlığının herhangi bir kelimesini yazın; Türkçe karakterler ve küçük yazım hataları sorun olmaz.
             Sonuçlar internet olmadan, bu cihazdaki paketlerden gelir.
@@ -589,9 +605,6 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
               </span>
             </button>
           ))}
-          <div class="kt-store">
-            <LibraryStore />
-          </div>
         </>
       )}
     </div>
@@ -625,40 +638,6 @@ function SourceCard({ src }: { src: LibrarySource }) {
         {src.hasFulltext && <span class="tag">tam metin dizini</span>}
         <span class="tag">çevrimdışı</span>
       </div>
-    </div>
-  );
-}
-
-function AllSourcesCard({ sources }: { sources: LibrarySource[] }) {
-  const total = sources.reduce((a, b) => a + b.articleCount, 0);
-  return (
-    <div class="card kt-meta" data-testid="lib-meta">
-      <div class="kt-meta-top">
-        <div class="kt-meta-icon">
-          <IconBook size={18} />
-        </div>
-        <div class="grow">
-          <div class="kt-meta-title">Tüm kaynaklar</div>
-          <p class="kt-meta-desc">
-            {sources.length} paket · {total.toLocaleString('tr-TR')} madde
-          </p>
-        </div>
-      </div>
-      <ul class="kt-srclist">
-        {sources.map((s) => (
-          <li key={s.id} class="kt-srcrow" data-testid="lib-meta-row">
-            <div class="kt-srcrow-top">
-              <span class="kt-srcrow-name">{s.label}</span>
-              {s.title !== s.label && <span class="kt-srcrow-sub">{s.title}</span>}
-            </div>
-            <div class="kt-tags">
-              <span class="tag">{s.articleCount.toLocaleString('tr-TR')} madde</span>
-              {s.languageName && <span class="tag">{s.languageName}</span>}
-              {s.size > 0 && <span class="tag">{formatSize(s.size)}</span>}
-            </div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
