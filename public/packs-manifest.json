@@ -1164,7 +1164,7 @@
       "name": "Hava ve iklim — Türkiye (81 il)",
       "desc": "Her il için ay ay iklim normalleri (sıcaklık, don, yağış) ve önümüzdeki 6–7 ayın mevsimsel eğilimi: normalden sıcak mı soğuk mu, yağışlı mı kurak mı. Gün gün hava durumu değildir. Her ay yenilenir.",
       "file": "hava-iklim-tr.json",
-      "size": 57724,
+      "size": 57443,
       "sizeApprox": false,
       "tier": "temel",
       "urls": [
@@ -1173,7 +1173,7 @@
       "license": "CC BY 4.0 (ECMWF SEAS5, Open-Meteo.com) · NASA POWER",
       "source": "ECMWF SEAS5 mevsimsel tahmin (Open-Meteo üzerinden), NASA POWER iklim verisi",
       "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir).",
-      "sha256": "498f268f758411c2585bb238399febfea89d35b6f29a2c7c0ca3f8d31a655c50"
+      "sha256": "3a91f616429963abf84dce424129503284fa7c20befe43f664c43cbcfbf1accc"
     }
   ]
 }
