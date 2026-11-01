@@ -9679,7 +9679,7 @@ async function main() {
       process.stdout.write("\r    tamam                         \n");
     }
     const patch = {};
-    if (e.kind === "map" || e.kind === "poi" || e.kind === "hava") {
+    if (e.kind === "map" || e.kind === "poi" || e.kind === "hava" || e.kind === "rehber") {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);

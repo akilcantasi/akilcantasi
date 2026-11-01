@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(__dirname, '..');
-const DIRS = ['src', 'public', 'tests', 'e2e', 'docs', 'tools', 'server', 'testdata'];
+const DIRS = ['src', 'public', 'tests', 'e2e', 'docs', 'tools', 'server', 'testdata', 'packs-src'];
 const TEXT = /\.(ts|tsx|js|mjs|cjs|json|md|html|css|txt|py|sh|conf|ps1|cmd|webmanifest|geojson)$/i;
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', 'android']);
 
@@ -100,7 +100,8 @@ describe('kişisel bilgi yasağı', () => {
       if (rel === self || rel === 'CLAUDE.md') continue;
       const text = fs.readFileSync(f, 'utf8').toLocaleLowerCase('tr-TR');
       for (const w of forbiddenWords(text)) hits.push(`${rel}: "${w}"`);
-      if (!CITY_DATA(rel)) for (const w of CITY_WORDS) if (text.includes(w)) hits.push(`${rel}: "${w}"`);
+      // Şehir adı kelime başında aranır ("mecbursanız" gibi kelimelerin içi sayılmaz)
+      if (!CITY_DATA(rel)) for (const w of CITY_WORDS) if (new RegExp('(?<!\\p{L})' + w, 'u').test(text)) hits.push(`${rel}: "${w}"`);
     }
     expect(hits, 'Kişisel bilgi içeren dosyalar (CLAUDE.md §1)').toEqual([]);
   });

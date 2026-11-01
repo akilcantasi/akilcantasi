@@ -230,7 +230,7 @@ async function main() {
     }
     const patch: Partial<Entry> = {};
     // Her ay yeniden üretilen paketler: boyut ve özet yeniden yazılır
-    if (e.kind === 'map' || e.kind === 'poi' || e.kind === 'hava') {
+    if (e.kind === 'map' || e.kind === 'poi' || e.kind === 'hava' || e.kind === 'rehber') {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);

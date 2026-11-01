@@ -24,7 +24,7 @@ on:
         default: '14'
         required: true
       sadece:
-        description: 'Yalnız bunları üret ve yükle (boş = hepsi): harita-tr-genel,harita-tr-detay,poi-tr-afet,hava-tr'
+        description: 'Yalnız bunları üret ve yükle (boş = aylık olanların hepsi): harita-tr-genel,harita-tr-detay,poi-tr-afet,hava-tr; rehber paketleri için sifirdan-… kimlikleri'
         default: ''
         required: false
 
@@ -97,6 +97,15 @@ jobs:
         run: |
           mkdir -p data/hava
           node tools/hava/hava-paketi.mjs data/hava/hava-iklim-tr.json
+
+      - name: Rehber paketleri (Sıfırdan)
+        # Yalnız istenince: sadece listesinde "sifirdan" geçerse kaynaktan (packs-src/) derlenir.
+        # Derleme tekrarlanabilirdir; aynı kaynak her seferinde bayt bayt aynı dosyayı verir.
+        if: contains(env.SADECE, 'sifirdan')
+        run: |
+          npm ci --no-audit --no-fund --loglevel=error
+          npx -y tsx tools/check-sifirdan.ts
+          npx -y tsx tools/build-rehber-packs.ts
 
       - name: Merkezi kataloğu eşitle
         # Önceki aylarda yüklenen paketlerin boyut/özet bilgisi Hugging Face'teki katalogda durur;

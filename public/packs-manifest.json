@@ -1325,9 +1325,9 @@
       "name": "Sıfırdan: Bilgi, haberleşme ve topluluk",
       "desc": "Zamanı ve ölçüyü yeniden kurmak, bilgiyi korumak ve öğretmek, telsizsiz ve telsizle haberleşmek, gönüllülük ve insan haklarına dayalı bir topluluk düzeni kurmak, doğada yıllarca güvenle yaşamak.",
       "file": "sifirdan-bilgi-topluluk.rehber.json",
-      "size": 2245413,
+      "size": 2245405,
       "sizeApprox": false,
-      "sha256": "9c854b9b28cb03a728774007553ab50557822bd7e3151a32f2189553d94be831",
+      "sha256": "25cab0e4a3af8ebc2a17da2a2b2e838c7916d31d4e6d2e9c5b547597a79c2cef",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-bilgi-topluluk.rehber.json"
