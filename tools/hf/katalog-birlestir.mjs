@@ -1,6 +1,8 @@
 // Aylık işin güncellediği katalog alanlarını (adres, boyut, özet) depodaki güncel kataloğa taşır.
 // İş sürerken depoya eklenen yeni paketler ya da değişiklikler korunur.
-//   node tools/hf/katalog-birlestir.mjs <işin-katalogu.json> <depodaki-katalog.json>
+//   node tools/hf/katalog-birlestir.mjs <kaynak-katalog.json> <hedef-katalog.json> [id1,id2,…]
+// Kimlik listesi verilirse yalnız o paketler taşınır (ör. Hugging Face'teki merkezi katalogdan
+// her ay yeniden üretilen haritalar, noktalar ve hava paketi).
 import fs from 'node:fs';
 
 const FIELDS = ['urls', 'size', 'sizeApprox', 'sha256', 'desc', 'file'];
@@ -23,10 +25,10 @@ export function merge(fromJob, current, ids = null) {
 }
 
 if (process.argv[1] && process.argv[1].endsWith('katalog-birlestir.mjs')) {
-  const [a, b] = process.argv.slice(2);
+  const [a, b, list] = process.argv.slice(2);
   const job = JSON.parse(fs.readFileSync(a, 'utf8'));
   const cur = JSON.parse(fs.readFileSync(b, 'utf8'));
-  const n = merge(job, cur);
+  const n = merge(job, cur, list ? list.split(',').map((x) => x.trim()).filter(Boolean) : null);
   fs.writeFileSync(b, JSON.stringify(cur, null, 2) + '\n');
   console.log(`Katalog birleştirildi: ${n} alan güncellendi`);
 }

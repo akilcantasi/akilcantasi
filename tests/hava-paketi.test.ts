@@ -67,5 +67,8 @@ describe('aylık katalog birleştirme', () => {
     expect(cur.packs[0]).toEqual({ id: 'hava-tr', urls: ['https://hf/x'], size: 81234, sizeApprox: false, sha256: 'ab', name: 'yeni ad' });
     expect(cur.packs[1].id).toBe('yeni-paket');
     expect(cur.updated).toBe('2026-12-06');
+    const cur2 = { packs: [{ id: 'hava-tr', size: 1 }, { id: 'harita', size: 1 }] };
+    expect(merge({ packs: [{ id: 'hava-tr', size: 2 }, { id: 'harita', size: 3 }] }, cur2, ['harita'])).toBe(1);
+    expect(cur2.packs.map((p: any) => p.size)).toEqual([1, 3]);
   });
 });

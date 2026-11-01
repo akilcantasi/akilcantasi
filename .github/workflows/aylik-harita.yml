@@ -98,6 +98,16 @@ jobs:
           mkdir -p data/hava
           node tools/hava/hava-paketi.mjs data/hava/hava-iklim-tr.json
 
+      - name: Merkezi kataloğu eşitle
+        # Önceki aylarda yüklenen paketlerin boyut/özet bilgisi Hugging Face'teki katalogda durur;
+        # depodaki kopya geride kalmışsa (ör. katalog işlenemediyse) bu ayki yükleme onu ezmesin.
+        run: |
+          if curl -fsSL --retry 3 https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/packs-manifest.json -o /tmp/hf-katalog.json; then
+            node tools/hf/katalog-birlestir.mjs /tmp/hf-katalog.json public/packs-manifest.json harita-tr-genel,harita-tr-detay,poi-tr-afet,hava-tr
+          else
+            echo "Merkezi katalog alınamadı; depodaki kopya kullanılacak"
+          fi
+
       - name: Hugging Face'e yükle
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
