@@ -72,7 +72,7 @@ export interface Manifest {
   sets?: { id: string; title: string; desc: string; ids: string[] }[];
 }
 
-export const KINDS: PackKind[] = ['zim', 'model', 'map', 'poi', 'ses', 'hava'];
+export const KINDS: PackKind[] = ['zim', 'model', 'map', 'poi', 'ses', 'hava', 'rehber'];
 export const TIERS: Tier[] = ['temel', 'standart', 'tam'];
 export const TIER_LABEL: Record<Tier, string> = { temel: 'Temel', standart: 'Standart', tam: 'Tam' };
 export const KIND_LABEL: Record<PackKind, string> = {
@@ -82,6 +82,7 @@ export const KIND_LABEL: Record<PackKind, string> = {
   poi: 'Harita noktaları',
   ses: 'Sesli soru (konuşma tanıma)',
   hava: 'Hava ve iklim',
+  rehber: 'Rehber paketleri',
 };
 
 const EXT_BY_KIND: Record<PackKind, string[]> = {
@@ -91,7 +92,15 @@ const EXT_BY_KIND: Record<PackKind, string[]> = {
   poi: ['geojson', 'json'],
   ses: ['tar'],
   hava: ['json'],
+  rehber: ['rehber.json'],
 };
+
+/** Dosya adı türün uzantısıyla bitiyor mu? (".rehber.json" harita noktası sayılmaz) */
+export function fileMatchesKind(file: string, kind: PackKind): boolean {
+  const f = file.toLowerCase();
+  if (kind !== 'rehber' && f.endsWith('.rehber.json')) return false;
+  return (EXT_BY_KIND[kind] ?? []).some((e) => f.endsWith('.' + e));
+}
 
 /** Katalog doğrulaması. Geçersiz paketler atılır; ciddi hata varsa ok=false. */
 export function validateManifest(input: unknown): { ok: boolean; errors: string[]; manifest: Manifest } {
@@ -123,8 +132,7 @@ export function validateManifest(input: unknown): { ok: boolean; errors: string[
     if (typeof p.file !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(p.file)) errs.push('file geçersiz');
     else {
       if (files.has(p.file)) errs.push('file tekrar ediyor');
-      const ext = p.file.toLowerCase().split('.').pop();
-      if (KINDS.includes(p.kind) && !EXT_BY_KIND[p.kind as PackKind].includes(ext)) errs.push('file uzantısı türle uyuşmuyor');
+      if (KINDS.includes(p.kind) && !fileMatchesKind(p.file, p.kind)) errs.push('file uzantısı türle uyuşmuyor');
     }
     if (typeof p.size !== 'number' || !(p.size >= 0)) errs.push('size geçersiz');
     if (p.sha256 !== undefined && p.sha256 !== '' && !/^[0-9a-f]{64}$/.test(String(p.sha256))) errs.push('sha256 geçersiz');

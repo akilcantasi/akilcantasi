@@ -1,6 +1,7 @@
 // Rehberlerde Türkçe duyarlı, eklere toleranslı basit arama.
 // Ağır bir arama kütüphanesi kullanılmaz; rehber sayısı küçüktür.
 import { GUIDES, type Guide } from '../content/guides';
+import { getPackGuides, packGuidesVersion } from '../content/pack-guides';
 
 export type { Guide };
 
@@ -110,11 +111,14 @@ interface Indexed {
 const W = { title: 10, keywords: 6, summary: 3, body: 1 };
 
 let index: Indexed[] | null = null;
+/** Dizinin kurulduğu andaki paket rehberi sürümü: paket yüklenince dizin yenilenir */
+let indexVersion = -1;
 /** Rehberlerde geçen kelimeler → ağırlıklı sıklık (yazım düzeltmesi için) */
 let vocab: Map<string, number> | null = null;
 function getIndex(): Indexed[] {
-  if (index) return index;
-  index = GUIDES.map((g) => ({
+  if (index && indexVersion === packGuidesVersion()) return index;
+  indexVersion = packGuidesVersion();
+  index = getAllGuides().map((g) => ({
     guide: g,
     title: new Set(tokenize(g.title + ' ' + g.tag)),
     keywords: new Set(g.keywords.flatMap(tokenize)),
@@ -202,11 +206,13 @@ export function searchGuides(query: string, limit = 5): { guide: Guide; score: n
 
 export function getGuide(id: string | null | undefined): Guide | undefined {
   if (!id) return undefined;
-  return GUIDES.find((g) => g.id === id);
+  return GUIDES.find((g) => g.id === id) ?? getPackGuides().find((g) => g.id === id);
 }
 
+/** Yerleşik rehberler + kurulu rehber paketlerindekiler (paketler sonda) */
 export function getAllGuides(): Guide[] {
-  return GUIDES;
+  const extra = getPackGuides();
+  return extra.length ? [...GUIDES, ...extra] : GUIDES;
 }
 
 /** Asistan bağlamı için düz metin */
@@ -214,6 +220,7 @@ export function guideToText(g: Guide): string {
   const lines: string[] = [];
   lines.push(`${g.title} [${g.tag}]`);
   lines.push(g.summary);
+  if (g.note) lines.push('Uyarı: ' + g.note);
   if (g.callEmergency) lines.push("Mümkünse hemen 112'yi arayın.");
   lines.push('');
   lines.push('Adımlar:');

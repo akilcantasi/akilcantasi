@@ -18,6 +18,7 @@ import './lib/settings';
 import { App } from './App';
 import { go, TAB_IDS, type TabId } from './lib/store';
 import { TOOLS } from './tools/registry';
+import { initPackGuides } from './content/pack-guides';
 
 const root = document.getElementById('app')!;
 if (new URLSearchParams(location.search).has('art')) {
@@ -33,6 +34,8 @@ if (new URLSearchParams(location.search).has('art')) {
   if (q.get('tool')) go.tool(q.get('tool'));
   if (q.get('comm')) go.comm(q.get('comm'));
   render(<App />, root);
+  // Kurulu rehber paketlerini (.rehber.json) yükle; ?guide= paket rehberi ise yüklenince açılır
+  initPackGuides();
   prefetchLazyChunks();
 }
 

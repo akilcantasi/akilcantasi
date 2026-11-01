@@ -4,8 +4,10 @@
 //  • Paket setleri: her setin ilerlemesi ve (yüklüler düşülmüş) kalan boyutu; dokununca seçilir
 //  • Alt çubuk: seçilenlerin toplamı ve "İndir"; inerken toplu ilerleme, hız ve "Duraklat"
 //  • Tek tek seçmek isteyene raflara ayrılmış tüm koleksiyon
+//  • Rehber paketleri ("Sıfırdan rehberleri": indir, dosyadan içe aktar, sil)
 // Paket satırları Araçlar → Paketler ile aynıdır (src/lib/packs-ui.tsx).
-import { useMemo, useState } from 'preact/hooks';
+import { useMemo, useRef, useState } from 'preact/hooks';
+import { importRehberPack, packInfoForFile, usePackGuides } from '../content/pack-guides';
 import { SHELVES, SHELF_LABEL, SHELF_SHORT, type Shelf } from '../lib/manifest';
 import { PackRow, UpdateBanner, usePackRows, type RowModel } from '../lib/packs-ui';
 import { canSaveToDevice, isActive, pauseDownload } from '../lib/downloader';
@@ -75,7 +77,74 @@ export const MAGAZA_CSS = `
 .lm-group { display: flex; flex-direction: column; gap: 8px; }
 .lm-group h3 { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
 .lm-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.lm-rehber { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.lm-rehber .btn { align-self: flex-start; }
 `;
+
+// İçe aktarma sonucu: paket listesi değişince Kütüphane yeniden kurulur, ileti kaybolmasın
+let lastRehberMsg = '';
+
+/** Rehber paketleri rafı: katalogdaki ve kurulu .rehber.json paketleri */
+function RehberShelf({ rows, dlFor, memGB, rec }: Pick<ReturnType<typeof usePackRows>, 'rows' | 'dlFor' | 'memGB' | 'rec'>) {
+  usePackGuides();
+  // Katalogda olmayan (içe aktarılan) paketlerde dosya adı yerine paketin kendi adı
+  const list = rows
+    .filter((r) => r.kind === 'rehber')
+    .map((r) => {
+      const info = !r.entry && r.device ? packInfoForFile(r.device.id) : null;
+      return info ? { ...r, name: info.name, desc: `${info.guides} rehber · ${info.desc}` } : r;
+    });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsgState] = useState(lastRehberMsg);
+  const setMsg = (m: string) => setMsgState((lastRehberMsg = m));
+  const onFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setBusy(true);
+    setMsg('');
+    const out: string[] = [];
+    for (const f of Array.from(files)) {
+      try {
+        const r = await importRehberPack(f);
+        out.push(`"${r.name}" eklendi (${r.guides} rehber). Rehber sekmesinde "Sıfırdan" bölümünde.` + (r.warnings.length ? ` ${r.warnings.length} bozuk öğe atlandı.` : ''));
+      } catch (e) {
+        out.push(`${f.name}: ${(e as Error).message}`);
+      }
+    }
+    if (fileRef.current) fileRef.current.value = '';
+    setBusy(false);
+    setMsg(out.join(' '));
+  };
+  return (
+    <div class="lm-group lm-rehber" data-testid="lib-rehber">
+      <h3>Sıfırdan rehberleri</h3>
+      <p class="lm-note">
+        Uzun süre dışarıdan yardım gelmezse: yiyecek, su, barınak, alet ve tarım üzerine adım adım, çizimli rehberler. İndirilen paketler Rehber sekmesinde görünür.
+      </p>
+      {list.map((r) => (
+        <PackRow key={r.key} row={r} dl={dlFor(r)} memGB={memGB} recommended={rec.tier} />
+      ))}
+      {!list.length && <p class="lm-note">Katalogda henüz rehber paketi yok; elinizdeki .rehber.json dosyasını içe aktarabilirsiniz.</p>}
+      <input
+        ref={fileRef}
+        type="file"
+        accept=".json,.rehber.json,application/json"
+        multiple
+        hidden
+        data-testid="rehber-import-input"
+        onChange={(e) => onFiles((e.currentTarget as HTMLInputElement).files)}
+      />
+      <button class="btn" data-testid="rehber-import" disabled={busy || !canSaveToDevice()} onClick={() => fileRef.current?.click()}>
+        {busy ? 'İçe aktarılıyor…' : 'Rehber paketini dosyadan içe aktar'}
+      </button>
+      {msg && (
+        <p class="lm-note" data-testid="rehber-import-msg" role="status">
+          {msg}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const LS_SEL = 'ac.lib.setler';
 const LS_MODE = 'ac.lib.secimTuru';
@@ -280,6 +349,8 @@ export function LibraryStore() {
           <p class="lm-note">İngilizce paketlerdeki makaleleri, makaleyi açtıktan sonra Fener ile Türkçeye çevirebilirsiniz.</p>
         </div>
       )}
+
+      <RehberShelf rows={rows} dlFor={dlFor} memGB={memGB} rec={rec} />
 
       {(inen.length > 0 || q.length > 0) && (
         <div class="lm-bar" data-testid="lib-bar" role="status">

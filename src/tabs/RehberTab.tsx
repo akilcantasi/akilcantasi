@@ -1,10 +1,12 @@
 // Rehber sekmesi: elle hazırlanmış, yapay zekâ kullanmayan acil durum rehberleri.
 // Gezinme: ana ekran (kategori kutuları) → kategori (rehber listesi) → rehber (çizimli adımlar).
+// Kurulu rehber paketlerinin (ör. "Sıfırdan") kategorileri ana kategorilerden sonra ayrı bölümde.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useAppState, go } from '../lib/store';
 import { GUIDES, type Guide } from '../content/guides';
 import { CATEGORIES, categoryOf, type GuideCategory } from '../content/categories';
-import { GUIDE_ART, guideThumb } from '../content/guide-art';
+import { GUIDE_ART, guideArt, guideThumb } from '../content/guide-art';
+import { getPackCategories, isPackGuide, packCategoryOf, usePackGuides } from '../content/pack-guides';
 import { getGuide, searchGuides } from '../lib/guides-search';
 import { Art } from '../art';
 import { IconChat, IconWarn } from '../icons';
@@ -96,6 +98,9 @@ const CSS = `
 .rh-src { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 0; }
 .rh-review { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text2); line-height: 1.45; background: rgba(245,165,36,0.08); border: 1px solid rgba(245,165,36,0.35); border-radius: 14px; padding: 10px 12px; margin: 0; }
 .rh-review svg { flex-shrink: 0; color: var(--accent); margin-top: 1px; }
+.rh-note { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; font-weight: 500; color: var(--text); line-height: 1.45; background: rgba(245,165,36,0.14); border: 1px solid rgba(245,165,36,0.6); border-left-width: 5px; border-radius: 14px; padding: 12px 14px; margin: 0; }
+.rh-note svg { flex-shrink: 0; color: var(--accent); margin-top: 2px; }
+.rh-pack-sub { margin-top: 18px; }
 .rh-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
 `;
 
@@ -124,9 +129,9 @@ function GuideRow({ g, onOpen }: { g: Guide; onOpen?: (id: string) => void }) {
   );
 }
 
-function CategoryTile({ c }: { c: GuideCategory }) {
+function CategoryTile({ c }: { c: GuideCategory & { packId?: string } }) {
   return (
-    <button class="rh-cat" data-testid="guide-category" data-category-id={c.id} onClick={() => go.category(c.id)} title={c.hint}>
+    <button class="rh-cat" data-testid="guide-category" data-category-id={c.id} data-pack-id={c.packId} onClick={() => go.category(c.id)} title={c.hint}>
       <span class="rh-medal" aria-hidden="true">
         <Art id={c.art} />
       </span>
@@ -170,8 +175,9 @@ type Origin = { id: string; from: 'search' | 'home' } | null;
 
 function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: GuideCategory | undefined; origin: Origin }) {
   // Kategoriden açıldıysa o kategoriye, aramadan ya da kısayoldan açıldıysa ana ekrana döner
-  const back = fromCategory ?? (origin ? undefined : categoryOf(g.id));
-  const art = GUIDE_ART[g.id] ?? [];
+  const back = fromCategory ?? (origin ? undefined : categoryOf(g.id) ?? packCategoryOf(g.id));
+  const art = guideArt(g.id);
+  const fromPack = isPackGuide(g.id);
   return (
     <article class="pad" aria-labelledby="rh-title" data-testid="guide-detail">
       <button class="rh-back" data-testid="guide-back" onClick={() => go.category(back?.id ?? null)}>
@@ -183,6 +189,13 @@ function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: Guid
       </div>
       <h1 class="rh-title" id="rh-title">{g.title}</h1>
       <p class="rh-summary">{g.summary}</p>
+
+      {g.note && (
+        <p class="rh-note" role="note" data-testid="guide-note">
+          <IconWarn size={18} />
+          <span>{g.note}</span>
+        </p>
+      )}
 
       {g.callEmergency && (
         <div class="rh-sos" role="note" data-testid="guide-112">
@@ -226,7 +239,7 @@ function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: Guid
       {!g.reviewed && (
         <p class="rh-review" data-testid="guide-review">
           <IconWarn size={16} />
-          <span>Bu rehber henüz bir sağlık profesyoneli tarafından incelenmedi.</span>
+          <span>Bu rehber henüz bir {fromPack ? 'uzman' : 'sağlık profesyoneli'} tarafından incelenmedi.</span>
         </p>
       )}
 
@@ -242,8 +255,11 @@ export function RehberTab() {
   const s = useAppState();
   const [query, setQuery] = useState('');
   const [origin, setOrigin] = useState<Origin>(null);
+  // Rehber paketi yüklenince/silinince yeniden çizilir (paket rehberleri, arama dizini)
+  const packV = usePackGuides();
+  const packCats = getPackCategories();
   const open = getGuide(s.openGuideId);
-  const cat = CATEGORIES.find((c) => c.id === s.openCategoryId);
+  const cat: GuideCategory | undefined = CATEGORIES.find((c) => c.id === s.openCategoryId) ?? packCats.find((c) => c.id === s.openCategoryId);
 
   useEffect(scrollTop, [open?.id, cat?.id]);
 
@@ -263,7 +279,7 @@ export function RehberTab() {
     // Yalnızca gövde metnindeki tesadüfi eşleşmeleri gizle ("dolar kaç tl" gibi)
     const top = res[0]?.score ?? 0;
     return res.filter((r) => r.score >= Math.max(2, top * 0.2)).map((r) => r.guide);
-  }, [query]);
+  }, [query, packV]);
 
   let body;
   if (open) {
@@ -349,6 +365,17 @@ export function RehberTab() {
               <CategoryTile key={c.id} c={c} />
             ))}
           </div>
+        )}
+        {!results && packCats.length > 0 && (
+          <section class="rh-pack-sub" aria-labelledby="rh-sifirdan" data-testid="guide-pack-section">
+            <h2 class="rh-h" id="rh-sifirdan">Sıfırdan</h2>
+            <p class="rh-intro" style="margin:2px 0 10px">İndirdiğiniz rehber paketleri: uzun süre dışarıdan yardım gelmezse yaşamı yeniden kurmak için.</p>
+            <div class="rh-cats" role="group" aria-label="Sıfırdan rehber kategorileri">
+              {packCats.map((c) => (
+                <CategoryTile key={c.id} c={c} />
+              ))}
+            </div>
+          </section>
         )}
         </div>
       </div>

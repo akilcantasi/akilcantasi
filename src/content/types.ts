@@ -31,6 +31,11 @@ export interface Guide {
   critical?: boolean;
   /** Ana kategorisi dışında görüneceği diğer kategoriler */
   alsoIn?: string[];
+  /**
+   * Rehberin başında gösterilen uyarı bandı (ör. yasal not ya da "uzman gözetimi
+   * olmadan uygulamayın"). Kısa, 1–2 cümle.
+   */
+  note?: string;
   /** Doğruluk denetiminden geçtiği tarih ve not (denetim ajanları doldurur) */
   checked?: { date: string; note?: string };
 }

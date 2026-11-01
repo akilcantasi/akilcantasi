@@ -6,7 +6,8 @@
     "zim": "zim",
     "map": "harita",
     "poi": "noktalar",
-    "hava": "hava"
+    "hava": "hava",
+    "rehber": "rehber"
   },
   "paketler": [
     "harita-tr-genel",
@@ -33,6 +34,16 @@
     "kitap-afet-sonrasi",
     "kitap-tip",
     "sahra-tibbi",
-    "ifixit-tr"
+    "ifixit-tr",
+    "sifirdan-yiyecek-bulma",
+    "sifirdan-yiyecek-saklama",
+    "sifirdan-tarim-hayvancilik",
+    "sifirdan-su-dezenfeksiyon",
+    "sifirdan-hijyen-saglik",
+    "sifirdan-yapi",
+    "sifirdan-ates-pisirme",
+    "sifirdan-giyim-zanaat",
+    "sifirdan-enerji-kimya",
+    "sifirdan-bilgi-topluluk"
   ]
 }

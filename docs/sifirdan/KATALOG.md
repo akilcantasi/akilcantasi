@@ -8,7 +8,7 @@ Her başlık bir rehberdir (4–10 adım, çizimli). Rehber yazımı ve doğrula
 - [Y]: yasal not gerekir. Türkiye'de olağan koşullarda yasak ya da izne bağlı; rehber "yalnız hayatta kalma durumunda" çerçevesiyle yazılır.
 - [U]: uzman gözden geçirmesi şart (sağlık, yapı güvenliği, kimya).
 
-Bilerek dışarıda bırakılanlar: silah, mermi, barut ve patlayıcı yapımı; ruhsatsız alkol damıtma; ilaç ve doz tarifleri; bitkisel tedavi iddiaları.
+Bilerek dışarıda bırakılanlar: silah, mermi, barut ve patlayıcı yapımı; içki yapımı için damıtma (dezenfektan amaçlı damıtma bölüm 16'da); ilaç ve doz tarifleri; bitkisel tedavi iddiaları.
 
 ---
 
@@ -336,6 +336,26 @@ Bilerek dışarıda bırakılanlar: silah, mermi, barut ve patlayıcı yapımı;
 293. Yangın mevsimi ve yerleşim koruma
 294. Sel ve heyelandan yerleşimi koruma
 295. Orman ürünlerini sürdürülebilir kullanma
+
+## 16. Dezenfeksiyon ve sterilizasyon
+296. Hangi iş için ne gerekir: temizlik, dezenfeksiyon, sterilizasyon farkı
+297. Sabun ve su: eller için neden alkolden daha önemli
+298. Kaynatma ile sterilizasyon: süre, kap, alet ve bez
+299. Basınçlı tencere ile sterilizasyon (otoklav mantığı) [U]
+300. Çamaşır suyunu seyreltme: yüzey, su, el için oranlar [U]
+301. Tuzlu sudan elektrolizle klorlu dezenfektan (WHO yöntemi), klor gazı riski [U]
+302. Kireç sütü: yüzey, tuvalet ve ahır dezenfeksiyonu [U]
+303. Kül suyu ile temizlik [U]
+304. Güneş ve ısı ile dezenfeksiyon: yatak, giysi, kap
+305. Duman ve tütsü: neye yarar, neye yaramaz
+306. Fermantasyon: şekerden ve meyveden alkollü maya
+307. Dezenfektan için alkol damıtma: basit imbik, ilk akan kısmı (baş) atma, ölçme [Y][U]
+308. Alkol yüzdesini ölçme: yoğunluk ve yanma testi; %60–80 aralığı neden gerekir [U]
+309. Damıtılmış alkol içilmez: metanol riski ve etiketleme [U]
+310. Sirke: dezenfektan değildir, sınırları
+311. Yara için temiz su: kaynatılıp soğutulmuş tuzlu su [U]
+312. Doğum ve yara malzemesi hazırlama: temiz bez, kaynatılmış makas ve ip [U]
+313. Su dezenfeksiyonu özeti: kaynatma, klor, SODIS, filtre — hangisi ne zaman
 
 ---
 

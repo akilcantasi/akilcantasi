@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import QRCode from 'qrcode';
 import '../styles/paylas.css';
 import { setState, useAppState } from '../lib/store';
-import { formatSize, importFile, type PackKind } from '../lib/packs';
+import { formatSize, importFile, kindOf, type PackKind } from '../lib/packs';
+import { importRehberPack } from '../content/pack-guides';
 import { KIND_LABEL, TIER_LABEL } from '../lib/manifest';
 import { canSaveToDevice, requestPersist } from '../lib/downloader';
 import { native } from '../lib/native';
@@ -318,7 +319,7 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
 
 // ---- paketler ----
 
-const KIND_ORDER: PackKind[] = ['zim', 'model', 'ses', 'map', 'poi', 'hava'];
+const KIND_ORDER: PackKind[] = ['zim', 'rehber', 'model', 'ses', 'map', 'poi', 'hava'];
 
 function PacksCard(_: { status: ServerStatus | null | undefined }) {
   const { manifest, rows, dlFor, rec, storage, memGB } = usePackRows();
@@ -334,7 +335,9 @@ function PacksCard(_: { status: ServerStatus | null | undefined }) {
     for (const f of Array.from(files)) {
       try {
         setImporting({ name: f.name, done: 0, total: f.size });
-        await importFile(f, (done, total) => setImporting({ name: f.name, done, total }));
+        // Rehber paketi önce doğrulanır (bozuk dosya cihaza kopyalanmaz)
+        if (kindOf(f.name) === 'rehber') await importRehberPack(f);
+        else await importFile(f, (done, total) => setImporting({ name: f.name, done, total }));
         ok++;
       } catch (e) {
         errs.push(`${f.name}: ${(e as Error).message}`);
@@ -392,7 +395,7 @@ function PacksCard(_: { status: ServerStatus | null | undefined }) {
       <input
         ref={fileRef}
         type="file"
-        accept=".zim,.gguf,.pmtiles,.geojson,.json,.tar"
+        accept=".zim,.gguf,.pmtiles,.geojson,.json,.rehber.json,.tar"
         multiple
         hidden
         onChange={(e) => onFiles((e.currentTarget as HTMLInputElement).files)}

@@ -1,7 +1,8 @@
 // İçerik paketleri: Vikipedi (ZIM), Fener modeli (GGUF; büyük modeller
 // "-00001-of-0000N.gguf" parçaları halinde), harita (PMTiles), harita noktaları
 // (GeoJSON), sesli soru için konuşma tanıma modeli (Whisper ONNX dosyalarını
-// içeren tek bir .tar; bkz. src/lib/voice/whisper-pack.ts). Paketler iki yerden gelebilir:
+// içeren tek bir .tar; bkz. src/lib/voice/whisper-pack.ts) ve isteğe bağlı rehber paketleri
+// (.rehber.json; bkz. src/content/pack-guides.ts). Paketler iki yerden gelebilir:
 //  1) Cihazın kendi deposu: OPFS (tarayıcıda indirilen ya da içe aktarılan paketler) ve
 //     Android uygulamasında uygulamanın paket klasörü (yerel indiricinin indirdikleri;
 //     url ile, /_paket/ yolundan parça parça okunur)
@@ -10,7 +11,7 @@ import { BlobSource, HttpRangeSource, type RandomAccessSource } from './source';
 import { getState, setState } from './store';
 import { nativePacks } from './native';
 
-export type PackKind = 'zim' | 'model' | 'map' | 'poi' | 'ses' | 'hava';
+export type PackKind = 'zim' | 'model' | 'map' | 'poi' | 'ses' | 'hava' | 'rehber';
 
 export interface InstalledPack {
   id: string; // dosya adı
@@ -30,6 +31,8 @@ export const KIND_BY_EXT: Record<string, PackKind> = {
 };
 
 export function kindOf(name: string): PackKind | null {
+  // ".rehber.json" rehber paketidir; sıradan ".json" harita noktası sayılır
+  if (name.toLowerCase().endsWith('.rehber.json')) return 'rehber';
   // Hava ve iklim paketi de .json'dur; adından ayırt edilir (hava-*.json)
   if (/^hava-.*\.json$/i.test(name)) return 'hava';
   const ext = name.toLowerCase().split('.').pop() ?? '';
