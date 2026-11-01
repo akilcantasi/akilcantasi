@@ -1114,9 +1114,9 @@
       "name": "Türkiye haritası — genel (z0–10)",
       "desc": "İl, ilçe ve ana yollar. Mahalle ve sokak ayrıntısı yok.",
       "file": "turkiye-genel-z10.pmtiles",
-      "size": 51121188,
+      "size": 45908301,
       "sizeApprox": false,
-      "sha256": "281b8b6231a11f8e0b2cc1aec9924f47edb8f060b4ca18a49b19615c24bb6017",
+      "sha256": "c9d1a7280d3128375c80c6935802653c8324eadd79ea3c21b7d59b692e34dee8",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye-genel-z10.pmtiles"
@@ -1130,9 +1130,9 @@
       "name": "Türkiye haritası — sokak ayrıntılı (z0–14)",
       "desc": "Sokaklar, binalar ve yürüme yolları dahil tüm Türkiye (z0–14).",
       "file": "turkiye.pmtiles",
-      "size": 856688321,
+      "size": 727906062,
       "sizeApprox": false,
-      "sha256": "23cc8cd62f0ff3b151e320f6abed85957ea68c21495fad407dc222f6f42c7850",
+      "sha256": "7e817344c11791d3c526af40ec8c6a6cd19f519c47fb122da955e41efa33da93",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye.pmtiles"
@@ -1146,9 +1146,9 @@
       "name": "Afet noktaları — Türkiye",
       "desc": "Toplanma alanları, hastane ve sağlık ocakları, eczaneler, içme suyu noktaları ve barınaklar. Hazır paket olarak hızlıca iner; gerekirse cihazda OpenStreetMap'ten yeniden oluşturulur.",
       "file": "turkiye-afet-noktalari.geojson",
-      "size": 10397936,
+      "size": 10338974,
       "sizeApprox": false,
-      "sha256": "6019bedb6f12fa15659dcc45c259aa30e84831e59dfc5e06f061279ed1084ce0",
+      "sha256": "cac6f268f8b0155654368c34c39e9c4f8cabdfd7b0f48ca636ff60843e5f69fb",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/noktalar/turkiye-afet-noktalari.geojson",
@@ -1164,15 +1164,16 @@
       "name": "Hava ve iklim — Türkiye (81 il)",
       "desc": "Her il için ay ay iklim normalleri (sıcaklık, don, yağış) ve önümüzdeki 6–7 ayın mevsimsel eğilimi: normalden sıcak mı soğuk mu, yağışlı mı kurak mı. Gün gün hava durumu değildir. Her ay yenilenir.",
       "file": "hava-iklim-tr.json",
-      "size": 90000,
-      "sizeApprox": true,
+      "size": 57724,
+      "sizeApprox": false,
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/hava/hava-iklim-tr.json"
       ],
       "license": "CC BY 4.0 (ECMWF SEAS5, Open-Meteo.com) · NASA POWER",
       "source": "ECMWF SEAS5 mevsimsel tahmin (Open-Meteo üzerinden), NASA POWER iklim verisi",
-      "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir)."
+      "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir).",
+      "sha256": "498f268f758411c2585bb238399febfea89d35b6f29a2c7c0ca3f8d31a655c50"
     }
   ]
 }
