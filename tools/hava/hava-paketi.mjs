@@ -3,8 +3,9 @@
 //   node tools/hava/hava-paketi.mjs <çıktı.json>
 //
 // İnternet yokken de işe yarayacak iki bilgi toplar, 81 il için:
-//  1) İklim normalleri (ay ay ortalama, en yüksek, en düşük sıcaklık ve yağış):
-//     NASA POWER iklim verisi (power.larc.nasa.gov), il başına tek istek.
+//  1) İklim normalleri (ay ay ortalama sıcaklık, günlük en yüksek/en düşük ortalaması ve yağış):
+//     NASA POWER iklim verisi (power.larc.nasa.gov), il başına tek istek. Not: POWER'da T2M_MAX/T2M_MIN
+//     dönemin en uç değerleridir; günlük değerlerin ortalaması T2M_MAX_AVG/T2M_MIN_AVG'dir.
 //  2) Önümüzdeki ~6 ayın eğilimi: ECMWF SEAS5 mevsimsel tahmini (Open-Meteo üzerinden, CC BY 4.0).
 //     Gün gün hava durumu DEĞİLDİR; her ay için "normalden ne kadar sıcak/soğuk, yağışlı/kurak".
 //
@@ -22,7 +23,7 @@ export const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', '
 const DAYS = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 export const POWER_URL = (lat, lon) =>
-  `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,T2M_MAX,T2M_MIN,PRECTOTCORR&community=AG&longitude=${lon}&latitude=${lat}&format=JSON`;
+  `https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=T2M,T2M_MAX_AVG,T2M_MIN_AVG,PRECTOTCORR&community=AG&longitude=${lon}&latitude=${lat}&format=JSON`;
 
 export const SEASONAL_VARS = ['temperature_2m_mean', 'temperature_2m_anomaly', 'precipitation_mean', 'precipitation_anomaly'];
 export const SEASONAL_URL = (lats, lons) =>
@@ -42,8 +43,8 @@ export function parsePower(json) {
   const prec = get('PRECTOTCORR'); // mm/gün
   return {
     t: get('T2M').map(r1),
-    tmax: get('T2M_MAX').map(r1),
-    tmin: get('T2M_MIN').map(r1),
+    tmax: (p.T2M_MAX_AVG ? get('T2M_MAX_AVG') : get('T2M_MAX')).map(r1),
+    tmin: (p.T2M_MIN_AVG ? get('T2M_MIN_AVG') : get('T2M_MIN')).map(r1),
     yagis: prec.map((v, i) => (Number.isFinite(v) ? Math.round(v * DAYS[i]) : null)),
   };
 }

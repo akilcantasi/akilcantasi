@@ -6,8 +6,11 @@ const power = (t: number) => ({
   properties: {
     parameter: {
       T2M: Object.fromEntries([...MONTHS.map((m: string, i: number) => [m, t + i]), ['ANN', 0]]),
-      T2M_MAX: Object.fromEntries(MONTHS.map((m: string, i: number) => [m, t + i + 6])),
-      T2M_MIN: Object.fromEntries(MONTHS.map((m: string, i: number) => [m, i === 0 ? -999 : t + i - 6])),
+      T2M_MAX_AVG: Object.fromEntries(MONTHS.map((m: string, i: number) => [m, t + i + 6])),
+      T2M_MIN_AVG: Object.fromEntries(MONTHS.map((m: string, i: number) => [m, i === 0 ? -999 : t + i - 6])),
+      // dönemin uç değerleri kullanılmamalı
+      T2M_MAX: Object.fromEntries(MONTHS.map((m: string) => [m, 99])),
+      T2M_MIN: Object.fromEntries(MONTHS.map((m: string) => [m, -99])),
       PRECTOTCORR: Object.fromEntries(MONTHS.map((m: string) => [m, 2])),
     },
   },
@@ -27,6 +30,8 @@ describe('hava ve iklim paketi', () => {
     expect(n.t[0]).toBe(0);
     expect(n.t[11]).toBe(11);
     expect(n.tmin[0]).toBeNull();
+    expect(n.tmin[1]).toBe(-5);
+    expect(n.tmax[0]).toBe(6);
     expect(n.yagis[0]).toBe(62);
     expect(n.yagis[3]).toBe(60);
   });
