@@ -7,6 +7,7 @@ import { useBoard } from '../iletisim/client';
 import { CSS, ConnCard } from '../iletisim/common';
 import { Baglan, Duyurular, Iyiyim, Kayip, Pano } from '../iletisim/BoardSections';
 import { Mors, Sms, Sos } from '../iletisim/OfflineTools';
+import { QuickHelp, Yakinlar } from '../iletisim/HizliSms';
 
 const SECTIONS = {
   pano: Pano,
@@ -16,6 +17,7 @@ const SECTIONS = {
   sos: Sos,
   mors: Mors,
   sms: Sms,
+  yakinlar: Yakinlar,
   baglan: Baglan,
 } as const;
 
@@ -30,6 +32,7 @@ const ICONS: Record<SectionId, string> = {
   kayip: '<circle cx="11" cy="9" r="3.5"/><path d="M4.5 20a6.5 6.5 0 0 1 9.6-5.7"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M19.4 19.4L21 21"/>',
   duyuru: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11"/>',
   mors: '<circle cx="5" cy="12" r="1.6"/><path d="M9.5 12h4.5"/><circle cx="18.5" cy="12" r="1.6"/><path d="M4 6h16M4 18h16"/>',
+  yakinlar: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6.5 6.5 0 0 0-3-5.5"/>',
   baglan: '<path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.2a9.5 9.5 0 0 1 13 0M8.6 15.4a5 5 0 0 1 6.8 0"/><circle cx="12" cy="18.6" r="1.2"/>',
 };
 
@@ -63,24 +66,9 @@ function Home() {
   );
   return (
     <div class="pad" data-testid="comm-home">
-      <div class="cm-hero">
-        <h2 class="cm-hero-title">Şebeke yokken de haberleşin</h2>
-        <p class="cm-hero-sub">Telefon çekmese bile ışık, ses ve yakındaki cihazlarla iletişim kurabilirsiniz.</p>
-      </div>
-
       <h2 class="cm-group">Hemen yardım</h2>
-      <div class="cm-quick">
-        <button class="cm-card cm-sos-card" data-testid="comm-card-sos" onClick={() => go.comm('sos')}>
-          <Ic id="sos" />
-          <b>SOS ışık ve ses</b>
-          <span>Yanıp sönen ekran, flaş, düdük ve siren</span>
-        </button>
-        <button class="cm-card cm-sms-card" data-testid="comm-card-sms" onClick={() => go.comm('sms')}>
-          <Ic id="sms" />
-          <b>Hazır SMS</b>
-          <span>Konumlu "iyiyim", 112 ve yardım mesajı</span>
-        </button>
-      </div>
+      <QuickHelp />
+      <div class="cm-rows">{row('sos', 'SOS ışık ve ses', 'Yanıp sönen ekran, flaş, düdük ve siren', undefined, ' cm-sos-card')}</div>
 
       <h2 class="cm-group">Yakındakilerle haberleş</h2>
       <p class="cm-group-sub">Aynı bilgi noktasına (Wi-Fi) bağlı herkesle, internet olmadan.</p>
@@ -94,6 +82,8 @@ function Home() {
 
       <h2 class="cm-group">Diğer araçlar</h2>
       <div class="cm-rows">
+        {row('sms', 'Ayrıntılı SMS yaz', 'Adres, kişi sayısı ve not ekleyerek iyiyim / 112 / yardım mesajı')}
+        {row('yakinlar', 'Yakınlarım', 'Hızlı SMS gidecek kişileri düzenleyin')}
         {row('mors', 'Mors çevirici', 'Yazıyı ışık ve sesle Mors olarak gönderin, Mors okuyun')}
         {row('baglan', 'Bilgi noktasına bağlan', 'Adım adım bağlantı ve yakın cihaz ağı')}
       </div>

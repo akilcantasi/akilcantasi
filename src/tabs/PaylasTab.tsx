@@ -318,7 +318,7 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
 
 // ---- paketler ----
 
-const KIND_ORDER: PackKind[] = ['zim', 'model', 'ses', 'map', 'poi'];
+const KIND_ORDER: PackKind[] = ['zim', 'model', 'ses', 'map', 'poi', 'hava'];
 
 function PacksCard(_: { status: ServerStatus | null | undefined }) {
   const { manifest, rows, dlFor, rec, storage, memGB } = usePackRows();

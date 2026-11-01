@@ -181,6 +181,38 @@ export function NameField({ label = 'Adınız' }: { label?: string }) {
 
 let lastPos: (Pos & { at: number }) | null = null;
 
+/** Son bilinen konum yeterince tazeyse hemen, değilse en çok timeoutMs bekleyerek konum verir; alınamazsa null. */
+export function quickPosition(timeoutMs = 7000, maxAgeMs = 10 * 60 * 1000): Promise<Pos | null> {
+  if (lastPos && Date.now() - lastPos.at < maxAgeMs) return Promise.resolve(lastPos);
+  if (typeof navigator === 'undefined' || !navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (p: Pos | null) => {
+      if (!done) {
+        done = true;
+        resolve(p);
+      }
+    };
+    setTimeout(() => finish(lastPos), timeoutMs + 300);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        lastPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, at: Date.now() };
+        finish(lastPos);
+      },
+      () => finish(lastPos),
+      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: maxAgeMs },
+    );
+  });
+}
+
+/** Konum izni zaten verilmişse konumu arka planda ısıtır (dokununca beklemeden gitsin). */
+export async function warmPosition() {
+  try {
+    const st = await (navigator as any).permissions?.query?.({ name: 'geolocation' });
+    if (st?.state === 'granted') void quickPosition(15000);
+  } catch {}
+}
+
 export function useGeo() {
   const [pos, setPos] = useState<Pos | null>(lastPos);
   const [state, setState] = useState<'idle' | 'loading' | 'ok' | 'error'>(lastPos ? 'ok' : 'idle');

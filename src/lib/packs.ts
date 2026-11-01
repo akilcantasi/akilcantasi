@@ -10,7 +10,7 @@ import { BlobSource, HttpRangeSource, type RandomAccessSource } from './source';
 import { getState, setState } from './store';
 import { nativePacks } from './native';
 
-export type PackKind = 'zim' | 'model' | 'map' | 'poi' | 'ses';
+export type PackKind = 'zim' | 'model' | 'map' | 'poi' | 'ses' | 'hava';
 
 export interface InstalledPack {
   id: string; // dosya adı
@@ -30,6 +30,8 @@ export const KIND_BY_EXT: Record<string, PackKind> = {
 };
 
 export function kindOf(name: string): PackKind | null {
+  // Hava ve iklim paketi de .json'dur; adından ayırt edilir (hava-*.json)
+  if (/^hava-.*\.json$/i.test(name)) return 'hava';
   const ext = name.toLowerCase().split('.').pop() ?? '';
   return KIND_BY_EXT[ext] ?? null;
 }

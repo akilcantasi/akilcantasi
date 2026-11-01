@@ -48,6 +48,7 @@ export function recommendSetup(o: { freeBytes: number | null; memGB: number | nu
     { id: 'poi-tr-afet', group: 'hayati', title: 'Afet noktaları', desc: 'Toplanma alanı, hastane, eczane, su ve barınma noktaları', on: true },
     { id: 'harita-tr-genel', group: 'hayati', title: 'Türkiye haritası — genel', desc: 'İl, ilçe ve ana yollar', on: true },
     { id: 'harita-tr-detay', group: 'hayati', title: 'Türkiye haritası — sokak ayrıntılı', desc: 'Sokaklar ve binalar; yolunuzu bulmak için', on: free >= 6 * GB },
+    { id: 'hava-tr', group: 'bilgi', title: 'Hava ve iklim', desc: 'Önümüzdeki ayların eğilimi ve il il iklim normalleri', on: true },
     { id: 'nhs-ilac', group: 'bilgi', title: 'İlaç rehberi', desc: 'Ne işe yarar, nasıl kullanılır, yan etkiler (İngilizce)', on: true },
     { id: 'kitap-su', group: 'bilgi', title: 'Su arıtma kitaplığı', desc: 'İçme suyu bulma, arıtma ve saklama (İngilizce)', on: true },
     { id: 'wikipedia-tr-mini', group: 'bilgi', title: 'Türkçe Vikipedi (özet)', desc: 'Tüm maddelerin giriş bölümleri', on: free >= 5 * GB },

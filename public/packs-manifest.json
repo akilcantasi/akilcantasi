@@ -1157,6 +1157,22 @@
       "license": "ODbL 1.0 (© OpenStreetMap katkıcıları)",
       "source": "OpenStreetMap (amenity=hospital/pharmacy/drinking_water, emergency=assembly_point)",
       "howto": "Ayrı bir indirme sunucusu gerekmez: uygulama Overpass API ile Türkiye'yi 24 bölgede sorgular ve sonucu tek GeoJSON dosyası olarak kaydeder."
+    },
+    {
+      "id": "hava-tr",
+      "kind": "hava",
+      "name": "Hava ve iklim — Türkiye (81 il)",
+      "desc": "Her il için ay ay iklim normalleri (sıcaklık, don, yağış) ve önümüzdeki 6–7 ayın mevsimsel eğilimi: normalden sıcak mı soğuk mu, yağışlı mı kurak mı. Gün gün hava durumu değildir. Her ay yenilenir.",
+      "file": "hava-iklim-tr.json",
+      "size": 90000,
+      "sizeApprox": true,
+      "tier": "temel",
+      "urls": [
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/hava/hava-iklim-tr.json"
+      ],
+      "license": "CC BY 4.0 (ECMWF SEAS5, Open-Meteo.com) · NASA POWER",
+      "source": "ECMWF SEAS5 mevsimsel tahmin (Open-Meteo üzerinden), NASA POWER iklim verisi",
+      "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir)."
     }
   ]
 }

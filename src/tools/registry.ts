@@ -17,6 +17,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'hesap', title: 'Su ve yiyecek hesabı', desc: 'Kaç kişi, kaç gün, ne kadar gerekir', group: 'Kaynaklar', load: () => import('./hesap') },
   { id: 'stok', title: 'Stok listesi', desc: 'Elinizdekiler, miktar ve tarih', group: 'Kaynaklar', load: () => import('./stok') },
   { id: 'pil', title: 'Pil ve şarj', desc: 'Kalan süre tahmini ve tasarruf ipuçları', group: 'Kaynaklar', load: () => import('./pil') },
+  { id: 'hava', title: 'Hava ve iklim', desc: 'Önümüzdeki ayların eğilimi ve il il normaller', group: 'Yön ve konum', load: () => import('./hava') },
   { id: 'pusula', title: 'Pusula', desc: 'Kuzey, yön ve hedefe açı', group: 'Yön ve konum', load: () => import('./pusula') },
   { id: 'cocuk', title: 'Çocuk köşesi', desc: 'Masallar, oyunlar, boyama', group: 'Bilgi ve eğlence', load: () => import('./cocuk') },
   { id: 'sozluk', title: 'Acil durum cümleleri', desc: 'İngilizce, Arapça, Kürtçe, Farsça…', group: 'Bilgi ve eğlence', load: () => import('./sozluk') },

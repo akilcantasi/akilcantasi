@@ -9416,7 +9416,10 @@ function createFetcher(o) {
       if (!safeName(e.file)) return { ok: false, status: 400, error: "Ge\xE7ersiz dosya ad\u0131" };
       if (!(e.urls ?? []).some((u) => /^https?:\/\//.test(u))) return { ok: false, status: 400, error: "Bu paket sunucuda indirilemez" };
       const finalPath = path.join(o.dataDir, e.file);
-      if (fs.existsSync(finalPath)) return { ok: true, job: { file: e.file, id: e.id, status: "done", received: 0, total: 0, speed: 0 } };
+      if (fs.existsSync(finalPath)) {
+        const have = fs.statSync(finalPath).size;
+        if (e.sizeApprox || !e.size || have === e.size) return { ok: true, job: { file: e.file, id: e.id, status: "done", received: have, total: have, speed: 0 } };
+      }
       let j = jobs.get(e.file);
       if (j && (j.status === "downloading" || j.status === "checking" || j.status === "verifying")) return { ok: true, job: pub(j) };
       j ??= {
@@ -9676,7 +9679,7 @@ async function main() {
       process.stdout.write("\r    tamam                         \n");
     }
     const patch = {};
-    if (e.kind === "map" || e.kind === "poi") {
+    if (e.kind === "map" || e.kind === "poi" || e.kind === "hava") {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);

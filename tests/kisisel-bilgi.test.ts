@@ -57,11 +57,11 @@ export function forbiddenWords(text: string): string[] {
 
 /**
  * Şehir adı yalnızca kamu verisinde ve kaynak gösteriminde geçebilir (örnek olarak değil):
- *  - 81 ilin radyo frekansları
+ *  - 81 ilin radyo frekansları ve il merkezlerinin koordinatları (hava ve iklim paketi)
  *  - rehberlerin kaynak listeleri ve doğrulama raporları (ör. "AKUT Bursa", "Bursagaz" gibi kurum adları)
  */
 const CITY_DATA = (rel: string) =>
-  rel === path.join('src', 'tools', 'radyo', 'frekanslar.ts') || rel.startsWith(path.join('src', 'content', 'guides') + path.sep) || rel.startsWith(path.join('docs', 'dogrulama'));
+  rel === path.join('src', 'tools', 'radyo', 'frekanslar.ts') || rel === path.join('tools', 'hava', 'iller.json') || rel.startsWith(path.join('src', 'content', 'guides') + path.sep) || rel.startsWith(path.join('docs', 'dogrulama'));
 const CITY_WORDS = ['bursa'];
 
 function walk(dir: string, out: string[]) {

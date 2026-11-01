@@ -15,7 +15,7 @@ describe('kurulum önerileri', () => {
 
   it('az yerde yalnız küçük ve hayati paketler seçili', () => {
     const s = on({ freeBytes: 2 * GB, memGB: 2 });
-    expect(s).toEqual(expect.arrayContaining(['poi-tr-afet', 'harita-tr-genel', 'nhs-ilac']));
+    expect(s).toEqual(expect.arrayContaining(['poi-tr-afet', 'harita-tr-genel', 'nhs-ilac', 'hava-tr']));
     expect(s).not.toContain('harita-tr-detay');
     expect(s).not.toContain('wikipedia-tr-mini');
     expect(s.some((x) => x.startsWith('fener-'))).toBe(false);

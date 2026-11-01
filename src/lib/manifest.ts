@@ -70,7 +70,7 @@ export interface Manifest {
   packs: ManifestPack[];
 }
 
-export const KINDS: PackKind[] = ['zim', 'model', 'map', 'poi', 'ses'];
+export const KINDS: PackKind[] = ['zim', 'model', 'map', 'poi', 'ses', 'hava'];
 export const TIERS: Tier[] = ['temel', 'standart', 'tam'];
 export const TIER_LABEL: Record<Tier, string> = { temel: 'Temel', standart: 'Standart', tam: 'Tam' };
 export const KIND_LABEL: Record<PackKind, string> = {
@@ -79,6 +79,7 @@ export const KIND_LABEL: Record<PackKind, string> = {
   map: 'Harita',
   poi: 'Harita noktaları',
   ses: 'Sesli soru (konuşma tanıma)',
+  hava: 'Hava ve iklim',
 };
 
 const EXT_BY_KIND: Record<PackKind, string[]> = {
@@ -87,6 +88,7 @@ const EXT_BY_KIND: Record<PackKind, string[]> = {
   map: ['pmtiles'],
   poi: ['geojson', 'json'],
   ses: ['tar'],
+  hava: ['json'],
 };
 
 /** Katalog doğrulaması. Geçersiz paketler atılır; ciddi hata varsa ok=false. */

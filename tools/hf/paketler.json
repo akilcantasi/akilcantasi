@@ -2,11 +2,17 @@
   "aciklama": "Hugging Face'e (her cihazdan hızlı indirme için) yansılanan paketler. Kimlikler public/packs-manifest.json'daki id'lerdir. Lisansı yeniden dağıtıma uygun olmayan ya da çok büyük paketler burada yer almaz; onlar Kiwix'ten (PC/Pi'de sunucu üzerinden) iner.",
   "org": "akilcantasi",
   "repo": "paketler",
-  "dizin": { "zim": "zim", "map": "harita", "poi": "noktalar" },
+  "dizin": {
+    "zim": "zim",
+    "map": "harita",
+    "poi": "noktalar",
+    "hava": "hava"
+  },
   "paketler": [
     "harita-tr-genel",
     "harita-tr-detay",
     "poi-tr-afet",
+    "hava-tr",
     "wikipedia-tr-mini",
     "wikipedia-tr-nopic",
     "vikikaynak-tr",

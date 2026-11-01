@@ -4,6 +4,8 @@ import { native } from '../lib/native';
 import { GeoButton, NameField, Section, useGeo, useProfile } from './common';
 import { looksLikeMorse, morseToSteps, morseToText, textToMorse, unitMs } from './morse';
 import { cleanPhone } from './outbox';
+import { useYakinlar } from './HizliSms';
+import { multiSmsHref } from './yakinlar';
 import { SOS_STEPS, WHISTLE_STEPS, keepAwake, play, steady, type Player, type SoundKind } from './signal';
 import { TEMPLATE_TITLE, buildTemplate, isIOS, smsHref, smsParts, type TemplateId } from './sms';
 
@@ -289,6 +291,7 @@ export function Sms() {
   const body = edited && edited.base === generated ? edited.text : generated;
   const parts = smsParts(body);
   const fam = cleanPhone(p.family);
+  const [yakinlar] = useYakinlar();
   const ios = isIOS();
   const copy = async () => {
     try {
@@ -337,6 +340,16 @@ export function Sms() {
           <input class="input" data-testid="sms-family" type="tel" inputMode="tel" value={p.family} placeholder="05xx xxx xx xx" onInput={(e) => update({ family: (e.target as HTMLInputElement).value })} />
         </label>
         <div class="cm-btns">
+          {yakinlar.length > 0 && (
+            <a class="btn primary" data-testid="sms-send-yakinlar" href={multiSmsHref(yakinlar.map((y) => y.phone), body, ios)}>
+              Yakınlarıma ({yakinlar.length})
+            </a>
+          )}
+          {tpl === 'acil112' && (
+            <a class="btn primary" data-testid="sms-send-112" href={smsHref('112', body, ios)}>
+              112'ye SMS
+            </a>
+          )}
           {fam ? (
             <a class="btn primary" data-testid="sms-send-family" href={smsHref(fam, body, ios)}>
               Aileye SMS

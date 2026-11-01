@@ -229,7 +229,8 @@ async function main() {
       process.stdout.write('\r    tamam                         \n');
     }
     const patch: Partial<Entry> = {};
-    if (e.kind === 'map' || e.kind === 'poi') {
+    // Her ay yeniden üretilen paketler: boyut ve özet yeniden yazılır
+    if (e.kind === 'map' || e.kind === 'poi' || e.kind === 'hava') {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);
