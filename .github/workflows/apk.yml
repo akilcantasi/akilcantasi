@@ -109,6 +109,30 @@ jobs:
           "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$RUNNER_TEMP/akil-cantasi.apk" | head -3 || true
           echo "Yerel kütüphaneler:"; unzip -l "$RUNNER_TEMP/akil-cantasi.apk" | grep "lib/" || echo "(yok)"
 
+      # Her yerel kütüphanenin bağımlılığı APK'da ya da Android'in herkese açık kütüphanelerinde olmalı;
+      # 64 bit kütüphaneler 16 KB sayfa hizalı olmalı (Android 15+ cihazlar). Değilse derleme durur.
+      - name: Yerel kütüphane denetimi
+        run: |
+          set -e
+          D="$RUNNER_TEMP/apk-lib"; rm -rf "$D"; mkdir -p "$D"
+          unzip -q -o "$RUNNER_TEMP/akil-cantasi.apk" 'lib/*' -d "$D" || { echo "yerel kütüphane yok"; exit 0; }
+          RE="$(ls -d "${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"/toolchains/llvm/prebuilt/*/bin | head -1)/llvm-readelf"
+          SYS="libc.so libm.so libdl.so liblog.so libandroid.so libOpenCL.so libvulkan.so libEGL.so libGLESv2.so libz.so"
+          bad=0
+          for abi in "$D"/lib/*; do
+            for f in "$abi"/*.so; do
+              for n in $("$RE" -d "$f" | grep NEEDED | sed 's/.*\[\(.*\)\]/\1/'); do
+                if [ ! -f "$abi/$n" ] && ! echo " $SYS " | grep -q " $n "; then echo "::error::$(basename "$abi")/$(basename "$f") → $n bulunamaz"; bad=1; fi
+              done
+              if [ "$(basename "$abi")" = "arm64-v8a" ]; then
+                al=$("$RE" -lW "$f" | awk '$1=="LOAD"{print $NF; exit}')
+                if [ "$al" != "0x4000" ] && [ "$al" != "0x10000" ]; then echo "::error::$(basename "$f") hizalaması $al (16 KB değil)"; bad=1; fi
+              fi
+            done
+          done
+          [ $bad = 0 ] && echo "Yerel kütüphaneler sağlam"
+          exit $bad
+
       - name: Deneme derlemesi (yayınlanmaz)
         if: github.event.inputs.yayinla == 'hayir'
         uses: actions/upload-artifact@v4
