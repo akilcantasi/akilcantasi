@@ -29,6 +29,19 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Fener GPU (Adreno, OpenCL): üreticinin kütüphanesi varsa uygulamaya açılır; yoksa işlemci -->
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+
+        <!-- SMS giden kutusu: gönderim/teslim sonuçları ve yeniden deneme alarmı (dışa kapalı) -->
+        <receiver android:name=".SmsAlici" android:exported="false" />
+        <!-- Telefon yeniden başlayınca bekleyen SMS'ler sürer -->
+        <receiver android:name=".AcilisAlici" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -58,6 +71,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Acil SMS: uygulama kendisi gönderir, şebeke gelene kadar yeniden dener (SmsGonderici) -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <!-- Harita: internetsiz GPS konumu -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />

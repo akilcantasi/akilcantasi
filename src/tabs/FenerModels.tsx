@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go, useAppState } from '../lib/store';
 import { formatSize, type InstalledPack } from '../lib/packs';
-import { deviceProfile, engine, fitFor, getModelOverride, listModels, setModelOverride, type ModelGroup } from '../lib/fener/engine';
+import { deviceProfile, engine, fitFor, getModelOverride, getNativeInfo, listModels, loadNativeInfo, setModelOverride, type ModelGroup } from '../lib/fener/engine';
 import { chooseModel, FIT_LABEL } from '../lib/fener/models';
 import { loadManifest, matchInstalled, type ManifestPack } from '../lib/manifest';
 import { isActive, pauseDownload, startDownload, useDownloads, type DlState } from '../lib/downloader';
@@ -76,8 +76,13 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
   const [catalog, setCatalog] = useState<ManifestPack[]>([]);
   const [installed, setInstalled] = useState<InstalledPack[]>([]);
 
+  const [nat, setNat] = useState(getNativeInfo());
   useEffect(() => {
     let alive = true;
+    // Yerel motor varsa gerçek RAM'e göre uygunluk hesaplanır
+    loadNativeInfo()
+      .then((d) => alive && setNat(d))
+      .catch(() => {});
     listModels()
       .then((g) => {
         if (!alive) return;
@@ -113,7 +118,7 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
   let engineLine = 'İlk soruda belleğe yüklenir.';
   if (active && eng.model?.id === active.id) {
     if (eng.status === 'loading') engineLine = `Belleğe yükleniyor${eng.progress != null ? ` %${Math.round(eng.progress * 100)}` : '…'}`;
-    else if (eng.status === 'ready') engineLine = 'Belleğe yüklü, hazır.';
+    else if (eng.status === 'ready') engineLine = eng.backend === 'yerel' ? `Belleğe yüklü, hazır (hızlı yerel motor${eng.gpu ? ', GPU ile' : ''}).` : 'Belleğe yüklü, hazır.';
     else if (eng.status === 'generating') engineLine = 'Şu an cevap yazıyor.';
     else if (eng.status === 'error') engineLine = 'Yüklenemedi: ' + (eng.error ?? 'bilinmeyen hata');
   }
@@ -144,6 +149,11 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
                   {active.paramsB ? ` · ${paramsLabel(active.paramsB)}` : ''} · {manual ? 'sizin seçiminiz' : 'otomatik seçildi'}
                 </span>
                 <span class="fener-active-meta">{engineLine}</span>
+                {nat && (
+                  <span class="fener-active-meta" data-testid="fener-native">
+                    Hızlı yerel motor: {Math.round(nat.ram / 1e9)} GB RAM, {nat.threads} iş parçacığı{nat.arkaUclar?.gpu && !nat.gpuKapali ? ', GPU var' : ''}
+                  </span>
+                )}
               </>
             ) : (
               <span class="fener-active-meta">Model yok — Fener doğrulanmış rehberlerden yanıt verir.</span>

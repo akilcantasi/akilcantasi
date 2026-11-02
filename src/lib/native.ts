@@ -145,3 +145,142 @@ export const nativePacks = {
     return NATIVE_PACK_PATH + encodeURIComponent(file);
   },
 };
+
+/** SMS giden kutusundaki bir mesaj (SmsKuyrugu.java ile aynı alanlar) */
+export interface SmsKayit {
+  id: string;
+  to: string;
+  name: string;
+  body: string;
+  state: 'bekliyor' | 'gonderiliyor' | 'gitti' | 'ulasti' | 'hata';
+  error: string;
+  created: number;
+  nextTry: number;
+  tried: number;
+  sentAt: number;
+  deliveredAt: number;
+  attempts: number;
+  parts: number;
+}
+
+/**
+ * Android SMS giden kutusu (AkilCantasiPlugin: smsGonder, smsKutusu, smsSimdiDene, smsIptal,
+ * smsTemizle; "smsDurum" olayı). Uygulama SMS'i kendisi gönderir ve şebeke gelene kadar
+ * yeniden dener. Tarayıcıda, iPhone'da ve eski APK'larda available() false döner.
+ */
+export const nativeSms = {
+  available(): boolean {
+    const p = plugin();
+    return native.isAndroid() && !!p && typeof p.smsGonder === 'function';
+  },
+  /** queued false ve izin false: kullanıcı SMS iznini vermedi */
+  async send(to: string[], names: string[], body: string): Promise<{ queued: boolean; izin: boolean; ids: string[] }> {
+    const r = await call<{ queued?: boolean; izin?: boolean; ids?: string[] }>('smsGonder', { to, names, body });
+    return { queued: !!r?.queued, izin: r?.izin !== false, ids: r?.ids ?? [] };
+  },
+  async list(): Promise<{ items: SmsKayit[]; izin: boolean }> {
+    const r = await call<{ items?: SmsKayit[]; izin?: boolean }>('smsKutusu');
+    return { items: r?.items ?? [], izin: !!r?.izin };
+  },
+  async retry(id?: string) {
+    await call('smsSimdiDene', id ? { id } : {});
+  },
+  async cancel(id: string) {
+    await call('smsIptal', { id });
+  },
+  async clear() {
+    await call('smsTemizle');
+  },
+  /** Değişiklik olayı; aboneliği kaldıran işlev döner */
+  listen(fn: (items: SmsKayit[]) => void): () => void {
+    const p = plugin();
+    if (!p || typeof p.addListener !== 'function') return () => {};
+    let h: any = null;
+    let gone = false;
+    Promise.resolve(p.addListener('smsDurum', (e: { items?: SmsKayit[] }) => fn(e?.items ?? [])))
+      .then((x) => {
+        h = x;
+        if (gone) h?.remove?.();
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+      h?.remove?.();
+    };
+  },
+};
+
+export interface NativeFenerDurum {
+  var: boolean;
+  hata?: string;
+  arkaUclar?: { devices?: string; gpu?: boolean; system?: string };
+  ram: number;
+  ramBos?: number;
+  cores: number;
+  threads: number;
+  yuklu: string | null;
+  gpu?: boolean;
+  gpuKapali?: boolean;
+  bilgi?: { desc?: string; nCtx?: number; threads?: number; gpuLayers?: number; layers?: number; devices?: string };
+}
+
+export interface NativeFenerSonuc {
+  tokens?: number;
+  promptTokens?: number;
+  promptMs?: number;
+  genMs?: number;
+  aborted?: boolean;
+  error?: string;
+}
+
+/**
+ * Fener yerel motoru (llama.cpp, AkilCantasiPlugin: fenerDurumu, fenerYukle, fenerSohbet, fenerDurdur,
+ * fenerBosalt; "fenerParca" olayı). WebView'daki WebAssembly motorundan kat kat hızlıdır ve varsa
+ * GPU'yu kullanır. Yalnızca uygulamanın kendi indiricisiyle indirilmiş (paket klasöründeki) modelleri açar.
+ */
+export const nativeFener = {
+  available(): boolean {
+    const p = plugin();
+    return native.isAndroid() && !!p && typeof p.fenerYukle === 'function';
+  },
+  async durum(): Promise<NativeFenerDurum | null> {
+    if (!this.available()) return null;
+    return call<NativeFenerDurum>('fenerDurumu');
+  },
+  async yukle(dosya: string, nCtx: number, gpu = true): Promise<{ ok: boolean; hata?: string; gpu?: boolean; bilgi?: NativeFenerDurum['bilgi'] }> {
+    const r = await call<{ ok?: boolean; hata?: string; gpu?: boolean; bilgi?: NativeFenerDurum['bilgi'] }>('fenerYukle', { dosya, nCtx, gpu });
+    return { ok: !!r?.ok, hata: r?.hata ?? (r ? undefined : 'yerel motor yanıt vermedi'), gpu: r?.gpu, bilgi: r?.bilgi };
+  },
+  /** Akışlı sohbet: onPiece her parçada çağrılır */
+  async sohbet(
+    messages: { role: string; content: string }[],
+    opts: { maxTokens: number; temperature: number; topK: number; topP: number; repeat: number },
+    onPiece: (t: string) => void,
+  ): Promise<NativeFenerSonuc> {
+    const p = plugin();
+    const id = Math.random().toString(36).slice(2);
+    let h: any = null;
+    try {
+      h = await p.addListener('fenerParca', (e: { id?: string; text?: string }) => {
+        if (e?.id === id && e.text) onPiece(e.text);
+      });
+    } catch {}
+    try {
+      return (await p.fenerSohbet({ id, messages, ...opts })) as NativeFenerSonuc;
+    } catch (e: any) {
+      return { error: e?.message ?? String(e) };
+    } finally {
+      // Son olaylar yanıt sözünden hemen sonra gelebilir
+      await new Promise((r) => setTimeout(r, 30));
+      try {
+        await h?.remove?.();
+      } catch {}
+    }
+  },
+  async durdur() {
+    await call('fenerDurdur');
+  },
+  async bosalt() {
+    await call('fenerBosalt');
+  },
+};

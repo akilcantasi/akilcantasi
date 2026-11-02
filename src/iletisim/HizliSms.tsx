@@ -1,10 +1,14 @@
 // İletişim: tek dokunuşla acil SMS.
-//  • 112'ye konumlu SMS: dokununca konum alınır (en çok birkaç saniye), SMS uygulaması
-//    mesaj ve numara hazır açılır; kullanıcı yalnızca Gönder'e basar.
+//  • 112'ye konumlu SMS: dokununca konum alınır (en çok birkaç saniye).
+//    Android uygulamasında SMS'i uygulama kendisi gönderir (3 sn içinde vazgeçilebilir) ve
+//    şebeke yoksa gidene kadar yeniden dener (SmsGonderici.java, giden kutusu aşağıda).
+//    Tarayıcıda/iPhone'da SMS uygulaması mesaj ve numara hazır açılır; kullanıcı Gönder'e basar.
 //  • Yakınlarıma haber ver: kayıtlı kişilere "iyiyim" ya da "yardım lazım" (konum ve harita
 //    bağlantısıyla), tek kişiye ya da hepsine birden.
 // Yakınlar ve ad yalnızca bu cihazda saklanır (yakinlar.ts, outbox.ts profil).
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { nativeSms } from '../lib/native';
+import { durumMetni, useSmsKutusu } from './sms-kutusu';
 import { go } from '../lib/store';
 import { NameField, Section, quickPosition, useProfile, warmPosition } from './common';
 import { cleanPhone } from './outbox';
@@ -46,6 +50,18 @@ export const QUICK_CSS = `
 .yk-row .grow b { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yk-row .grow span { font-size: 13px; color: var(--muted); font-family: var(--mono); }
 .yk-del { min-width: 44px; min-height: 44px; border-radius: 12px; border: 1px solid var(--glass-line); background: transparent; color: #ffb4a8; font-size: 13px; }
+.qs-cancel { min-height: 44px; }
+.qs-out { display: flex; flex-direction: column; gap: 6px; }
+.qs-out-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; }
+.qs-out-row { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line2); border-radius: 14px; padding: 6px 6px 6px 12px; }
+.qs-out-row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.qs-out-row b { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qs-out-row span { font-size: 12.5px; line-height: 1.35; }
+.qs-out-row .ok { color: var(--ok); }
+.qs-out-row .wait { color: var(--text2); }
+.qs-out-row .bad { color: #ffb4a8; }
+.qs-out-btn { min-height: 44px; min-width: 44px; border-radius: 12px; border: 1px solid var(--glass-line); background: transparent; color: var(--text); font-size: 13px; padding: 0 10px; }
+.qs-out-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
 .yk-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 `;
 
@@ -113,23 +129,59 @@ export function QuickHelp() {
     void warmPosition();
   }, []);
 
-  const withPos = async (key: string, send: (pos: Pos | null) => void) => {
+  const direct = nativeSms.available();
+  const cancelled = useRef(false);
+
+  /** Konumu al; uygulama kendisi gönderecekse en az 3 sn vazgeçme süresi tanı */
+  const withPos = async (key: string, label: string, send: (pos: Pos | null) => void | Promise<void>) => {
     if (busy) return;
     setBusy(key);
-    setStatus({ text: 'Konum alınıyor… (birkaç saniye)' });
-    const pos = await quickPosition(7000);
+    cancelled.current = false;
+    setStatus({ text: direct ? `${label}: konum alınıyor, birkaç saniye içinde gönderilecek.` : 'Konum alınıyor… (birkaç saniye)' });
+    const [pos] = await Promise.all([quickPosition(7000), direct ? new Promise((r) => setTimeout(r, 3000)) : null]);
     setBusy(null);
+    if (cancelled.current) {
+      setStatus({ text: 'Gönderim iptal edildi.' });
+      return;
+    }
+    await send(pos);
+  };
+
+  /** Android'de giden kutusuna verir; olmazsa SMS uygulamasını açar */
+  const deliver = async (numbers: string[], names: string[], body: string, pos: Pos | null) => {
+    if (direct) {
+      const r = await nativeSms.send(numbers, names, body);
+      if (r.queued) {
+        setStatus({
+          text: (pos ? `Konum eklendi (±${Math.round(pos.acc ?? 0)} m). ` : 'Konum alınamadı; konumsuz gönderiliyor. ') + 'Şebeke yoksa SMS gidene kadar otomatik yeniden denenecek.',
+          bad: !pos,
+        });
+        return;
+      }
+      if (!r.izin) {
+        open(multiSmsHref(numbers, body, ios));
+        setStatus({ text: "SMS izni verilmediği için SMS uygulaması açıldı; Gönder'e basın.", bad: true });
+        return;
+      }
+    }
+    open(multiSmsHref(numbers, body, ios));
     setStatus(
       pos
         ? { text: `Konum eklendi (±${Math.round(pos.acc ?? 0)} m). SMS uygulamasında Gönder'e basın.` }
         : { text: "Konum alınamadı; mesaj konumsuz açıldı. Mümkünse adresinizi ekleyip Gönder'e basın.", bad: true },
     );
-    send(pos);
   };
 
-  const send112 = () => withPos('112', (pos) => open(smsHref('112', emergencyMessage(p.name, pos), ios)));
+  const send112 = () => withPos('112', "112'ye SMS", (pos) => deliver(['112'], ['112'], emergencyMessage(p.name, pos), pos));
   const sendTo = (list: Yakin[], key: string) =>
-    withPos(key, (pos) => open(multiSmsHref(list.map((y) => y.phone), familyMessage(durum, p.name, pos), ios)));
+    withPos(key, list.length > 1 ? `${list.length} kişiye SMS` : `${list[0].name} kişisine SMS`, (pos) =>
+      deliver(
+        list.map((y) => y.phone),
+        list.map((y) => y.name),
+        familyMessage(durum, p.name, pos),
+        pos,
+      ),
+    );
 
   return (
     <div class="qs" data-testid="quick-help">
@@ -139,7 +191,7 @@ export function QuickHelp() {
           <span class="qs-112-ic">{SMS_ICON}</span>
           <span class="qs-112-t">
             <b>{busy === '112' ? 'Konum alınıyor…' : "112'ye konumlu SMS"}</b>
-            <small>Tek dokunuş: konumunuz eklenir, mesaj hazır açılır</small>
+            <small>{direct ? 'Tek dokunuş: konumunuz eklenir, SMS kendiliğinden gider' : 'Tek dokunuş: konumunuz eklenir, mesaj hazır açılır'}</small>
           </span>
         </button>
         <a class="qs-call" href="tel:112" data-testid="quick-112-call">
@@ -150,6 +202,12 @@ export function QuickHelp() {
       <p class={'qs-status' + (status?.bad ? ' bad' : '')} role="status" data-testid="quick-status">
         {status?.text ?? ''}
       </p>
+      {busy && direct && (
+        <button class="btn qs-cancel" data-testid="quick-cancel" onClick={() => (cancelled.current = true)}>
+          Vazgeç, gönderme
+        </button>
+      )}
+      <GidenKutusu />
 
       <section class="qs-fam" aria-labelledby="qs-fam-t">
         <div class="qs-fam-head">
@@ -194,6 +252,61 @@ export function QuickHelp() {
         )}
       </section>
     </div>
+  );
+}
+
+/** Android: giden SMS'ler ve durumları (gidene kadar yeniden denenir) */
+export function GidenKutusu() {
+  const kutu = useSmsKutusu();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (!kutu || !kutu.items.length) return null;
+  const shown = kutu.items.slice(0, 6);
+  const finished = kutu.items.some((m) => m.state === 'gitti' || m.state === 'ulasti' || m.state === 'hata');
+  const act = async (f: () => Promise<void>) => {
+    await f();
+    kutu.refresh();
+  };
+  return (
+    <section class="qs-out" aria-label="Giden SMS'ler" data-testid="sms-outbox">
+      <div class="qs-out-head">
+        <span>Giden SMS'ler</span>
+        {finished && (
+          <button class="qs-out-btn" data-testid="sms-clear" onClick={() => act(() => nativeSms.clear())}>
+            Gidenleri temizle
+          </button>
+        )}
+      </div>
+      {shown.map((m) => {
+        const d = durumMetni(m, now);
+        const open = m.state === 'bekliyor' || m.state === 'gonderiliyor' || m.state === 'hata';
+        return (
+          <div key={m.id} class="qs-out-row" data-testid="sms-item" data-state={m.state}>
+            <div class="grow">
+              <b>{m.name || m.to}</b>
+              <span class={d.tone}>{d.text}</span>
+            </div>
+            {(m.state === 'bekliyor' || m.state === 'hata') && (
+              <button class="qs-out-btn" data-testid="sms-retry" aria-label={`Şimdi dene: ${m.name || m.to}`} onClick={() => act(() => nativeSms.retry(m.id))}>
+                Şimdi dene
+              </button>
+            )}
+            {open && (
+              <button class="qs-out-btn" data-testid="sms-cancel" aria-label={`İptal: ${m.name || m.to}`} onClick={() => act(() => nativeSms.cancel(m.id))}>
+                İptal
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {!kutu.izin && <p class="qs-out-note">SMS izni kapalı: bekleyen mesajlar gönderilemez. Ayarlar &gt; Uygulamalar &gt; Akıl Çantası &gt; İzinler'den SMS'e izin verin.</p>}
+      {kutu.items.some((m) => m.state === 'bekliyor' || m.state === 'gonderiliyor') && (
+        <p class="qs-out-note">Uygulamayı kapatsanız da telefon yeniden başlasa da mesaj gidene kadar denenir (3 gün boyunca). Telefonu kapatmayın.</p>
+      )}
+    </section>
   );
 }
 

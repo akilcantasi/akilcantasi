@@ -1,0 +1,26 @@
+# Bir indirme adresindeki dosyanın tam boyutunu ve SHA-256'sını ölçer (katalog girdisi için).
+# Kapsayıcıdan Hugging Face'e erişilemediğinde kullanılır. Sonuç işin günlüğünde ve özetinde.
+name: Dosya ölç
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'İndirme adresi'
+        required: true
+
+jobs:
+  olc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Ölç
+        env:
+          URL: ${{ github.event.inputs.url }}
+        run: |
+          set -e
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/f" "$URL"
+          sha=$(sha256sum "$RUNNER_TEMP/f" | awk '{print $1}')
+          size=$(stat -c %s "$RUNNER_TEMP/f")
+          echo "OLCUM size=$size sha256=$sha"
+          echo "size=$size sha256=$sha" >> "$GITHUB_STEP_SUMMARY"

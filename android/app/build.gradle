@@ -1,5 +1,9 @@
 apply plugin: 'com.android.application'
 
+// llama.cpp kaynakları APK derlemesinde indirilir (.github/workflows/apk.yml). Yoksa yerel motor
+// derlenmez; uygulama yalnızca WebView'daki Fener motoruyla çalışır.
+def fenerYerel = file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()
+
 android {
     namespace = "org.akilcantasi.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -11,6 +15,20 @@ android {
         versionCode((System.getenv("AKIL_VERSION_CODE") ?: "1") as int)
         versionName(System.getenv("AKIL_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Fener yerel motoru (llama.cpp): 64 bit ARM için tam, 32 bit ARM için yalnız işlemci.
+        // Eski APK'larda yerel kütüphane yoktu; iki ABI de olunca her ARM cihaza kurulur.
+        if (fenerYerel) {
+            ndk {
+                abiFilters 'arm64-v8a', 'armeabi-v7a'
+            }
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared"
+                    def ocl = System.getenv("FENER_OPENCL_DIR")
+                    if (ocl) arguments "-DFENER_OPENCL_DIR=" + ocl
+                }
+            }
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -36,6 +54,23 @@ android {
             signingConfig = (ks && file(ks).exists()) ? signingConfigs.yayin : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    if (fenerYerel) {
+        externalNativeBuild {
+            cmake {
+                path "src/main/cpp/CMakeLists.txt"
+                version "3.31.6"
+            }
+        }
+    }
+    packaging {
+        jniLibs {
+            // GGML arka uçları (işlemci türevleri, GPU) çalışırken klasörden yüklenir: dosya olarak açılmalı
+            useLegacyPackaging = true
+            // OpenCL'e yalnız bağlanılır; telefonda üreticinin kütüphanesi kullanılır
+            excludes += ['**/libOpenCL.so']
         }
     }
 }

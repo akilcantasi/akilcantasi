@@ -1,4 +1,7 @@
-// Fener'in cihaz üstü dil modeli motoru: wllama (llama.cpp → WebAssembly).
+// Fener'in cihaz üstü dil modeli motoru.
+// - Android uygulamasında, model uygulamanın indiricisiyle indirilmişse yerel llama.cpp motoru
+//   (nativeFener: ARM vektör komutları, varsa GPU) kullanılır; kat kat hızlıdır.
+// - Diğer her yerde wllama (llama.cpp → WebAssembly).
 // - Tembel başlatma: yalnızca Fener bir soruyu modelle yanıtlayacağı zaman yüklenir.
 // - Kullanıcı Fener sekmesinden 60 sn'den uzun ayrılırsa ya da pil tasarrufu
 //   açılırsa model bellekten atılır.
@@ -6,6 +9,7 @@
 import wasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url';
 import type { Wllama } from '@wllama/wllama';
 import { listPacks, openBlob, type InstalledPack } from '../packs';
+import { NATIVE_PACK_PATH, nativeFener, type NativeFenerDurum } from '../native';
 import {
   chooseModel,
   estimateParamsB,
@@ -47,10 +51,34 @@ export {
   type PromptProfile,
 } from './models';
 
+/** Yerel motorun bildirdiği cihaz bilgisi (Android; gerçek RAM, 8 GB sınırı yok) */
+let nativeInfo: NativeFenerDurum | null = null;
+let nativeInfoReq: Promise<NativeFenerDurum | null> | null = null;
+
+/** Yerel motor bilgisini (bir kez) alır. Motor yoksa null. */
+export function loadNativeInfo(): Promise<NativeFenerDurum | null> {
+  if (!nativeFener.available()) return Promise.resolve(null);
+  nativeInfoReq ??= nativeFener.durum().then((d) => (nativeInfo = d?.var ? d : null));
+  return nativeInfoReq;
+}
+
+export function getNativeInfo(): NativeFenerDurum | null {
+  return nativeInfo;
+}
+
 export function deviceProfile(): DeviceProfile {
   const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+  if (nativeInfo && nativeInfo.ram > 0) {
+    // Yerel motor: telefonun gerçek RAM'i (WebView'ın 8 GB bildirim sınırı yok)
+    return { memGB: Math.round((nativeInfo.ram / 1e9) * 10) / 10, cores: Math.max(1, nativeInfo.cores || Number(nav.hardwareConcurrency) || 1) };
+  }
   const mem = typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 ? nav.deviceMemory : null;
   return { memGB: mem, cores: Math.max(1, Number(nav.hardwareConcurrency) || 1) };
+}
+
+/** Bu model yerel motorla açılabilir mi (tüm parçalar uygulamanın paket klasöründe) */
+export function canRunNative(choice: ModelChoice | null): boolean {
+  return !!choice && !!nativeInfo && choice.origin === 'device' && choice.parts.length > 0 && choice.parts.every((p) => p.url?.startsWith(NATIVE_PACK_PATH));
 }
 
 /** İş parçacığı: crossOriginIsolated ise min(4, çekirdek), değilse 1. */
@@ -139,6 +167,7 @@ export async function pickModel(): Promise<ModelChoice | null> {
     const paramsB = estimateParamsB({ id, size: 0 });
     return { id, name: prettyModelName(id), size: 0, origin: 'dev', parts: [], urls: dev, paramsB, profile: promptProfile(paramsB), quant: null, manual: false };
   }
+  await loadNativeInfo().catch(() => null);
   const groups = await listModels();
   const override = getModelOverride();
   const g = chooseModel(groups, deviceProfile(), override);
@@ -184,6 +213,10 @@ export interface EngineState {
   isolated: boolean;
   /** Son üretimin hızı */
   tokensPerSec: number | null;
+  /** 'yerel' = Android llama.cpp, 'wasm' = WebView'da WebAssembly */
+  backend: 'yerel' | 'wasm' | null;
+  /** Yerel motor GPU kullanıyor mu */
+  gpu: boolean;
 }
 
 let st: EngineState = {
@@ -195,6 +228,8 @@ let st: EngineState = {
   multithread: false,
   isolated: typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : false,
   tokensPerSec: null,
+  backend: null,
+  gpu: false,
 };
 const listeners = new Set<(s: EngineState) => void>();
 function set(p: Partial<EngineState>) {
@@ -207,6 +242,8 @@ function notify() {
 }
 
 let wllama: Wllama | null = null;
+/** Yerel motorda yüklü model (wllama yerine) */
+let nativeLoaded = false;
 let loadedId: string | null = null;
 let loadedProfile: PromptProfile = promptProfile(0.5);
 let loading: Promise<void> | null = null;
@@ -313,17 +350,19 @@ export const engine = {
       listeners.delete(l);
     };
   },
-  isLoaded: () => !!wllama && loadedId !== null,
+  isLoaded: () => (!!wllama || nativeLoaded) && loadedId !== null,
 
   /** Modeli (gerekirse) yükler. İlerleme 0..1 ya da bilinmiyorsa null. */
   async ensureLoaded(choice: ModelChoice, onProgress?: (f: number | null) => void): Promise<void> {
     this.cancelUnload();
-    if (wllama && loadedId === choice.id) return;
+    if ((wllama || nativeLoaded) && loadedId === choice.id) return;
     if (loading) {
       await loading;
-      if (wllama && loadedId === choice.id) return;
+      if ((wllama || nativeLoaded) && loadedId === choice.id) return;
     }
-    const why = unsupportedReason();
+    await loadNativeInfo().catch(() => null);
+    const useNative = canRunNative(choice);
+    const why = useNative ? null : unsupportedReason();
     if (why) throw Object.assign(new Error(why), { unsupported: true });
 
     loading = (async () => {
@@ -333,6 +372,25 @@ export const engine = {
         onProgress?.(f);
       };
       set({ status: 'loading', model: choice, progress: 0, error: null });
+      if (useNative) {
+        // Yerel motor: dosya diskten doğrudan (bellek eşlemeli) açılır; ilerleme bilinmez
+        prog(null);
+        const r = await nativeFener.yukle(choice.parts[0].id, choice.profile.nCtx, true);
+        if (r.ok) {
+          nativeLoaded = true;
+          loadedId = choice.id;
+          loadedProfile = choice.profile;
+          set({ status: 'ready', progress: 1, threads: r.bilgi?.threads ?? nativeInfo?.threads ?? 1, multithread: true, isolated: false, backend: 'yerel', gpu: !!r.gpu });
+          return;
+        }
+        console.warn('[fener] yerel motor açamadı, WebAssembly deneniyor:', r.hata);
+        const why2 = unsupportedReason();
+        if (why2) {
+          set({ status: 'error', error: r.hata ?? why2, progress: null });
+          throw Object.assign(new Error(r.hata ?? why2), { unsupported: true });
+        }
+        prog(0);
+      }
       try {
         const blobs = await openModelBlobs(choice, (f) => prog(f == null ? null : f * 0.9));
         prog(0.92);
@@ -367,6 +425,8 @@ export const engine = {
           threads: wllama.getNumThreads(),
           multithread: wllama.isMultithread(),
           isolated,
+          backend: 'wasm',
+          gpu: false,
         });
       } catch (e) {
         wllama = null;
@@ -390,6 +450,7 @@ export const engine = {
     messages: ChatMsg[],
     opts: { onToken?: (piece: string, full: string) => void; signal?: AbortSignal; maxTokens?: number } = {},
   ): Promise<{ text: string; aborted: boolean; tokens: number; tokensPerSec: number | null }> {
+    if (nativeLoaded) return this.chatNative(messages, opts);
     if (!wllama) throw new Error('Model yüklü değil');
     this.cancelUnload();
     busy = true;
@@ -438,8 +499,54 @@ export const engine = {
     return { text, aborted, tokens, tokensPerSec: tps };
   },
 
+  /** Yerel motorla akışlı sohbet (chat ile aynı sözleşme) */
+  async chatNative(
+    messages: ChatMsg[],
+    opts: { onToken?: (piece: string, full: string) => void; signal?: AbortSignal; maxTokens?: number },
+  ): Promise<{ text: string; aborted: boolean; tokens: number; tokensPerSec: number | null }> {
+    this.cancelUnload();
+    busy = true;
+    set({ status: 'generating' });
+    let text = '';
+    const onAbort = () => void nativeFener.durdur();
+    opts.signal?.addEventListener('abort', onAbort);
+    let r;
+    try {
+      if (opts.signal?.aborted) onAbort();
+      r = await nativeFener.sohbet(
+        messages.map((m) => ({ role: m.role, content: m.content })),
+        { maxTokens: opts.maxTokens ?? loadedProfile.maxTokens, temperature: loadedProfile.temperature, topK: 40, topP: 0.9, repeat: 1.1 },
+        (piece) => {
+          text += piece;
+          opts.onToken?.(piece, text);
+        },
+      );
+    } finally {
+      opts.signal?.removeEventListener('abort', onAbort);
+      busy = false;
+    }
+    const aborted = !!r.aborted || !!opts.signal?.aborted;
+    if (r.error && !aborted) {
+      set({ status: 'ready' });
+      throw new Error(r.error);
+    }
+    const tokens = r.tokens ?? 0;
+    const tps = tokens > 1 && r.genMs ? (tokens / r.genMs) * 1000 : null;
+    set({ status: 'ready', tokensPerSec: tps });
+    if (!getState().batterySaver && getState().tab !== 'fener') this.scheduleUnload();
+    if (getState().batterySaver) void this.unload();
+    return { text, aborted, tokens, tokensPerSec: tps };
+  },
+
   async unload() {
     this.cancelUnload();
+    if (nativeLoaded) {
+      nativeLoaded = false;
+      loadedId = null;
+      try {
+        await nativeFener.bosalt();
+      } catch {}
+    }
     const w = wllama;
     wllama = null;
     loadedId = null;
@@ -453,7 +560,7 @@ export const engine = {
 
   scheduleUnload(ms = UNLOAD_AFTER_MS) {
     this.cancelUnload();
-    if (!wllama) return;
+    if (!wllama && !nativeLoaded) return;
     unloadTimer = setTimeout(() => {
       unloadTimer = null;
       if (busy) return this.scheduleUnload(ms); // üretim sürüyorsa bekle

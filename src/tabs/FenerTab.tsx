@@ -643,9 +643,11 @@ export function FenerTab() {
         data-threads={eng.threads}
         data-mt={String(eng.multithread)}
         data-isolated={String(eng.isolated)}
+        data-backend={eng.backend ?? ''}
+        data-gpu={String(eng.gpu)}
         title={
           model
-            ? `Model cihazda çalışır, internet gerekmez. ${eng.status === 'ready' || eng.status === 'generating' ? `${eng.threads} iş parçacığı.` : ''}`
+            ? `Model cihazda çalışır, internet gerekmez. ${eng.status === 'ready' || eng.status === 'generating' ? `${eng.backend === 'yerel' ? (eng.gpu ? 'Yerel motor, GPU ile' : 'Yerel motor') + ', ' : ''}${eng.threads} iş parçacığı.` : ''}`
             : 'Yapay zekâ modeli olmadan, doğrulanmış rehberlerden yanıt verilir.'
         }
       >

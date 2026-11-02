@@ -14,3 +14,4 @@ _gecici/
 _gizli/
 testdata/_*
 tools/__pycache__/
+android/app/src/main/cpp/llama.cpp/
