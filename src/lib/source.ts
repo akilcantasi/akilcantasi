@@ -50,6 +50,26 @@ export class HttpRangeSource implements RandomAccessSource {
   }
 }
 
+/**
+ * Android uygulamasının paket klasörü (/_paket/…): aralık adreste gönderilir (?aralik=bas-son),
+ * yanıt düz 200 ve tam o baytlardır. Range başlığı kullanılmaz; WebView Range'li yanıtları
+ * kendisi de kaydırabildiği için okunan bayt yanlış olabiliyordu. Gelen uzunluk her okumada denetlenir.
+ */
+export class QueryRangeSource implements RandomAccessSource {
+  constructor(private url: string, readonly size: number, readonly name: string) {}
+
+  async read(offset: number, length: number): Promise<Uint8Array> {
+    const end = Math.min(offset + length, this.size) - 1;
+    if (end < offset) return new Uint8Array(0);
+    const sep = this.url.includes('?') ? '&' : '?';
+    const res = await fetch(`${this.url}${sep}aralik=${offset}-${end}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Okuma hatası ${res.status} (${this.name})`);
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length !== end - offset + 1) throw new Error(`Eksik okuma: ${buf.length} / ${end - offset + 1} bayt (${this.name})`);
+    return buf;
+  }
+}
+
 /** Node testleri için: bellekteki bayt dizisi. */
 export class BytesSource implements RandomAccessSource {
   constructor(private bytes: Uint8Array, readonly name = 'bytes') {}

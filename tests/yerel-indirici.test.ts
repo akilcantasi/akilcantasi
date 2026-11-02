@@ -46,18 +46,25 @@ describe('Android yerel paketler', () => {
     expect(l).toEqual([{ id: files[0].name, kind: 'zim', size: 1234, origin: 'device', url: '/_paket/' + files[0].name }]);
   });
 
-  it('paket HEAD isteği olmadan parça parça okunur', async () => {
+  it('paket parça parça, aralık adreste (Range başlığı yok) okunur; eksik yanıt reddedilir', async () => {
     const fetchMock = vi.fn(async (_u: string, init?: any) => {
       expect(init?.method).not.toBe('HEAD');
-      return new Response(new Uint8Array([1, 2, 3, 4]), { status: 206 });
+      expect(init?.headers?.Range).toBeUndefined();
+      return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
     });
     vi.stubGlobal('fetch', fetchMock);
     const { openSource } = await import('../src/lib/packs');
     const src = await openSource({ id: 'a.zim', kind: 'zim', size: 1234, origin: 'device', url: '/_paket/a.zim' });
     expect(src.size).toBe(1234);
     expect(Array.from(await src.read(10, 4))).toEqual([1, 2, 3, 4]);
-    expect(fetchMock.mock.calls[0][0]).toBe('/_paket/a.zim');
-    expect(fetchMock.mock.calls[0][1].headers.Range).toBe('bytes=10-13');
+    expect(fetchMock.mock.calls[0][0]).toBe('/_paket/a.zim?aralik=10-13');
+    // Dosya sonunda aralık kırpılır
+    fetchMock.mockImplementationOnce(async () => new Response(new Uint8Array([9, 9]), { status: 200 }));
+    expect(Array.from(await src.read(1232, 100))).toEqual([9, 9]);
+    expect(fetchMock.mock.calls[1][0]).toBe('/_paket/a.zim?aralik=1232-1233');
+    // Eksik gelen yanıt sessizce kabul edilmez
+    fetchMock.mockImplementationOnce(async () => new Response(new Uint8Array([1]), { status: 200 }));
+    await expect(src.read(0, 4)).rejects.toThrow(/Eksik okuma/);
   });
 
   it('indirme yerel indiriciye verilir; duraklat/iptal eklentiye gider', async () => {

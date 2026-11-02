@@ -68,6 +68,24 @@ public class MainActivity extends BridgeActivity {
         long size = f.length();
         String mime = name.endsWith(".json") || name.endsWith(".geojson") ? "application/json" : "application/octet-stream";
         boolean head = "HEAD".equalsIgnoreCase(request.getMethod());
+        // Aralık adreste gelir (?aralik=bas-son): WebView, Range başlıklı isteklerde araya girip
+        // yanıtı kendi de kaydırabiliyor; adresteki aralıkta yanıt düz 200 ve tam o baytlardır.
+        String q = request.getUrl().getQueryParameter("aralik");
+        if (q != null) {
+            Matcher qm = Pattern.compile("^(\\d+)-(\\d+)$").matcher(q);
+            if (!qm.find()) return rangeError(h, size);
+            long start = Long.parseLong(qm.group(1));
+            long end = Math.min(size - 1, Long.parseLong(qm.group(2)));
+            if (start >= size || start > end) return rangeError(h, size);
+            long len = end - start + 1;
+            h.put("Content-Length", String.valueOf(len));
+            h.put("X-Aralik", start + "-" + end + "/" + size);
+            try {
+                return new WebResourceResponse(mime, null, 200, "OK", h, head ? empty() : new RangeStream(f, start, len));
+            } catch (IOException e) {
+                return new WebResourceResponse("text/plain", null, 500, "Error", h, empty());
+            }
+        }
         String range = null;
         Map<String, String> rh = request.getRequestHeaders();
         if (rh != null) for (Map.Entry<String, String> e : rh.entrySet()) if ("range".equalsIgnoreCase(e.getKey())) range = e.getValue();

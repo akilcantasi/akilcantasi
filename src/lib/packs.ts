@@ -7,7 +7,7 @@
 //     Android uygulamasında uygulamanın paket klasörü (yerel indiricinin indirdikleri;
 //     url ile, /_paket/ yolundan parça parça okunur)
 //  2) Bağlı olunan Akıl Çantası sunucusu (masaüstü / bilgi noktası): /api/packs
-import { BlobSource, HttpRangeSource, type RandomAccessSource } from './source';
+import { BlobSource, HttpRangeSource, QueryRangeSource, type RandomAccessSource } from './source';
 import { getState, setState } from './store';
 import { nativePacks } from './native';
 
@@ -128,7 +128,7 @@ export async function getDeviceFile(id: string): Promise<File | null> {
 }
 
 export async function openSource(pack: InstalledPack): Promise<RandomAccessSource> {
-  if (pack.origin === 'device' && pack.url) return HttpRangeSource.withSize(pack.url, pack.size, pack.id);
+  if (pack.origin === 'device' && pack.url) return new QueryRangeSource(pack.url, pack.size, pack.id);
   if (pack.origin === 'device') {
     const f = await getDeviceFile(pack.id);
     if (!f) throw new Error('Paket bulunamadı: ' + pack.id);
