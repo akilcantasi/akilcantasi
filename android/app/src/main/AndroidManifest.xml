@@ -48,6 +48,8 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Deprem sonrası enkaz altında kalma ihtimaline karşı ivmeölçerle sarsıntı izleme; kullanıcı açar." />
         </service>
+        <!-- Uygulama güncellemesi: kurulum sonucu (Guncelleyici) -->
+        <receiver android:name=".Guncelleyici$Sonuc" android:exported="false" />
         <!-- Enkaz işareti nöbeti: sistemin arka plan BLE taraması sonuçları -->
         <receiver android:name=".EnkazTarayici$Alici" android:exported="false" />
         <!-- Telefon yeniden başlayınca bekleyen SMS'ler sürer -->
@@ -95,6 +97,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <!-- Uygulama güncellemesi: yalnız kullanıcı "Kur"a basınca; Android 12+ kendi güncellemesinde
+         onay penceresi çıkmayabilir (Guncelleyici) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Güncellemeyi yalnız Wi-Fi'da (ölçülmeyen ağda) kendiliğinden indirmek için -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Son konum kaydı ve enkaz işareti nöbeti (ikisi de isteğe bağlı, varsayılan kapalı) -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

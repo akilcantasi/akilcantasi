@@ -17,6 +17,8 @@ export interface Settings {
   reduceMotion: boolean;
   /** Düşük güç: OLED siyahı, animasyon yok, harita daha az çalışır, pil tasarrufu açık */
   lowPower: boolean;
+  /** Android: internet varken günde bir GitHub'da yeni sürüm var mı diye bak (kurulum yine düğmeyle) */
+  updateCheck: boolean;
 }
 
 export const SETTINGS_KEY = 'ac.settings';
@@ -25,7 +27,7 @@ export const SETTINGS_KEY = 'ac.settings';
 export const TEXT_SCALES: readonly number[] = [1, 1.12, 1.25, 1.4];
 export const TEXT_LABELS: readonly string[] = ['Normal', 'Büyük', 'Çok büyük', 'En büyük'];
 
-export const DEFAULTS: Settings = { textSize: 0, highContrast: false, reduceMotion: false, lowPower: false };
+export const DEFAULTS: Settings = { textSize: 0, highContrast: false, reduceMotion: false, lowPower: false, updateCheck: true };
 
 type Listener = (s: Settings) => void;
 const listeners = new Set<Listener>();
@@ -39,6 +41,7 @@ export function normalizeSettings(raw: unknown, systemReduceMotion = false): Set
     highContrast: o.highContrast === true,
     reduceMotion: typeof o.reduceMotion === 'boolean' ? o.reduceMotion : systemReduceMotion,
     lowPower: o.lowPower === true,
+    updateCheck: o.updateCheck !== false,
   };
 }
 

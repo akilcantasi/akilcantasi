@@ -11,6 +11,8 @@ import { AraclarTab } from './tabs/AraclarTab';
 import { StorageWarning } from './StorageWarning';
 import { KurulumHost } from './Kurulum';
 import { nativeEnkaz } from './lib/enkaz/native';
+import { useGuncelleme } from './lib/guncelleme';
+import { GuncellemeKarti } from './Guncelleme';
 
 const TABS: { id: TabId; label: string; sub: string; Icon: typeof IconChat }[] = [
   { id: 'fener', label: 'Fener', sub: 'asistan · çevrimdışı', Icon: IconChat },
@@ -41,6 +43,9 @@ export function App() {
     mo.observe(el, { childList: true, subtree: true });
     return () => mo.disconnect();
   }, []);
+
+  // Uygulama güncellemesi (Android): denetim kendiliğinden, kurulum yalnız "Kur" düğmesiyle
+  const guncel = useGuncelleme();
 
   // Bildirimden açılış (enkaz işareti duyuldu, görünürlük bitti, sarsıntı sorusu): ilgili araca git
   useEffect(() => {
@@ -124,6 +129,11 @@ export function App() {
           <h1 class="sr-only app-tab-title" data-testid="tab-title">
             {cur.label}
           </h1>
+        )}
+        {guncel && !(s.tab === 'araclar' && s.openTool === 'ayarlar') && (
+          <div style="padding:14px 18px 0">
+            <GuncellemeKarti d={guncel} bant />
+          </div>
         )}
         {s.tab === 'fener' && <FenerTab />}
         {s.tab === 'harita' && <HaritaTab />}

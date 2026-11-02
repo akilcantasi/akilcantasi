@@ -55,6 +55,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AkilCantasiPlugin.class);
         registerPlugin(AkilMeshPlugin.class);
         registerPlugin(EnkazPlugin.class);
+        registerPlugin(GuncellemePlugin.class);
         hedefKoy(getIntent());
         super.onCreate(savedInstanceState);
 

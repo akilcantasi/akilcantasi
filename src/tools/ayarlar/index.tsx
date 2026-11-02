@@ -3,6 +3,8 @@
 // Ayarların kendisi src/lib/settings.ts'de; burada yalnızca arayüz var.
 import { useEffect, useState } from 'preact/hooks';
 import { AppLogo } from '../../Logo';
+import { GuncellemeKarti } from '../../Guncelleme';
+import { HATA_YAZI, guncelleme, useGuncelleme } from '../../lib/guncelleme';
 import { version } from '../../../package.json';
 import { go, setState, useAppState } from '../../lib/store';
 import {
@@ -313,6 +315,42 @@ function openLicenses() {
   }, 75);
 }
 
+function Guncelleme() {
+  const s = useSettings();
+  const d = useGuncelleme();
+  if (!guncelleme.available() || !d) return null;
+  const son = d.sonDenetim ? new Date(d.sonDenetim).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }) : 'hiç';
+  return (
+    <section class="card st-sec" aria-labelledby="st-upd" data-testid="set-update">
+      <h2 class="st-h" id="st-upd">
+        Uygulama güncellemesi
+      </h2>
+      <Switch
+        id="update-check"
+        title="Yeni sürümü denetle"
+        desc="İnternet varken günde bir kez GitHub'a yeni sürüm var mı diye sorulur (telefonun IP adresi GitHub'a görünür). Wi-Fi'dayken yeni sürüm kendiliğinden indirilir; kurulum her zaman yalnız siz düğmeye basınca olur."
+        on={s.updateCheck}
+        onChange={(v) => setSettings({ updateCheck: v })}
+      />
+      <p class="st-p">
+        Kurulu sürüm {d.kurulu || '?'} · son denetim {son}
+        {d.is === 'denetleniyor' ? ' · denetleniyor…' : ''}
+      </p>
+      {d.yeni ? (
+        <GuncellemeKarti d={d} />
+      ) : (
+        <>
+          {d.hata && <p class="st-err">{HATA_YAZI[d.hata] ?? d.hata}</p>}
+          {d.sonDenetim > 0 && !d.hata && d.is === '' && <p class="st-ok">Güncel.</p>}
+        </>
+      )}
+      <button class="btn" data-testid="set-update-now" disabled={d.is !== ''} onClick={() => guncelleme.denetle(false)}>
+        Şimdi denetle
+      </button>
+    </section>
+  );
+}
+
 function About() {
   return (
     <section class="card st-sec" aria-labelledby="st-about" data-testid="set-about">
@@ -332,7 +370,7 @@ function About() {
       </dl>
       <p class="st-p">
         Akıl Çantası özgür yazılımdır (GNU GPL 3.0 ya da sonrası): kaynak kodunu kullanabilir, değiştirebilir ve aynı lisansla paylaşabilirsiniz. Tüm içerik
-        cihazda çalışır; hiçbir veri dışarı gönderilmez.
+        cihazda çalışır; kişisel veri dışarı gönderilmez. (Güncelleme denetimi açıksa GitHub'a yalnız sürüm sorulur.)
       </p>
       <button class="btn" data-testid="set-licenses" onClick={openLicenses}>
         Kaynaklar ve lisanslar
@@ -349,6 +387,7 @@ export default function Tool() {
       <Power />
       <Storage />
       <Reset />
+      <Guncelleme />
       <About />
     </>
   );
