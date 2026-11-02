@@ -6,8 +6,10 @@ def fenerYerel = file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()
 
 android {
     namespace = "org.akilcantasi.app"
-    // r28+: 16 KB bellek sayfalı (Android 15+) cihazlarla uyumlu hizalama; SME/KleidiAI için yeni clang
-    if (fenerYerel) ndkVersion = "29.0.13113456"
+    // r28+: 16 KB bellek sayfalı (Android 15+) cihazlarla uyumlu hizalama; SME/KleidiAI için yeni clang.
+    // GitHub derlemesinde makinede kurulu en yeni NDK kullanılır (apk.yml AKIL_NDK_VERSION'ı verir).
+    def ndkSurum = System.getenv("AKIL_NDK_VERSION")
+    if (fenerYerel && ndkSurum) ndkVersion = ndkSurum
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "org.akilcantasi.app"

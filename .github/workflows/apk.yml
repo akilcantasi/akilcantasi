@@ -56,6 +56,8 @@ jobs:
         run: |
           git clone --depth 1 --branch b12032 https://github.com/ggml-org/llama.cpp android/app/src/main/cpp/llama.cpp
           git -C android/app/src/main/cpp/llama.cpp log -1 --format='llama.cpp %h %cd'
+          # Makinede kurulu en yeni NDK (r28+: 16 KB sayfa hizalaması)
+          if [ -n "$ANDROID_NDK_LATEST_HOME" ]; then echo "AKIL_NDK_VERSION=$(basename "$ANDROID_NDK_LATEST_HOME")" >> "$GITHUB_ENV"; fi
 
       # Adreno GPU için OpenCL başlıkları ve bağlama kütüphanesi (telefonda üreticininki kullanılır).
       # Başarısız olursa APK yalnızca işlemciyle çalışan motorla derlenir.
