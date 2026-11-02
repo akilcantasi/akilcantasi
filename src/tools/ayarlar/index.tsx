@@ -2,6 +2,7 @@
 // depolama özeti, verileri sıfırlama ve uygulama hakkında.
 // Ayarların kendisi src/lib/settings.ts'de; burada yalnızca arayüz var.
 import { useEffect, useState } from 'preact/hooks';
+import { AppLogo } from '../../Logo';
 import { version } from '../../../package.json';
 import { go, setState, useAppState } from '../../lib/store';
 import {
@@ -315,9 +316,12 @@ function openLicenses() {
 function About() {
   return (
     <section class="card st-sec" aria-labelledby="st-about" data-testid="set-about">
-      <h2 class="st-h" id="st-about">
-        Uygulama hakkında
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <AppLogo size={56} class="st-logo" />
+        <h2 class="st-h" id="st-about">
+          Uygulama hakkında
+        </h2>
+      </div>
       <dl class="st-kv">
         <dt>Uygulama</dt>
         <dd>Akıl Çantası</dd>

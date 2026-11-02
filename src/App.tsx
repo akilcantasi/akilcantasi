@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { AppLogo } from './Logo';
 import { useAppState, go, type TabId } from './lib/store';
 import { IconBook, IconChat, IconMap, IconShield, IconSignal, IconTools } from './icons';
 import { FenerTab } from './tabs/FenerTab';
@@ -82,6 +83,8 @@ export function App() {
   return (
     <div class="app">
       <header class="app-header">
+        <div class="brand-row">
+        <AppLogo size={34} class="brand-logo" />
         <div class="brand">
           <span class="brand-name">
             <span aria-hidden="true">
@@ -90,6 +93,7 @@ export function App() {
             <span class="sr-only">Akıl Çantası</span>
           </span>
           <span class="brand-sub" data-testid="tab-sub">{cur.sub}</span>
+        </div>
         </div>
         <div
           class="pill"

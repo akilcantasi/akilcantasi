@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ArtFn } from './registry';
 import { packArtUri } from '../content/pack-guides';
+import { getState } from '../lib/store';
 
 export type { ArtFn };
 
@@ -26,10 +27,13 @@ export function loadArt(): Promise<Record<string, ArtFn>> {
   return loading;
 }
 
-// Açılıştan sonra boşta önceden yükle (rehber listesi küçük resimleri hemen gösterebilsin)
+// Rehber sekmesindeyken boşta önceden yükle (listedeki küçük resimler hemen görünsün).
+// Başka bir ekranla açılan uygulama bu parçayı ilk çizim istenene kadar indirmez.
 if (typeof window !== 'undefined') {
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 300));
-  idle(() => void loadArt());
+  idle(() => {
+    if (getState().tab === 'rehber' && !new URLSearchParams(location.search).has('tool')) void loadArt();
+  });
 }
 
 export function Art({ id, title }: { id: string | null | undefined; title?: string }) {

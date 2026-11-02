@@ -2,6 +2,7 @@
 // seçili getirir; tek dokunuşla hepsi indirilmeye başlar (indirmeler arka planda sürer).
 // Hiç paket yoksa ilk açılışta kendiliğinden, sonra Araçlar → Paketler'den açılır.
 import { useEffect, useMemo, useState } from 'preact/hooks';
+import { AppLogo } from './Logo';
 import { listPacks, formatSize } from './lib/packs';
 import { PackRow, startRow, usePackRows, type RowModel } from './lib/packs-ui';
 import { canSaveToDevice, isActive } from './lib/downloader';
@@ -14,6 +15,7 @@ const CSS = `
 .ku { position: fixed; inset: 0; z-index: 60; background: radial-gradient(130% 55% at 50% -12%, rgba(245,165,36,0.16), rgba(245,165,36,0) 62%), var(--bg); overflow-y: auto; }
 .ku-in { max-width: 640px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
 .ku-hero { display: flex; flex-direction: column; gap: 6px; }
+.ku-logo { border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.3); margin-bottom: 6px; }
 .ku-hero h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
 .ku-hero p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text2); }
 .ku-space { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
@@ -135,6 +137,7 @@ function Kurulum() {
       <style>{CSS}</style>
       <div class="ku-in">
         <div class="ku-hero">
+          <AppLogo size={64} class="ku-logo" />
           <h1 id="ku-title">Hazırlanalım</h1>
           <p>
             {started

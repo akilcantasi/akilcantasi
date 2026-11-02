@@ -1,6 +1,7 @@
 // Paylaş sekmesi: bilgi noktası, içerik paketleri, internetsiz yayılma,
 // pil tasarrufu ve lisanslar.
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { AppLogo } from '../Logo';
 import QRCode from 'qrcode';
 import '../styles/paylas.css';
 import { setState, useAppState } from '../lib/store';
@@ -29,12 +30,6 @@ const IconBox = () => (
     <path d="M21 8l-9-5-9 5 9 5 9-5z" />
     <path d="M3 8v8l9 5 9-5V8" />
     <path d="M12 13v8" />
-  </svg>
-);
-const IconPhone = () => (
-  <svg {...ic()}>
-    <rect x="6" y="2" width="12" height="20" rx="2" />
-    <path d="M11 18h2" />
   </svg>
 );
 const IconShare = () => (
@@ -462,7 +457,7 @@ function SpreadCard({ status }: { status: ServerStatus | null | undefined }) {
           setOpen(open === 'app' ? null : 'app');
         }}
       >
-        <IconPhone />
+        <AppLogo size={26} class="sh-logo" />
         <span class="grow">Uygulamayı başka telefona aktar</span>
       </button>
       {open === 'app' && (

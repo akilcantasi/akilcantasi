@@ -58,6 +58,8 @@ html.hc * { scrollbar-color: #ffffff #000000; }
 /* Şafak ışığı: üstte hafif kehribar parıltı */
 .app { position: relative; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; background: radial-gradient(130% 55% at 50% -12%, rgba(245, 165, 36, 0.13), rgba(245, 165, 36, 0) 62%), var(--bg); }
 .app-header { min-height: 58px; background: var(--bg); flex-shrink: 0; padding: env(safe-area-inset-top) 18px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand-logo { border-radius: 9px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
 .brand { display: flex; flex-direction: column; min-width: 0; }
 .brand-name { font-size: calc(20px * var(--nav-scale)); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
 .brand-name em { font-weight: 500; font-style: italic; color: var(--accent2); }
