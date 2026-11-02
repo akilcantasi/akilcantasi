@@ -1197,17 +1197,17 @@
       "id": "kendine-yetmek",
       "kind": "rehber",
       "name": "Kendine Yetmek",
-      "desc": "Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk. Adım adım, çizimli rehberler.",
+      "desc": "Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, kıtlıkta beslenme, yolculuk ve kış, onarım, bilgi ve topluluk. Adım adım, çizimli rehberler.",
       "file": "kendine-yetmek.rehber.json",
-      "size": 13669380,
+      "size": 18743416,
       "sizeApprox": false,
-      "sha256": "03ca27aed793110c00e6611a495127d76da875c857c188a74628b403fb2d70f5",
+      "sha256": "a267ef325664dfcdc55212a5309f5f5aa035eea58d8b4a3be04febf427f363a8",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/kendine-yetmek.rehber.json"
       ],
       "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan (10 konu)"
+      "source": "Akıl Çantası — packs-src/sifirdan (16 konu)"
     }
   ],
   "sets": [

@@ -369,3 +369,105 @@ Bilerek dışarıda bırakılanlar: silah, mermi, barut ve patlayıcı yapımı;
 2. İlk dalga (yaklaşık 60): yiyecek saklama, ateş, fırın, kerpiç ve barınak, su ve tuvalet.
 3. Sonraki dalgalar: tarım ve hayvancılık, zanaat, enerji, bilgi ve topluluk.
 4. Her dalgada önce metin ve kaynak kontrolü, sahibin onayı, sonra çizim.
+
+---
+
+# İkinci dalga (2026-11-02)
+
+## 17. Yiyecek bulma: hayvansal ekler (paket 11)
+314. Kurbağa: gece fenerle yakalama, temizleme, pişirme; karakurbağası ayrımı, parazit, yasal dönem [Y]
+315. Salyangoz toplama, aç bırakarak arındırma, pişirme
+316. Kerevit: kapan, yem, temizleme [Y]
+317. Yengeç ve deniz kestanesi toplama [Y]
+318. Ahtapot ve kalamarı kıyıdan yakalama, temizleme [Y]
+319. Elle balık yakalama: taş altı, sığ su, set [Y]
+320. Gece balıkçılığı: fener ve kamış [Y]
+321. Buz deliğinden balık tutma [Y]
+322. Türkiye tatlı su balıklarını tanıma; zehirli derisi ya da yumurtası olanlar [U]
+323. Avı temizlerken sülük, kene ve parazitten korunma
+324. Ölü bulunan hayvan: neden yenmez, istisnalar [U]
+325. Kuş yumurtası ve yuva: koruma altındaki türler [Y]
+326. Arı ve yaban arısı larvası
+327. Böcek ayrıntısı: çekirge toplama, zehirli tırtıl ve böcekler
+
+## 18. Yiyecek bulma: bitkisel ekler (paket 12)
+328. İlkbahar otları: madımak, kenger, çiriş, gelincik, şevketi bostan, yabani kuşkonmaz, turp otu
+329. Yaz: dut, böğürtlen, semizotu, yabani erik
+330. Sonbahar: kestane, ceviz, fındık, kuşburnu, alıç, ahlat, yabani elma
+331. Kış: kökler, kurumuş meyveler, çam iç kabuğu, kurutulmuş otlar
+332. Çam: fıstık, iç kabuk unu, iğne çayı; porsuk ağacı tehlikesi [U]
+333. Yenebilir çiçekler: akasya, ıhlamur, menekşe, gül, kabak çiçeği
+334. Sulak alan bitkileri: kamış kökü, su teresi; karaciğer kelebeği riski [U]
+335. Kıyı bitkileri: deniz börülcesi, deniz rezenesi
+336. Ağaç özsuyu: hangi ağaçlardan alınır, alınmaz
+337. Terk edilmiş bahçe ve tarla: yabanileşmiş sebze ve meyve
+338. Şehirde yiyecek bulma: kirlilik ve ilaçlanmış alanlar
+339. Türkiye'nin en tehlikeli zehirli bitkileri: tanıma [U]
+340. Çocuklarla toplama güvenliği
+341. Acı ve zehirli yiyecekleri yenir hale getirme: bekletme, kaynatma, kül suyu [U]
+342. Yabani tahıl ve ot tohumu; çavdar mahmuzu (ergot) [U]
+343. Mürdümük ve yabani baklagiller: latirizm [U]
+344. Akdeniz bitkileri: keçiboynuzu, mersin, menengiç, çitlembik
+345. Deniz yosunu ve tatlı su yosunu; ağır metal riski [U]
+346. Liken (İzlanda yosunu) hazırlama
+347. Kar ve buz: neden doğrudan yenmez, nasıl suya çevrilir
+
+## 19. Mutfak, beslenme ve ilaçsız sağlık (paket 13)
+348. Kurbağa bacağı, salyangoz ve kerevit pişirme
+349. Isırgan çorbası, ebegümeci kavurma, otlu gözleme
+350. Palamut ekmeği ve palamut kahvesi
+351. Kuşburnu ve alıç marmeladı, şekersiz meyve kurusu
+352. Kıt malzemeyle ekmek: arpa, mısır, karışık un
+353. Tek tencere yemekleri
+354. Kıtlıkta bebek ve çocuk beslenmesi [U]
+355. Kalori hesabı ve stok planlama
+356. Protein açlığı ("tavşan açlığı") [U]
+357. İskorbüt ve yabani C vitamini kaynakları [U]
+358. Pellagra ve beriberi: tek tahılın riskleri [U]
+359. Uzun açlıktan sonra yemeye başlama (refeeding) [U]
+360. Su ve tuz dengesi, ağır işte beslenme [U]
+361. Mama yoksa bebek: verilebilecekler ve asla verilmeyecekler [U]
+362. İlaç bitince kronik hastalık: diyabette beslenme, tansiyonda tuz, astım tetikleyicileri (doz yok) [U]
+363. Sivrisinek ve sıtma riski: durgun su, cibinlik [U]
+364. Gözlük kırılınca ya da kaybolunca idare
+365. Diş ağrısı ve diş kaybıyla yaşamak: tehlike belirtileri [U]
+366. Uyku düzeni ve mevsimsel ışık
+
+## 20. Yolculuk, kış, yerleşim ve moral (paket 14)
+367. Uzun yürüyüşe hazırlık: yük, ayak bakımı, mola
+368. Grupla yolculuk: çocuk, yaşlı, hayvan
+369. Yolda yiyecek ve su planı
+370. Yük hayvanı ya da el arabasıyla taşıma
+371. Yeni yerleşim yeri seçme
+372. Kar ayakkabısı yapma
+373. Göl ve dere buzu: kalınlık testi, buza düşünce kurtulma [U]
+374. Ayağı kuru tutmak: siper ayağı [U]
+375. Yerleşimi fark edilmez kılmak: duman, ışık, ses
+376. Basit alarm düzenekleri
+377. Stokları hırsızlık, kemirgen ve nemden korumak
+378. Yangın gözetleme ve erken uyarı
+379. El yapımı oyuncak ve oyunlar
+380. Basit çalgı yapımı ve toplu müzik
+381. Çocuklara doğa bilimi: deneyler, gözlem defteri
+
+## 21. Hayvanlar ve tarım ekleri (paket 15)
+382. Köpek eğitimi: bekçi, sürü, iz takibi
+383. Kedi ile kemirgen kontrolü
+384. At ve eşek eğitimi, nalbantlık temeli [U]
+385. Güvercin besleme
+386. Hayvan doğumu: kuzu ve oğlak [U]
+387. Şeker pancarından şeker
+388. Baltalık: yeniden süren odun ormanı [Y]
+389. Fidanlık: tohumdan ağaç
+390. Kuraklıkta tarım: gri su, malç
+391. İpekböceği yetiştirme
+
+## 22. Onarım ve teknik (paket 16)
+392. El aletleri: sap değiştirme, bileme, pas
+393. Ayakkabı ve çanta onarımı
+394. Basit mekanik onarım: zincir, rulman, yağlama
+395. Elektrikli cihazlarda basit arıza bulma [U]
+396. Cam, plastik ve seramik yapıştırma
+397. Kristal radyo (pilsiz)
+398. Basit anten yapma [Y]
+399. Yelkenli sal ya da kayık, kıyı boyunca yön bulma [U]

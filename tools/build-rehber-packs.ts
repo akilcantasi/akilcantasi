@@ -85,7 +85,7 @@ const built: RehberPack[] = [];
 const TEK = {
   id: 'kendine-yetmek',
   name: 'Kendine Yetmek',
-  desc: 'Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk. Adım adım, çizimli rehberler.',
+  desc: 'Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, kıtlıkta beslenme, yolculuk ve kış, onarım, bilgi ve topluluk. Adım adım, çizimli rehberler.',
   version: 1,
 };
 

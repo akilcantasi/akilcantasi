@@ -59,8 +59,8 @@ export function KendineYetmek({ installed, children }: { installed: boolean; chi
           pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk.
         </p>
         <div class="ky-tags" aria-hidden="true">
-          <span>349 rehber</span>
-          <span>1068 çizim</span>
+          <span>467 rehber</span>
+          <span>1411 çizim</span>
           <span>{size}</span>
         </div>
         {onDevice && !busy ? (
