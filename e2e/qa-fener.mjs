@@ -101,7 +101,7 @@ async function open({ packs = [], query = '?tab=fener', viewport = { width: 390,
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  page.on('console', (m) => { if (m.type() === 'error' && !/favicon/.test(m.text())) errors.push('console: ' + m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/favicon|ERR_TUNNEL|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED/.test(m.text())) errors.push('console: ' + m.text()); });
   await page.addInitScript(INIT, init);
   await page.goto(new URL(query, base).href, { waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="fener-status"]:not([data-mode="checking"])', { timeout: 15000 }).catch(() => {});

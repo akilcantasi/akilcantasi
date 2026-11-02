@@ -20,7 +20,7 @@ async function open(url) {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED/.test(m.text())) errors.push('console: ' + m.text()); });
   await page.goto(url, { waitUntil: 'networkidle' });
   return { page, errors };
 }
@@ -33,7 +33,7 @@ async function open(url) {
   check(env.isolated === true, 'crossOriginIsolated = true');
   await page.waitForSelector('[data-testid="fener-status"][data-mode="model"]', { timeout: 10000 });
   const status = await page.textContent('[data-testid="fener-status"]');
-  check(/tiny-test · cihazda/.test(status), 'durum çubuğu model adını gösteriyor: ' + status.trim());
+  check(/Etkin model: tiny-test/.test(status), 'durum çubuğu model adını gösteriyor: ' + status.trim());
   await page.screenshot({ path: shots + '/fener-empty.png' });
 
   await page.fill('[data-testid="fener-input"]', 'Kanama nasıl durdurulur?');

@@ -17,6 +17,15 @@ let pw;
 try { pw = require('playwright'); } catch { pw = require('/opt/npm-tools/node_modules/playwright'); }
 
 const app = (process.argv[2] ?? 'http://localhost:5199/').replace(/\/?$/, '/');
+// Uygulama bir bilgi noktasından (server.mjs) sunuluyorsa istemci kendi kökenine bağlanır ve
+// "bağlı değil" senaryoları sınanamaz: Vite sunucusu gerekir.
+try {
+  const r = await fetch(app + 'api/status');
+  if (r.ok && /json/.test(r.headers.get('content-type') || '')) {
+    console.log('HATA: ' + app + ' bir bilgi noktası (server.mjs). Bu denetim Vite sunucusuyla çalışır: npx vite --port 5199');
+    process.exit(2);
+  }
+} catch {}
 const shots = process.argv[3] ?? '/tmp/qa-iletisim';
 fs.mkdirSync(shots, { recursive: true });
 

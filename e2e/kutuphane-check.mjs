@@ -20,7 +20,8 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+// İsteğe bağlı çevrim içi katalog bu ortamda erişilemez (kapsam dışı)
+page.on('console', (m) => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED/.test(m.text())) errors.push('console: ' + m.text()); });
 const tid = (id) => `[data-testid="${id}"]`;
 const shot = (n) => page.screenshot({ path: `${SHOTS}/${n}.png` });
 const timed = async (label, fn) => { const t = Date.now(); const r = await fn(); console.log(`${label}: ${Date.now() - t} ms`); return r; };

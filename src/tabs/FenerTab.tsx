@@ -14,6 +14,7 @@ import {
   isContextOverflow,
   pickModel,
   unsupportedReason,
+  canRunNative,
   type ModelChoice,
   type PromptProfile,
 } from '../lib/fener/engine';
@@ -153,7 +154,8 @@ async function send(text: string, context?: PendingContext | null, opts: { free?
     if (ctl.signal.aborted) return useFallback('no-model');
     if (getState().batterySaver) return useFallback('battery');
     if (!model) return useFallback('no-model');
-    if (unsupportedReason()) return useFallback('unsupported');
+    // Yerel motorla açılacak modelde WebAssembly desteği aranmaz
+    if (!canRunNative(model) && unsupportedReason()) return useFallback('unsupported');
 
     const pp = model.profile;
     const prompt = assemblePrompt(r, { history, free: opts.free, rich: pp.rich, maxContextChars: budgetFor(pp), maxHistoryChars: pp.historyChars });
@@ -551,7 +553,7 @@ export function FenerTab() {
       const m = await pickModel().catch(() => null);
       if (!alive) return;
       if (!m) return setMode({ kind: 'guide', why: 'Model yok — rehber modu' });
-      if (unsupportedReason()) return setMode({ kind: 'guide', why: 'Cihaz desteklemiyor — rehber modu' });
+      if (!canRunNative(m) && unsupportedReason()) return setMode({ kind: 'guide', why: 'Cihaz desteklemiyor — rehber modu' });
       setMode({ kind: 'model', model: m });
     })();
     return () => {

@@ -307,6 +307,8 @@ export function isContextOverflow(e: unknown): boolean {
 /** wllama hata nesnelerini kullanıcıya gösterilecek Türkçe iletiye çevirir. */
 export function describeError(e: unknown): string {
   const err = e as any;
+  // Zaten kullanıcıya göre yazılmış Türkçe ileti (yerel motor)
+  if (typeof err?.userMessage === 'string') return err.userMessage;
   const msg = String(err?.message ?? err ?? '');
   const type = err?.type as string | undefined;
   if (/memory|OOM|allocate|Array buffer allocation|RangeError/i.test(msg) || err?.name === 'RangeError')
@@ -436,7 +438,7 @@ export const engine = {
         if (!fallbackOk) {
           const msg = nativeErrorText(r.hata);
           set({ status: 'error', error: msg, progress: null });
-          throw Object.assign(new Error(msg), { unsupported: true });
+          throw Object.assign(new Error(msg), { userMessage: msg });
         }
         prog(0);
       }
