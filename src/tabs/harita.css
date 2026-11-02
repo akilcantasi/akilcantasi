@@ -110,3 +110,57 @@
 .dir-big { font-size: 30px; font-weight: 700; }
 .dir-sub { font-size: 15px; color: var(--text2); margin-top: -8px; }
 .dir-note { max-width: 34em; line-height: 1.45; }
+
+/* ---- Konum aranıyor kartı (KonumArama) ---- */
+.ka { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--bg2); border: 1px solid var(--line2); }
+.ka.hata { border-color: color-mix(in srgb, var(--danger) 55%, var(--line2)); }
+.ka-ust { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.ka-sure { color: var(--accent2); font-variant-numeric: tabular-nums; font-size: 15px; }
+.ka-nabiz { width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 rgba(245, 165, 36, 0.6); animation: ka-nabiz 1.6s infinite; flex: none; }
+.ka-nabiz.dur { background: var(--danger); animation: none; }
+@keyframes ka-nabiz { 0% { box-shadow: 0 0 0 0 rgba(245, 165, 36, 0.55); } 70% { box-shadow: 0 0 0 10px rgba(245, 165, 36, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 165, 36, 0); } }
+.ka-gorsel { display: flex; gap: 12px; align-items: stretch; }
+.ka-gok { width: 116px; height: 116px; flex: none; }
+.ka-halka { fill: none; stroke: var(--line3); stroke-width: 0.8; }
+.ka-halka.ince { stroke: var(--line2); stroke-width: 0.5; }
+.ka-tarama { fill: none; stroke: var(--accent); stroke-width: 1.2; opacity: 0; transform-origin: 0 0; animation: ka-tarama 2.4s ease-out infinite; }
+@keyframes ka-tarama { 0% { transform: scale(0.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 0; } }
+.ka-k { fill: var(--muted); font-size: 8px; font-family: var(--code); }
+.ka-uydu { stroke-width: 1.3; fill: transparent; transition: cx 0.6s, cy 0.6s; }
+.ka-uydu.zayif { stroke: #ff8a7a; }
+.ka-uydu.orta { stroke: #f5c451; }
+.ka-uydu.iyi { stroke: #4fd1a5; }
+.ka-uydu.kullanilan { fill: currentColor; }
+.ka-uydu.zayif.kullanilan { fill: #ff8a7a; }
+.ka-uydu.orta.kullanilan { fill: #f5c451; }
+.ka-uydu.iyi.kullanilan { fill: #4fd1a5; }
+.ka-sag { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ka-cubuklar { position: relative; flex: 1; min-height: 70px; display: flex; align-items: flex-end; gap: 3px; padding: 4px; border-radius: 8px; background: rgba(0, 0, 0, 0.18); }
+.ka-cubuk { flex: 1; max-width: 14px; border-radius: 3px 3px 1px 1px; transition: height 0.6s; opacity: 0.55; }
+.ka-cubuk.kullanilan { opacity: 1; }
+.ka-cubuk.bos { background: var(--line2); opacity: 0.6; }
+.ka-cubuk.zayif { background: #ff8a7a; }
+.ka-cubuk.orta { background: #f5c451; }
+.ka-cubuk.iyi { background: #4fd1a5; }
+.ka-esik { position: absolute; left: 4px; right: 4px; border-top: 1px dashed var(--muted2); opacity: 0.7; }
+.ka-sayilar { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); }
+.ka-sayilar b { color: var(--text); font-size: 14px; }
+.ka-adimlar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; font-size: 13px; }
+.ka-adim { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.ka-adim.tamam, .ka-adim.suruyor { color: var(--text); }
+.ka-adim.hata { color: var(--danger); }
+.ka-ikon { width: 18px; height: 18px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; border: 1.5px solid var(--line3); }
+.ka-adim.tamam .ka-ikon { background: var(--ok); border-color: var(--ok); color: #06231a; }
+.ka-adim.hata .ka-ikon { background: var(--danger); border-color: var(--danger); color: #2a0703; }
+.ka-adim.suruyor .ka-ikon { border-color: var(--accent); border-top-color: transparent; animation: ka-don 0.9s linear infinite; }
+@keyframes ka-don { to { transform: rotate(360deg); } }
+.ka-not { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.ka-adim.hata .ka-not { color: var(--danger); }
+.ka-ipucu { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text2); }
+.ka-aciklama { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--muted2); }
+html.reduce-motion .ka-tarama { display: none; }
+.ka.kompakt { gap: 8px; padding: 10px 12px; }
+.ka.kompakt .ka-gok { width: 84px; height: 84px; }
+.ka.kompakt .ka-cubuklar { min-height: 44px; }
+.ka.kompakt .ka-ipucu { font-size: 12.5px; }
+.ka-adim.simdiki { font-size: 13px; }

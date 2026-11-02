@@ -47,7 +47,10 @@ import org.json.JSONArray;
  */
 @CapacitorPlugin(
     name = "AkilCantasi",
-    permissions = { @Permission(alias = "sms", strings = { Manifest.permission.SEND_SMS }) }
+    permissions = {
+        @Permission(alias = "sms", strings = { Manifest.permission.SEND_SMS }),
+        @Permission(alias = "konum", strings = { Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION })
+    }
 )
 public class AkilCantasiPlugin extends Plugin {
 
@@ -603,8 +606,88 @@ public class AkilCantasiPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    // ------------------------------------------------------------------ Konum araması (uydu durumu)
+
+    private KonumIzleyici konumIzleyici;
+
+    /**
+     * Konum aramasını başlatır; saniyede bir "konumDurum" olayı gelir.
+     * İzin yoksa önce istenir. → { izin: "tam" | "yaklasik" | "yok" }
+     */
+    @PluginMethod
+    public void konumIzle(PluginCall call) {
+        if (getPermissionState("konum") != PermissionState.GRANTED && konumIzleyiciYap().izinDurumu().equals("yok")) {
+            requestPermissionForAlias("konum", call, "konumIzinSonucu");
+            return;
+        }
+        konumIzleBaslat(call);
+    }
+
+    @PermissionCallback
+    private void konumIzinSonucu(PluginCall call) {
+        konumIzleBaslat(call);
+    }
+
+    private KonumIzleyici konumIzleyiciYap() {
+        if (konumIzleyici == null) {
+            konumIzleyici = new KonumIzleyici(getContext(), d -> {
+                try {
+                    notifyListeners("konumDurum", JSObject.fromJSONObject(d));
+                } catch (Exception ignored) {
+                }
+            });
+        }
+        return konumIzleyici;
+    }
+
+    private void konumIzleBaslat(PluginCall call) {
+        KonumIzleyici k = konumIzleyiciYap();
+        String izin = k.izinDurumu();
+        if (!izin.equals("yok")) k.baslat();
+        JSObject ret = new JSObject();
+        ret.put("izin", izin);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void konumIzleDurdur(PluginCall call) {
+        if (konumIzleyici != null) konumIzleyici.durdur();
+        call.resolve(new JSObject());
+    }
+
+    /** Telefonun konum ayarları ekranı (konum kapalıysa) */
+    @PluginMethod
+    public void konumAyarlari(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            Intent i = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            ret.put("opened", true);
+        } catch (Exception e) {
+            ret.put("opened", false);
+        }
+        call.resolve(ret);
+    }
+
+    /** Uygulama ayrıntıları (izin "yaklaşık" ya da kalıcı reddedildiyse) */
+    @PluginMethod
+    public void uygulamaAyarlari(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            ret.put("opened", true);
+        } catch (Exception e) {
+            ret.put("opened", false);
+        }
+        call.resolve(ret);
+    }
+
     @Override
     protected void handleOnDestroy() {
+        if (konumIzleyici != null) konumIzleyici.durdur();
         SmsGonderici.birak(smsDinleyici);
         if (fenerH != 0) FenerMotoru.durdur(fenerH);
         fenerIs.execute(this::fenerBosaltSimdi);

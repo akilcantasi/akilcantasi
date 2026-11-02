@@ -48,6 +48,8 @@ import {
 } from '../lib/map/layers';
 import { copyText, useWaypoints } from '../lib/map/ui';
 import { IzCard, NavCard, Sheet, WaypointSheet, useTicker, type AddPreset } from '../lib/map/panels';
+import { KonumArama } from '../lib/map/KonumArama';
+import { nativeKonum, type KonumDurum } from '../lib/native';
 import './harita.css';
 
 type Filter = 'hepsi' | PoiType;
@@ -107,6 +109,12 @@ export function HaritaTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loc, setLoc] = useState<UserLoc | null>(null);
   const [locState, setLocState] = useState<LocState>('idle');
+  // Android'de telefonun bildirdiği uydu durumu ve aramanın başladığı an (görselleştirme için)
+  const [konumDurum, setKonumDurum] = useState<KonumDurum | null>(null);
+  const [aramaBas, setAramaBas] = useState(0);
+  const yerelAktif = useRef(false);
+  const locRef = useRef<UserLoc | null>(null);
+  locRef.current = loc;
   const [panel, setPanel] = useState<null | 'yon' | 'konum'>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -317,6 +325,10 @@ export function HaritaTab() {
           navigator.geolocation?.clearWatch(watchId.current);
           watchId.current = null;
         }
+        if (low && yerelAktif.current && locRef.current) {
+          yerelAktif.current = false;
+          nativeKonum.stop();
+        }
       }),
     [],
   );
@@ -488,9 +500,46 @@ export function HaritaTab() {
   useEffect(
     () => () => {
       if (watchId.current !== null) navigator.geolocation?.clearWatch(watchId.current);
+      if (yerelAktif.current) nativeKonum.stop();
+      yerelAktif.current = false;
     },
     [],
   );
+
+  // Android yerel konum araması: saniyede bir uydu durumu; bulunan konum doğrudan kullanılır
+  useEffect(
+    () =>
+      nativeKonum.listen((d) => {
+        if (!yerelAktif.current) return;
+        setKonumDurum(d);
+        const k = d.konum;
+        if (!k) return;
+        const o = locRef.current;
+        if (!o || o.lat !== k.lat || o.lon !== k.lon || o.accuracy !== k.dogruluk) {
+          setLoc({ lat: k.lat, lon: k.lon, accuracy: k.dogruluk, timestamp: k.zaman });
+        }
+        setLocState('ok');
+        if (lowPower()) {
+          yerelAktif.current = false;
+          nativeKonum.stop();
+        }
+      }),
+    [],
+  );
+
+  async function yerelBaslat(center: boolean) {
+    const izin = await nativeKonum.start();
+    if (izin === null) {
+      webLocate(center);
+      return;
+    }
+    yerelAktif.current = izin !== 'yok';
+    if (izin === 'yok') {
+      setLocState('denied');
+      if (wantNearest.current) setToast(null);
+      wantNearest.current = false;
+    }
+  }
 
   // Konum geldiğinde bekleyen "en yakın" isteğini tamamla
   useEffect(() => {
@@ -542,6 +591,21 @@ export function HaritaTab() {
   }
 
   function locate(center = true) {
+    centerOnFix.current = center;
+    if (loc && center) moveTo([loc.lon, loc.lat], Math.max(mapRef.current?.getZoom() ?? 14, 14));
+    if (!loc && locState !== 'waiting') {
+      setLocState('waiting');
+      setAramaBas(Date.now());
+      setKonumDurum(null);
+    }
+    if (nativeKonum.available()) {
+      if (!yerelAktif.current) yerelBaslat(center);
+      return;
+    }
+    webLocate(center);
+  }
+
+  function webLocate(center: boolean) {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setLocState('unsupported');
       return;
@@ -551,7 +615,6 @@ export function HaritaTab() {
       return;
     }
     centerOnFix.current = center;
-    if (loc && center) moveTo([loc.lon, loc.lat], Math.max(mapRef.current?.getZoom() ?? 14, 14));
     if (!loc) setLocState('waiting');
     const onOk = (p: GeolocationPosition) => {
       setLoc({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp });
@@ -742,10 +805,10 @@ export function HaritaTab() {
           küçük ekranda birkaç kart açıkken sayfa kaymaz, harita görünür kalır. */}
       {(locMsg || selected || nav || izOpen) && (
       <div class="map-panels" data-testid="map-panels">
-      {locMsg && (
-        <p class={'loc-msg' + (locState === 'waiting' ? '' : ' bad')} role="status" data-testid="loc-msg">
-          {locMsg}
-        </p>
+      {locState === 'waiting' ? (
+        <KonumArama durum={konumDurum} baslangic={aramaBas} kompakt />
+      ) : (
+        locMsg && <KonumHata locState={locState} />
       )}
 
       {selected && (
@@ -840,28 +903,45 @@ export function HaritaTab() {
         />
       )}
 
-      {panel === 'konum' && <KonumPanel loc={loc} locState={locState} onLocate={() => locate(false)} onClose={() => setPanel(null)} />}
+      {panel === 'konum' && <KonumPanel loc={loc} locState={locState} durum={konumDurum} baslangic={aramaBas} onLocate={() => locate(false)} onClose={() => setPanel(null)} />}
       {panel === 'yon' && selected && (
-        <YonPanel poi={selected} loc={loc} locState={locState} onLocate={() => locate(false)} onClose={() => setPanel(null)} />
+        <YonPanel poi={selected} loc={loc} locState={locState} durum={konumDurum} baslangic={aramaBas} onLocate={() => locate(false)} onClose={() => setPanel(null)} />
       )}
     </div>
   );
 }
 
-function NeedLocation({ locState, onLocate }: { locState: LocState; onLocate: () => void }) {
+/** Konum hatası; Android'de izin reddinde ayarlara giden düğmeyle */
+function KonumHata({ locState }: { locState: LocState }) {
   return (
     <div class="col">
-      <p class="empty">{LOC_MSG[locState] || 'Konumunuz henüz bilinmiyor.'}</p>
-      {locState !== 'unsupported' && locState !== 'insecure' && (
-        <button type="button" class="btn primary" onClick={onLocate} disabled={locState === 'waiting'}>
-          {locState === 'waiting' ? 'Konum aranıyor…' : 'Konumumu bul'}
+      <p class="loc-msg bad" role="status" data-testid="loc-msg">
+        {LOC_MSG[locState]}
+      </p>
+      {locState === 'denied' && nativeKonum.available() && (
+        <button type="button" class="btn" data-testid="loc-app-settings" onClick={() => nativeKonum.openAppSettings()}>
+          Uygulama izinlerini aç
         </button>
       )}
     </div>
   );
 }
 
-function KonumPanel({ loc, locState, onLocate, onClose }: { loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void }) {
+function NeedLocation({ locState, onLocate, durum, baslangic }: { locState: LocState; onLocate: () => void; durum: KonumDurum | null; baslangic: number }) {
+  if (locState === 'waiting') return <KonumArama durum={durum} baslangic={baslangic} testid="loc-search-panel" />;
+  return (
+    <div class="col">
+      {locState !== 'idle' && LOC_MSG[locState] ? <KonumHata locState={locState} /> : <p class="empty">Konumunuz henüz bilinmiyor.</p>}
+      {locState !== 'unsupported' && locState !== 'insecure' && (
+        <button type="button" class="btn primary" onClick={onLocate}>
+          {locState === 'idle' ? 'Konumumu bul' : 'Yeniden dene'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function KonumPanel({ loc, locState, onLocate, onClose, durum, baslangic }: { loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void; durum: KonumDurum | null; baslangic: number }) {
   const [copied, setCopied] = useState<string | null>(null);
   useEffect(() => {
     if (!loc && locState === 'idle') onLocate();
@@ -869,7 +949,7 @@ function KonumPanel({ loc, locState, onLocate, onClose }: { loc: UserLoc | null;
   return (
     <Sheet title="Konumum" testid="map-loc-panel" onClose={onClose}>
       {!loc ? (
-        <NeedLocation locState={locState} onLocate={onLocate} />
+        <NeedLocation locState={locState} onLocate={onLocate} durum={durum} baslangic={baslangic} />
       ) : (
         <div class="col">
           <div>
@@ -909,7 +989,7 @@ function KonumPanel({ loc, locState, onLocate, onClose }: { loc: UserLoc | null;
   );
 }
 
-function YonPanel({ poi, loc, locState, onLocate, onClose }: { poi: Poi; loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void }) {
+function YonPanel({ poi, loc, locState, onLocate, onClose, durum, baslangic }: { poi: Poi; loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void; durum: KonumDurum | null; baslangic: number }) {
   const c = useCompass(true);
   const heading = c.status === 'ok' ? c.heading : null;
   const needPerm = c.status === 'needs-permission';
@@ -920,7 +1000,7 @@ function YonPanel({ poi, loc, locState, onLocate, onClose }: { poi: Poi; loc: Us
   return (
     <Sheet title={`Yön: ${poi.name}`} testid="map-dir-panel" onClose={onClose}>
       {!loc ? (
-        <NeedLocation locState={locState} onLocate={onLocate} />
+        <NeedLocation locState={locState} onLocate={onLocate} durum={durum} baslangic={baslangic} />
       ) : (
         (() => {
           const d = distanceM(loc, poi);

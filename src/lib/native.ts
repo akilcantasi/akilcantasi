@@ -289,3 +289,75 @@ export const nativeFener = {
     await call('fenerBosalt');
   },
 };
+
+/** Görülen bir uydu (Android GnssStatus) */
+export interface Uydu {
+  id: number;
+  tur: string;
+  /** Sinyal gücü, dB-Hz (0: duyulmuyor; ~20 altı zayıf; 30+ iyi) */
+  sinyal: number;
+  /** Konum hesabında kullanılıyor mu */
+  kullanilan: boolean;
+  /** Yörünge verisi (efemeris) indi mi; Android 8 öncesinde gelmez */
+  yorunge?: boolean;
+  /** Pusula yönü (0 = kuzey) ve ufuktan yükseklik, derece */
+  az: number;
+  yukseklik: number;
+}
+
+export interface KonumDurum {
+  izin: 'tam' | 'yaklasik' | 'yok';
+  gpsVar: boolean;
+  konumAcik: boolean;
+  gpsAcik: boolean;
+  agAcik: boolean;
+  gecenMs: number;
+  /** İlk konumun kaç ms'de bulunduğu; henüz yoksa -1 */
+  ilkKonumMs: number;
+  uydular: Uydu[];
+  konum?: { lat: number; lon: number; dogruluk: number; zaman: number; kaynak: 'gps' | 'ag' };
+}
+
+/**
+ * Android yerel konum araması (AkilCantasiPlugin: konumIzle, konumIzleDurdur, konumAyarlari,
+ * uygulamaAyarlari; "konumDurum" olayı saniyede bir). Tarayıcıda ve eski APK'larda
+ * available() false döner; harita o zaman tarayıcı konum arayüzünü kullanır.
+ */
+export const nativeKonum = {
+  available(): boolean {
+    const p = plugin();
+    return native.isAndroid() && !!p && typeof p.konumIzle === 'function';
+  },
+  /** Aramayı başlatır (gerekirse izin ister). null: eklenti yanıt vermedi */
+  async start(): Promise<KonumDurum['izin'] | null> {
+    const r = await call<{ izin?: KonumDurum['izin'] }>('konumIzle');
+    return r?.izin ?? null;
+  },
+  async stop() {
+    await call('konumIzleDurdur');
+  },
+  async openLocationSettings(): Promise<boolean> {
+    const r = await call<{ opened?: boolean }>('konumAyarlari');
+    return !!r?.opened;
+  },
+  async openAppSettings(): Promise<boolean> {
+    const r = await call<{ opened?: boolean }>('uygulamaAyarlari');
+    return !!r?.opened;
+  },
+  listen(fn: (d: KonumDurum) => void): () => void {
+    const p = plugin();
+    if (!p || typeof p.addListener !== 'function') return () => {};
+    let h: any = null;
+    let gone = false;
+    Promise.resolve(p.addListener('konumDurum', (e: KonumDurum) => e && fn({ ...e, uydular: Array.isArray(e.uydular) ? e.uydular : [] })))
+      .then((x) => {
+        h = x;
+        if (gone) h?.remove?.();
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+      h?.remove?.();
+    };
+  },
+};
