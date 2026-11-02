@@ -1,0 +1,74 @@
+# Hugging Face paket deposunun (akilcantasi/paketler) bakımı.
+#   liste: depodaki her dosyayı, boyutunu ve katalogda (public/packs-manifest.json) kullanılıp
+#          kullanılmadığını yazar. Hiçbir şey silmez.
+#   sil:   "dosyalar" alanındaki yolları (virgülle ayrılmış) tek bir commit ile siler.
+#          Katalogda kullanılan bir dosya listede varsa hiçbir şey silinmez.
+name: Hugging Face bakım
+
+on:
+  workflow_dispatch:
+    inputs:
+      islem:
+        description: 'liste ya da sil'
+        default: 'liste'
+        required: true
+      dosyalar:
+        description: 'sil için: virgülle ayrılmış dosya yolları'
+        default: ''
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  bakim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install --quiet huggingface_hub
+      - name: Bakım
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          ISLEM: ${{ github.event.inputs.islem }}
+          DOSYALAR: ${{ github.event.inputs.dosyalar }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          from huggingface_hub import HfApi, CommitOperationDelete
+          REPO = 'akilcantasi/paketler'
+          api = HfApi(token=os.environ['HF_TOKEN'])
+          info = api.dataset_info(REPO, files_metadata=True)
+          files = {s.rfilename: (s.size or 0) for s in info.siblings}
+          m = json.load(open('public/packs-manifest.json'))
+          pref = f'https://huggingface.co/datasets/{REPO}/resolve/main/'
+          used = {'README.md', '.gitattributes', 'packs-manifest.json'}
+          for p in m['packs']:
+              for u in p.get('urls', []) + [c.get('url', '') for c in p.get('contents', []) or []]:
+                  if u.startswith(pref):
+                      used.add(u[len(pref):].split('?')[0])
+          islem = os.environ.get('ISLEM', 'liste').strip()
+          if islem == 'liste':
+              toplam = 0
+              for f in sorted(files):
+                  d = 'KULLANILIYOR' if f in used else 'KULLANILMIYOR'
+                  if f not in used: toplam += files[f]
+                  print(f'DOSYA\t{d}\t{files[f]}\t{f}')
+              print(f'OZET\t{len(files)} dosya, kullanılmayanların toplamı {toplam/1e9:.2f} GB')
+              eksik = sorted(u for u in used if u not in files and u not in ('.gitattributes',))
+              for f in eksik: print(f'EKSIK\t{f}')
+          elif islem == 'sil':
+              hedef = [x.strip() for x in os.environ.get('DOSYALAR', '').split(',') if x.strip()]
+              yasak = [f for f in hedef if f in used]
+              if yasak:
+                  print('Katalogda kullanılan dosyalar silinmez:', yasak); sys.exit(1)
+              yok = [f for f in hedef if f not in files]
+              hedef = [f for f in hedef if f in files]
+              if yok: print('Depoda olmayanlar atlandı:', yok)
+              if not hedef: print('Silinecek dosya yok'); sys.exit(0)
+              api.create_commit(repo_id=REPO, repo_type='dataset', operations=[CommitOperationDelete(path_in_repo=f) for f in hedef],
+                                commit_message=f'Kullanılmayan {len(hedef)} dosya silindi')
+              print('SILINDI', len(hedef))
+          else:
+              print('islem: liste ya da sil'); sys.exit(1)
+          PY
