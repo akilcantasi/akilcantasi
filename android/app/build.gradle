@@ -7,8 +7,9 @@ android {
         applicationId "org.akilcantasi.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // GitHub derlemesinde her sürüm bir öncekinin üzerine kurulabilsin diye artan numara
+        versionCode((System.getenv("AKIL_VERSION_CODE") ?: "1") as int)
+        versionName(System.getenv("AKIL_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +17,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Yayın imzası: anahtar dosyası ve parolası ortam değişkeninden gelir (GitHub Actions gizli değişkenleri).
+    // Anahtar yoksa yayın derlemesi hata ayıklama anahtarıyla imzalanır (yalnız deneme içindir).
+    signingConfigs {
+        yayin {
+            def ks = System.getenv("AKIL_KEYSTORE")
+            if (ks && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv("AKIL_KEYSTORE_PAROLA")
+                keyAlias "akilcantasi"
+                keyPassword System.getenv("AKIL_KEYSTORE_PAROLA")
+            }
+        }
+    }
     buildTypes {
         release {
+            def ks = System.getenv("AKIL_KEYSTORE")
+            signingConfig (ks && file(ks).exists()) ? signingConfigs.yayin : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

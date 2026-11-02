@@ -1,0 +1,97 @@
+# Akıl Çantası — Android APK derler ve GitHub "Releases" sayfasına koyar.
+#
+# Elle çalıştırmak için: Actions → "APK derle" → Run workflow.
+# İmza: APK_KEYSTORE_B64 (anahtar dosyasının base64'ü) ve APK_KEYSTORE_PAROLA gizli değişkenleri
+# varsa APK bu kalıcı anahtarla imzalanır; her yeni sürüm eskisinin üzerine kurulur.
+# Yoksa geçici (hata ayıklama) anahtarı kullanılır: deneme için uygundur, ama sonraki sürümü
+# kurmadan önce eskisini kaldırmak gerekir.
+name: APK derle
+
+on:
+  workflow_dispatch:
+    inputs:
+      surum:
+        description: 'Sürüm adı (ör. 0.9.0); boş = tarih'
+        default: ''
+        required: false
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Web uygulaması
+        run: |
+          npm ci --no-audit --no-fund --loglevel=error
+          npm run build
+          npx cap sync android
+
+      - name: İmza anahtarı
+        env:
+          KS: ${{ secrets.APK_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/akil.jks"
+            echo "AKIL_KEYSTORE=$RUNNER_TEMP/akil.jks" >> "$GITHUB_ENV"
+            echo "Kalıcı anahtarla imzalanacak"
+          else
+            echo "::warning::APK_KEYSTORE_B64 yok: geçici anahtarla imzalanıyor (yalnız deneme)"
+          fi
+
+      - name: APK
+        env:
+          AKIL_KEYSTORE_PAROLA: ${{ secrets.APK_KEYSTORE_PAROLA }}
+          AKIL_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          set -e
+          ad="${{ github.event.inputs.surum }}"
+          [ -n "$ad" ] || ad="${GITHUB_REF_NAME#v}"
+          case "$ad" in main|"") ad="$(date -u +%Y.%m.%d)-$GITHUB_RUN_NUMBER";; esac
+          echo "AKIL_SURUM=$ad" >> "$GITHUB_ENV"
+          export AKIL_VERSION_NAME="$ad"
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --console=plain
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/akil-cantasi.apk"
+          ls -la "$RUNNER_TEMP/akil-cantasi.apk"
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$RUNNER_TEMP/akil-cantasi.apk" | head -3 || true
+
+      - name: Sürüm sayfası
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          tag="v$AKIL_SURUM"
+          imza="kalıcı anahtar"
+          [ -n "$AKIL_KEYSTORE" ] || imza="geçici deneme anahtarı (sonraki sürümden önce eskisini kaldırın)"
+          notes="Android 7.0 ve üstü. Kurmak için APK'yı telefona indirip açın; \"bilinmeyen kaynaklardan yüklemeye\" izin verin.
+
+          İmza: $imza
+
+          Paketler (Vikipedi, harita, Fener modeli…) uygulamanın içinden indirilir."
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$RUNNER_TEMP/akil-cantasi.apk" --clobber
+          else
+            gh release create "$tag" "$RUNNER_TEMP/akil-cantasi.apk" --title "Akıl Çantası $AKIL_SURUM" --notes "$notes" --prerelease
+          fi

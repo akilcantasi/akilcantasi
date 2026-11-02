@@ -11,5 +11,6 @@ data/
 *.apk
 _to_delete/
 _gecici/
+_gizli/
 testdata/_*
 tools/__pycache__/
