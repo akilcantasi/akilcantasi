@@ -57,14 +57,19 @@ export interface PdfHit {
  * Sayfa metinlerinde arama. Türkçe karakter ve büyük/küçük harf duyarsız.
  * Katlama karakter sayısını değiştirmediği için eşleşme konumu özgün metne de uyar.
  */
-export function searchPages(pages: (string | undefined)[], query: string, max = 200): PdfHit[] {
+export function searchPages(pages: (string | undefined)[], query: string, max = 200, foldCache?: (string | undefined)[]): PdfHit[] {
   const q = fold(query.trim());
   if (q.length < 2) return [];
   const out: PdfHit[] = [];
   for (let p = 0; p < pages.length && out.length < max; p++) {
     const text = pages[p];
     if (!text) continue;
-    const f = fold(text);
+    // Katlanmış metin önbelleği: büyük kitaplarda her taramada yeniden katlamayı önler
+    let f = foldCache?.[p];
+    if (f === undefined) {
+      f = fold(text);
+      if (foldCache) foldCache[p] = f;
+    }
     if (f.length !== text.length) continue; // beklenmedik birleşik karakter: güvenli tarafta kal
     let i = f.indexOf(q);
     while (i >= 0 && out.length < max) {

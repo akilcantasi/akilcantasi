@@ -270,15 +270,19 @@ public class AkilCantasiPlugin extends Plugin {
         torchOn = false;
     }
 
+    private Runnable smsDinleyici;
+    private static boolean fenerCokmeDenetlendi = false;
+
     @Override
     public void load() {
         super.load();
         // SMS giden kutusundaki değişiklikler JS'e "smsDurum" olayıyla iletilir
-        SmsGonderici.dinle(() -> {
+        smsDinleyici = () -> {
             JSObject ev = new JSObject();
             ev.put("items", toJsArray(SmsGonderici.kuyruk(getContext()).json()));
             notifyListeners("smsDurum", ev);
-        });
+        };
+        SmsGonderici.dinle(smsDinleyici);
         // Uygulama açılınca bekleyen SMS'ler varsa kuyruk hemen işlenir
         if (SmsGonderici.kuyruk(getContext()).acikSayisi() > 0) new Thread(() -> SmsGonderici.isle(getContext())).start();
     }
@@ -290,9 +294,50 @@ public class AkilCantasiPlugin extends Plugin {
     private String fenerDosya = null;
     private String fenerBilgi = "{}";
     private boolean fenerGpu = false;
+    /** Durdurulması istenen sohbetin kimliği (üretim başlamadan gelen durdurma kaybolmasın) */
+    private volatile String fenerDurdurId = null;
 
+    /**
+     * Yerel motoru başlatır. GPU daha önce uygulamayı çökerttiyse (gpuKapali) arka uçlar yalnızca
+     * işlemci kütüphanelerinin bulunduğu bir klasörden yüklenir; OpenCL hiç açılmaz.
+     * Başlatma sırasında çökme olursa (OpenCL sürücüsü) bir dahaki açılışta GPU kapatılır.
+     */
     private boolean fenerVar() {
-        return FenerMotoru.var(getContext().getApplicationInfo().nativeLibraryDir);
+        android.content.SharedPreferences p = fenerPrefs();
+        synchronized (AkilCantasiPlugin.class) {
+            if (!fenerCokmeDenetlendi) {
+                // Önceki süreç GPU'yu başlatırken ya da ilk GPU cevabında öldüyse: GPU kalıcı kapalı
+                fenerCokmeDenetlendi = true;
+                if (p.getBoolean("baslatiliyor", false) || p.getBoolean("gpuDeneniyor", false)) {
+                    p.edit().putBoolean("gpuKapali", true).putBoolean("baslatiliyor", false).putBoolean("gpuDeneniyor", false).commit();
+                }
+            }
+        }
+        String dir = getContext().getApplicationInfo().nativeLibraryDir;
+        if (p.getBoolean("gpuKapali", false)) dir = yalnizIslemciKlasoru(dir);
+        p.edit().putBoolean("baslatiliyor", true).commit();
+        boolean v = FenerMotoru.var(dir);
+        p.edit().putBoolean("baslatiliyor", false).commit();
+        return v;
+    }
+
+    /** nativeLibraryDir'deki libggml-cpu-*.so dosyalarına bağlantılar içeren klasör */
+    private String yalnizIslemciKlasoru(String libDir) {
+        File d = new File(getContext().getFilesDir(), "fener-islemci");
+        try {
+            if (!d.exists()) d.mkdirs();
+            File[] olds = d.listFiles();
+            if (olds != null) for (File f : olds) f.delete();
+            File[] libs = new File(libDir).listFiles();
+            if (libs != null) {
+                for (File f : libs) {
+                    if (f.getName().startsWith("libggml-cpu")) android.system.Os.symlink(f.getAbsolutePath(), new File(d, f.getName()).getAbsolutePath());
+                }
+            }
+            return d.getAbsolutePath();
+        } catch (Exception e) {
+            return libDir;
+        }
     }
 
     private static JSObject jsonObj(String s) {
@@ -362,13 +407,13 @@ public class AkilCantasiPlugin extends Plugin {
                 fenerBosaltSimdi();
                 android.content.SharedPreferences p = fenerPrefs();
                 // Önceki GPU denemesi yarıda kaldıysa (çökme) GPU'yu kalıcı olarak kapat
-                if (p.getBoolean("gpuDeneniyor", false)) p.edit().putBoolean("gpuKapali", true).putBoolean("gpuDeneniyor", false).commit();
                 boolean gpu = gpuIste && !p.getBoolean("gpuKapali", false) && jsonObj(FenerMotoru.arkaUclar()).optBoolean("gpu", false);
                 long h = 0;
                 if (gpu) {
+                    // İlk cevap başarıyla yazılana kadar işaret kalır (GPU çökmeleri çoğu zaman ilk hesapta olur)
                     p.edit().putBoolean("gpuDeneniyor", true).commit();
                     h = FenerMotoru.yukle(f.getAbsolutePath(), nCtx, fenerThreads(), 99);
-                    p.edit().putBoolean("gpuDeneniyor", false).commit();
+                    if (h == 0) p.edit().putBoolean("gpuDeneniyor", false).commit();
                 }
                 if (h == 0) {
                     gpu = false;
@@ -418,19 +463,34 @@ public class AkilCantasiPlugin extends Plugin {
                 call.resolve(r);
                 return;
             }
+            if (id.equals(fenerDurdurId)) {
+                JSObject r = new JSObject();
+                r.put("aborted", true);
+                r.put("tokens", 0);
+                call.resolve(r);
+                return;
+            }
             String res = FenerMotoru.sohbet(h, roles, contents, maxTokens, temp, topK, topP, repeat, (bytes) -> {
+                if (id.equals(fenerDurdurId)) return false;
                 JSObject ev = new JSObject();
                 ev.put("id", id);
                 ev.put("text", new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
                 notifyListeners("fenerParca", ev);
                 return true;
             });
-            call.resolve(jsonObj(res));
+            JSObject out = jsonObj(res);
+            if (fenerGpu && out.optString("error", "").isEmpty() && out.optInt("tokens", 0) > 0) {
+                android.content.SharedPreferences p = fenerPrefs();
+                if (p.getBoolean("gpuDeneniyor", false)) p.edit().putBoolean("gpuDeneniyor", false).commit();
+            }
+            call.resolve(out);
         });
     }
 
     @PluginMethod
     public void fenerDurdur(PluginCall call) {
+        String id = call.getString("id");
+        if (id != null) fenerDurdurId = id;
         long h = fenerH;
         if (h != 0) FenerMotoru.durdur(h);
         call.resolve(new JSObject());
@@ -454,6 +514,8 @@ public class AkilCantasiPlugin extends Plugin {
         fenerGpu = false;
         fenerBilgi = "{}";
         if (h != 0) FenerMotoru.bosalt(h);
+        // Düzgün boşaltıldı: GPU denemesi çökmeyle bitmedi
+        if (h != 0 && fenerPrefs().getBoolean("gpuDeneniyor", false)) fenerPrefs().edit().putBoolean("gpuDeneniyor", false).commit();
     }
 
     // ------------------------------------------------------------------ SMS giden kutusu
@@ -543,7 +605,7 @@ public class AkilCantasiPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
-        SmsGonderici.dinle(null);
+        SmsGonderici.birak(smsDinleyici);
         if (fenerH != 0) FenerMotoru.durdur(fenerH);
         fenerIs.execute(this::fenerBosaltSimdi);
         fenerIs.shutdown();

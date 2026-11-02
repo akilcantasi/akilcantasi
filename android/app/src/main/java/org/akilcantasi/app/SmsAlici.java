@@ -27,7 +27,10 @@ public class SmsAlici extends BroadcastReceiver {
             case SmsGonderici.ACTION_SENT: {
                 int code = getResultCode();
                 String hata = code == Activity.RESULT_OK ? null : SmsKuyrugu.hataAdi(code);
-                if (q.gonderimSonucu(id, attempt, hata, now)) {
+                boolean degisti = hata != null && SmsKuyrugu.kaliciHata(code)
+                    ? q.kaliciBasarisiz(id, attempt, hata, now)
+                    : q.gonderimSonucu(id, attempt, hata, now);
+                if (degisti) {
                     SmsKuyrugu.Mesaj m = q.bul(id);
                     SmsGonderici.sonucBildir(ctx, m);
                     if (m != null && "bekliyor".equals(m.state) && m.nextTry <= now + 1000) SmsGonderici.isle(ctx);
@@ -60,7 +63,11 @@ public class SmsAlici extends BroadcastReceiver {
             String format = intent.getStringExtra("format");
             SmsMessage sms = format != null ? SmsMessage.createFromPdu(pdu, format) : SmsMessage.createFromPdu(pdu);
             if (sms == null) return true;
-            if ("3gpp2".equals(format)) return sms.getStatus() == 0 || sms.getStatus() == 2; // CDMA: ulaştı/teslim
+            if ("3gpp2".equals(format)) {
+                // CDMA: durum 16 bit sola kaydırılmış gelir; 0 = ulaştı, 2 = teslim edildi
+                int st = (sms.getStatus() >> 16) & 0xFF;
+                return st == 0 || st == 2;
+            }
             return sms.getStatus() < 0x20;
         } catch (Exception e) {
             return true;

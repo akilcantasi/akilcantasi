@@ -285,6 +285,22 @@ public class SmsKuyrugu {
         return b.length() > 20 ? "" : b.toString();
     }
 
+    /** Yeniden denemenin işe yaramayacağı kalıcı hatalar (geçersiz ileti, FDN, kısa numara engeli) */
+    public static boolean kaliciHata(int kod) {
+        return kod == 3 || kod == 6 || kod == 7 || kod == 8;
+    }
+
+    /** Kalıcı hata: yeniden denenmez, hemen "hata" olur. Durum değiştiyse true. */
+    public synchronized boolean kaliciBasarisiz(String id, int attempt, String hata, long now) {
+        Mesaj m = bul(id);
+        if (m == null || m.attempts != attempt || !"gonderiliyor".equals(m.state)) return false;
+        m.state = "hata";
+        m.error = hata;
+        m.nextTry = 0;
+        save();
+        return true;
+    }
+
     /** SmsManager sonuç kodlarının Türkçe karşılığı */
     public static String hataAdi(int kod) {
         switch (kod) {
@@ -293,6 +309,9 @@ public class SmsKuyrugu {
             case 3: return "Gönderilemedi (geçersiz ileti)";
             case 4: return "Şebeke yok";
             case 5: return "Gönderim sınırı aşıldı";
+            case 6: return "Numara izinli numaralar listesinde değil (FDN)";
+            case 7: return "Kısa numaraya gönderime izin verilmedi";
+            case 8: return "Kısa numaraya gönderim engelli";
             default: return "Gönderilemedi (kod " + kod + ")";
         }
     }

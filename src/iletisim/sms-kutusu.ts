@@ -1,5 +1,5 @@
 // SMS giden kutusu: durum metinleri (saf mantık, test edilir) ve arayüz kancası.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { nativeSms, type SmsKayit } from '../lib/native';
 
 /** "2 dk", "40 sn" */
@@ -34,13 +34,26 @@ export function durumMetni(m: SmsKayit, now: number): { text: string; tone: 'ok'
 export function useSmsKutusu(): { items: SmsKayit[]; izin: boolean; refresh: () => void } | null {
   const avail = nativeSms.available();
   const [st, setSt] = useState<{ items: SmsKayit[]; izin: boolean }>({ items: [], izin: true });
-  const refresh = () => void nativeSms.list().then(setSt);
+  const alive = useRef(true);
+  // Olay sayacı: istek sürerken olay geldiyse eski liste yeni olayın üzerine yazılmasın
+  const seq = useRef(0);
+  const refresh = () => {
+    const at = seq.current;
+    void nativeSms.list().then((r) => {
+      if (alive.current && seq.current === at) setSt(r);
+    });
+  };
   useEffect(() => {
+    alive.current = true;
     if (!avail) return;
     refresh();
-    const off = nativeSms.listen((items) => setSt((s) => ({ ...s, items })));
+    const off = nativeSms.listen((items) => {
+      seq.current++;
+      if (alive.current) setSt((s) => ({ ...s, items }));
+    });
     const t = setInterval(refresh, 5000);
     return () => {
+      alive.current = false;
       off();
       clearInterval(t);
     };

@@ -83,9 +83,26 @@ for (const vp of [{ width: 360, height: 740 }, { width: 1280, height: 800 }]) {
 
   await step(`${vp.width}px: görünen sayfa çeviriye gönderilir`, async () => {
     await p.click(tid('pdf-translate'));
-    await p.waitForFunction(() => /Sayfa \d: Türkçeye çevir/.test(document.getElementById('main')?.innerText || ''));
+    // Çeviri üst çubukta açılır ve düğme beklemeden başlar (bu sunucuda model yok → model yok iletisi)
+    await p.waitForSelector(`${tid('pdf-translation-box')} ${tid('lib-translation')}`);
+    const st = await p.getAttribute(tid('lib-translation'), 'data-state');
+    assert.ok(st !== 'idle', 'çeviri kendiliğinden başlamadı: ' + st);
+    const box = await p.$eval(tid('pdf-translation-box'), (e) => e.getBoundingClientRect().top);
+    assert.ok(box >= 0 && box < 600, 'çeviri ekranda değil: ' + box);
     await p.click(tid('pdf-translate-close'));
     await p.waitForSelector(tid('pdf-translate'));
+  });
+
+  await step(`${vp.width}px: yakınlaştırma sayfayı büyütür, tuval sayısı sınırlı`, async () => {
+    const w0 = await p.$eval('[data-page="1"]', (e) => e.getBoundingClientRect().width);
+    await p.click('[aria-label="Yakınlaştır"]');
+    await p.waitForFunction((w) => document.querySelector('[data-page="1"]').getBoundingClientRect().width > w * 1.15, w0);
+    await p.waitForFunction(() => {
+      const c = document.querySelector('[data-page="1"] canvas, [data-page="2"] canvas');
+      return c && c.width > 0;
+    });
+    assert.ok((await p.$$('[data-testid="pdf-pages"] canvas')).length <= 3);
+    await p.click('[aria-label="Uzaklaştır"]');
   });
 
   await step(`${vp.width}px: dokunma hedefleri ve taşma`, async () => {

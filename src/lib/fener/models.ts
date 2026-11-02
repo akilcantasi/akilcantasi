@@ -212,6 +212,8 @@ export function chooseModel<P extends PackLike>(
   groups: ModelGroup<P>[],
   profile: DeviceProfile,
   overrideId?: string | null,
+  /** Model başına uygunluk (yerel motor ve WebView farklı bellek sınırlarıyla çalışır) */
+  fit: (g: ModelGroup<P>) => Fit = (g) => fitFor(g, profile),
 ): ModelGroup<P> | null {
   const usable = groups.filter((g) => g.complete);
   if (!usable.length) return null;
@@ -220,7 +222,7 @@ export function chooseModel<P extends PackLike>(
     if (o) return o;
   }
   const bySize = [...usable].sort((a, b) => a.size - b.size || a.id.localeCompare(b.id));
-  const fits = bySize.filter((g) => fitFor(g, profile) === 'ok');
+  const fits = bySize.filter((g) => fit(g) === 'ok');
   if (fits.length) return fits[fits.length - 1];
   return bySize[0];
 }

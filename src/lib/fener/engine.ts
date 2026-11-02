@@ -12,14 +12,17 @@ import { listPacks, openBlob, type InstalledPack } from '../packs';
 import { NATIVE_PACK_PATH, nativeFener, type NativeFenerDurum } from '../native';
 import {
   chooseModel,
+  fitFor,
   estimateParamsB,
   groupModels,
   prettyModelName,
   promptProfile,
   type DeviceProfile,
+  type Fit,
   type ModelGroup,
   type PromptProfile,
 } from './models';
+export { chooseModel };
 import { getState, subscribe } from '../store';
 import type { ChatMsg } from './rag';
 
@@ -39,7 +42,6 @@ export const UNLOAD_AFTER_MS = 60_000;
 const OVERRIDE_KEY = 'ac.fenerModel';
 
 export {
-  chooseModel,
   effectiveMemGB,
   estimateParamsB,
   fitFor,
@@ -58,7 +60,18 @@ let nativeInfoReq: Promise<NativeFenerDurum | null> | null = null;
 /** Yerel motor bilgisini (bir kez) alır. Motor yoksa null. */
 export function loadNativeInfo(): Promise<NativeFenerDurum | null> {
   if (!nativeFener.available()) return Promise.resolve(null);
-  nativeInfoReq ??= nativeFener.durum().then((d) => (nativeInfo = d?.var ? d : null));
+  nativeInfoReq ??= nativeFener
+    .durum()
+    .then((d) => {
+      nativeInfo = d?.var ? d : null;
+      // Yanıt alınamadıysa (köprü hazır değil) bir dahaki çağrıda yeniden sor
+      if (!d) nativeInfoReq = null;
+      return nativeInfo;
+    })
+    .catch(() => {
+      nativeInfoReq = null;
+      return null;
+    });
   return nativeInfoReq;
 }
 
@@ -66,19 +79,40 @@ export function getNativeInfo(): NativeFenerDurum | null {
   return nativeInfo;
 }
 
-export function deviceProfile(): DeviceProfile {
+/** WebView'daki WebAssembly motorunun göreceği cihaz (navigator.deviceMemory, en çok 8 GB) */
+export function webDeviceProfile(): DeviceProfile {
   const nav: any = typeof navigator !== 'undefined' ? navigator : {};
-  if (nativeInfo && nativeInfo.ram > 0) {
-    // Yerel motor: telefonun gerçek RAM'i (WebView'ın 8 GB bildirim sınırı yok)
-    return { memGB: Math.round((nativeInfo.ram / 1e9) * 10) / 10, cores: Math.max(1, nativeInfo.cores || Number(nav.hardwareConcurrency) || 1) };
-  }
   const mem = typeof nav.deviceMemory === 'number' && nav.deviceMemory > 0 ? nav.deviceMemory : null;
   return { memGB: mem, cores: Math.max(1, Number(nav.hardwareConcurrency) || 1) };
 }
 
-/** Bu model yerel motorla açılabilir mi (tüm parçalar uygulamanın paket klasöründe) */
+/** Yerel motor için cihaz: telefonun gerçek RAM'i. Yerel motor yoksa null. */
+export function nativeDeviceProfile(): DeviceProfile | null {
+  if (!nativeInfo || !(nativeInfo.ram > 0)) return null;
+  const nav: any = typeof navigator !== 'undefined' ? navigator : {};
+  return { memGB: Math.round((nativeInfo.ram / 1e9) * 10) / 10, cores: Math.max(1, nativeInfo.cores || Number(nav.hardwareConcurrency) || 1) };
+}
+
+/**
+ * Yeni indirilecek modeller için cihaz: Android uygulamasında modeller yerel indiriciyle
+ * paket klasörüne iner ve yerel motorla çalışır, bu yüzden gerçek RAM esas alınır.
+ */
+export function deviceProfile(): DeviceProfile {
+  return nativeDeviceProfile() ?? webDeviceProfile();
+}
+
+/** Model grubu yerel motorla açılabilir mi (tüm parçalar uygulamanın paket klasöründe) */
+export function groupRunsNative(g: { parts: InstalledPack[] }): boolean {
+  return !!nativeInfo && g.parts.length > 0 && g.parts.every((p) => p.origin === 'device' && !!p.url?.startsWith(NATIVE_PACK_PATH));
+}
+
 export function canRunNative(choice: ModelChoice | null): boolean {
-  return !!choice && !!nativeInfo && choice.origin === 'device' && choice.parts.length > 0 && choice.parts.every((p) => p.url?.startsWith(NATIVE_PACK_PATH));
+  return !!choice && choice.origin === 'device' && groupRunsNative(choice);
+}
+
+/** Modelin bu cihazda hangi motorla, ne kadar uygun çalışacağı */
+export function fitForGroup(g: ModelGroup<InstalledPack>): Fit {
+  return fitFor(g, groupRunsNative(g) ? nativeDeviceProfile()! : webDeviceProfile());
 }
 
 /** İş parçacığı: crossOriginIsolated ise min(4, çekirdek), değilse 1. */
@@ -99,7 +133,11 @@ export function setModelOverride(id: string | null) {
     if (id) localStorage.setItem(OVERRIDE_KEY, id);
     else localStorage.removeItem(OVERRIDE_KEY);
   } catch {}
-  if (loadedId && loadedId !== id) void engine.unload();
+  // Cevap yazılırken modeli atma: üretim bitince boşaltılır
+  if (loadedId && loadedId !== id) {
+    if (busy) engine.scheduleUnload(500);
+    else void engine.unload();
+  }
   modelEpoch++;
   notify();
 }
@@ -170,7 +208,7 @@ export async function pickModel(): Promise<ModelChoice | null> {
   await loadNativeInfo().catch(() => null);
   const groups = await listModels();
   const override = getModelOverride();
-  const g = chooseModel(groups, deviceProfile(), override);
+  const g = chooseModel(groups, deviceProfile(), override, fitForGroup);
   if (!g) return null;
   return toChoice(g, !!override && g.id === override);
 }
@@ -249,6 +287,15 @@ let loadedProfile: PromptProfile = promptProfile(0.5);
 let loading: Promise<void> | null = null;
 let unloadTimer: ReturnType<typeof setTimeout> | null = null;
 let busy = false;
+
+/** Yerel motor hatasını kullanıcıya gösterilecek Türkçe iletiye çevirir (dosya yolları gösterilmez) */
+export function nativeErrorText(h: string | undefined): string {
+  const m = String(h ?? '');
+  if (/belleğe sığmadı/i.test(m)) return 'Model bu cihazın belleğine sığmadı. Daha küçük bir model seçin.';
+  if (/açılamadı|bozuk|cihazda yok/i.test(m)) return 'Model dosyası açılamadı; dosya eksik ya da bozuk olabilir. Kütüphane > Yönet bölümünden yeniden indirin.';
+  if (/yanıt vermedi|yok:/i.test(m)) return 'Hızlı yerel motor başlatılamadı. Uygulamayı güncelleyin ya da daha küçük bir model seçin.';
+  return 'Model yüklenemedi.';
+}
 
 /** İstem n_ctx'i aştı mı? (llama-server: exceed_context_size_error) */
 export function isContextOverflow(e: unknown): boolean {
@@ -383,11 +430,13 @@ export const engine = {
           set({ status: 'ready', progress: 1, threads: r.bilgi?.threads ?? nativeInfo?.threads ?? 1, multithread: true, isolated: false, backend: 'yerel', gpu: !!r.gpu });
           return;
         }
-        console.warn('[fener] yerel motor açamadı, WebAssembly deneniyor:', r.hata);
-        const why2 = unsupportedReason();
-        if (why2) {
-          set({ status: 'error', error: r.hata ?? why2, progress: null });
-          throw Object.assign(new Error(r.hata ?? why2), { unsupported: true });
+        console.warn('[fener] yerel motor açamadı:', r.hata);
+        // WebAssembly'ye ancak model WebView belleğine de sığıyorsa düş (yoksa uygulama çöker)
+        const fallbackOk = !unsupportedReason() && choice.parts.length > 0 && fitFor({ ...choice, complete: true } as any, webDeviceProfile()) === 'ok';
+        if (!fallbackOk) {
+          const msg = nativeErrorText(r.hata);
+          set({ status: 'error', error: msg, progress: null });
+          throw Object.assign(new Error(msg), { unsupported: true });
         }
         prog(0);
       }
@@ -508,11 +557,13 @@ export const engine = {
     busy = true;
     set({ status: 'generating' });
     let text = '';
-    const onAbort = () => void nativeFener.durdur();
-    opts.signal?.addEventListener('abort', onAbort);
+    if (opts.signal?.aborted) {
+      busy = false;
+      set({ status: 'ready' });
+      return { text, aborted: true, tokens: 0, tokensPerSec: null };
+    }
     let r;
     try {
-      if (opts.signal?.aborted) onAbort();
       r = await nativeFener.sohbet(
         messages.map((m) => ({ role: m.role, content: m.content })),
         { maxTokens: opts.maxTokens ?? loadedProfile.maxTokens, temperature: loadedProfile.temperature, topK: 40, topP: 0.9, repeat: 1.1 },
@@ -520,19 +571,21 @@ export const engine = {
           text += piece;
           opts.onToken?.(piece, text);
         },
+        opts.signal,
       );
     } finally {
-      opts.signal?.removeEventListener('abort', onAbort);
       busy = false;
     }
     const aborted = !!r.aborted || !!opts.signal?.aborted;
+    const after = this.isLoaded() ? 'ready' : 'idle';
     if (r.error && !aborted) {
-      set({ status: 'ready' });
-      throw new Error(r.error);
+      set({ status: after });
+      if (isContextOverflow(r.error)) throw new Error(r.error);
+      throw new Error('Yerel motor cevap üretemedi: ' + r.error);
     }
     const tokens = r.tokens ?? 0;
     const tps = tokens > 1 && r.genMs ? (tokens / r.genMs) * 1000 : null;
-    set({ status: 'ready', tokensPerSec: tps });
+    set({ status: after, tokensPerSec: tps });
     if (!getState().batterySaver && getState().tab !== 'fener') this.scheduleUnload();
     if (getState().batterySaver) void this.unload();
     return { text, aborted, tokens, tokensPerSec: tps };

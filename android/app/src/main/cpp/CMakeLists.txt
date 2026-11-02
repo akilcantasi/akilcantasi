@@ -33,7 +33,8 @@ if(ANDROID)
         set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
         set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
         set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
-        set(GGML_OPENMP ON CACHE BOOL "" FORCE)
+        # NDK'nın libomp'u APK'ya girmez; OpenMP açıkken işlemci arka uçları yüklenemez (docs/android.md)
+        set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
         # Adreno GPU (OpenCL). Başlıklar ve bağlama kütüphanesi derlemede verilirse açılır;
         # telefonda üreticinin libOpenCL.so'su yoksa bu arka uç yüklenmez, işlemci kullanılır.
         if(DEFINED FENER_OPENCL_DIR AND EXISTS "${FENER_OPENCL_DIR}/include/CL/cl.h")

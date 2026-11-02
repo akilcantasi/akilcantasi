@@ -130,21 +130,37 @@ export function QuickHelp() {
   }, []);
 
   const direct = nativeSms.available();
-  const cancelled = useRef(false);
+  /** Süren gönderimin iptal anahtarı */
+  const pending = useRef<{ cancelled: boolean; cancel: () => void } | null>(null);
+
+  const cancelPending = (msg = 'Gönderim iptal edildi.') => {
+    const p = pending.current;
+    if (!p) return;
+    pending.current = null;
+    p.cancelled = true;
+    p.cancel();
+    setBusy(null);
+    setStatus({ text: msg });
+  };
 
   /** Konumu al; uygulama kendisi gönderecekse en az 3 sn vazgeçme süresi tanı */
   const withPos = async (key: string, label: string, send: (pos: Pos | null) => void | Promise<void>) => {
-    if (busy) return;
-    setBusy(key);
-    cancelled.current = false;
-    setStatus({ text: direct ? `${label}: konum alınıyor, birkaç saniye içinde gönderilecek.` : 'Konum alınıyor… (birkaç saniye)' });
-    const [pos] = await Promise.all([quickPosition(7000), direct ? new Promise((r) => setTimeout(r, 3000)) : null]);
-    setBusy(null);
-    if (cancelled.current) {
-      setStatus({ text: 'Gönderim iptal edildi.' });
-      return;
+    if (busy) {
+      // 112 her zaman öncelikli: bekleyen yakın mesajını iptal edip devralır
+      if (key !== '112' || busy === '112') return;
+      cancelPending('Yakın mesajı iptal edildi; 112 öne alındı.');
     }
-    await send(pos);
+    let cancel = () => {};
+    const tok = { cancelled: false, cancel: () => cancel() };
+    const cancelled = new Promise<'iptal'>((r) => (cancel = () => r('iptal')));
+    pending.current = tok;
+    setBusy(key);
+    setStatus({ text: direct ? `${label}: konum alınıyor, birkaç saniye içinde gönderilecek.` : 'Konum alınıyor… (birkaç saniye)' });
+    const got = await Promise.race([Promise.all([quickPosition(7000), direct ? new Promise((r) => setTimeout(r, 3000)) : null]), cancelled]);
+    if (tok.cancelled || got === 'iptal') return;
+    pending.current = null;
+    setBusy(null);
+    await send((got as [Pos | null, unknown])[0]);
   };
 
   /** Android'de giden kutusuna verir; olmazsa SMS uygulamasını açar */
@@ -187,7 +203,7 @@ export function QuickHelp() {
     <div class="qs" data-testid="quick-help">
       <style>{QUICK_CSS}</style>
       <div class="qs-112">
-        <button class="qs-112-btn" data-testid="quick-112-sms" onClick={send112} disabled={busy === '112'}>
+        <button class="qs-112-btn" data-testid="quick-112-sms" onClick={send112} disabled={busy === '112'} aria-busy={busy === '112'}>
           <span class="qs-112-ic">{SMS_ICON}</span>
           <span class="qs-112-t">
             <b>{busy === '112' ? 'Konum alınıyor…' : "112'ye konumlu SMS"}</b>
@@ -203,7 +219,7 @@ export function QuickHelp() {
         {status?.text ?? ''}
       </p>
       {busy && direct && (
-        <button class="btn qs-cancel" data-testid="quick-cancel" onClick={() => (cancelled.current = true)}>
+        <button class="btn qs-cancel" data-testid="quick-cancel" onClick={() => cancelPending()}>
           Vazgeç, gönderme
         </button>
       )}
@@ -259,10 +275,12 @@ export function QuickHelp() {
 export function GidenKutusu() {
   const kutu = useSmsKutusu();
   const [now, setNow] = useState(Date.now());
+  const has = !!kutu && kutu.items.length > 0;
   useEffect(() => {
+    if (!has) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [has]);
   if (!kutu || !kutu.items.length) return null;
   const shown = kutu.items.slice(0, 6);
   const finished = kutu.items.some((m) => m.state === 'gitti' || m.state === 'ulasti' || m.state === 'hata');

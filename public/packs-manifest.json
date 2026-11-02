@@ -982,6 +982,23 @@
       "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-4B-GGUF"
     },
     {
+      "id": "fener-qwen3.5-9b",
+      "kind": "model",
+      "name": "Fener modeli — en büyük (Qwen3.5 9B)",
+      "desc": "Güçlü telefonlar (12 GB+ RAM) ve bilgisayarlar için en iyi yanıt kalitesi. Android uygulamasında hızlı yerel motorla çalışır; 5,7 GB tek dosya.",
+      "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "size": 5680522464,
+      "sizeApprox": false,
+      "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+      "tier": "tam",
+      "minRamGB": 12,
+      "urls": [
+        "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
+      ],
+      "license": "Apache-2.0",
+      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+    },
+    {
       "id": "fener-gemma-4-e2b",
       "kind": "model",
       "name": "Fener modeli — Gemma 4 E2B",

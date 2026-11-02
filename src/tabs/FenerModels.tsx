@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go, useAppState } from '../lib/store';
 import { formatSize, type InstalledPack } from '../lib/packs';
-import { deviceProfile, engine, fitFor, getModelOverride, getNativeInfo, listModels, loadNativeInfo, setModelOverride, type ModelGroup } from '../lib/fener/engine';
+import { deviceProfile, engine, fitFor, fitForGroup, getModelOverride, getNativeInfo, listModels, loadNativeInfo, setModelOverride, type ModelGroup } from '../lib/fener/engine';
 import { chooseModel, FIT_LABEL } from '../lib/fener/models';
 import { loadManifest, matchInstalled, type ManifestPack } from '../lib/manifest';
 import { isActive, pauseDownload, startDownload, useDownloads, type DlState } from '../lib/downloader';
@@ -101,7 +101,7 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
   const prof = deviceProfile();
   const overrideMissing = !!override && !!groups && !groups.some((g) => g.id === override && g.complete);
   const manual = !!override && !overrideMissing;
-  const active = groups ? chooseModel(groups, prof, manual ? override : null) : null;
+  const active = groups ? chooseModel(groups, prof, manual ? override : null, fitForGroup) : null;
 
   const choose = (id: string | null) => {
     setModelOverride(id);
@@ -168,7 +168,7 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
           ) : (
             <div class="fener-models-list" role="radiogroup" aria-label="Kullanılacak model">
               {groups.map((g) => {
-                const fit = fitFor(g, prof);
+                const fit = fitForGroup(g);
                 const on = active?.id === g.id;
                 return (
                   <button
@@ -219,7 +219,7 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
                 <span class="fener-model-name">Otomatik seç</span>
                 <span class="fener-model-meta">
                   {(() => {
-                    const auto = chooseModel(groups, prof, null);
+                    const auto = chooseModel(groups, prof, null, fitForGroup);
                     return auto ? `Açıkken bu cihaz için en uygun olan kullanılır: ${auto.name}` : 'Uygun model yok';
                   })()}
                 </span>

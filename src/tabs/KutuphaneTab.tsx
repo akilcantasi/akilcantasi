@@ -669,7 +669,8 @@ export function isFilePath(p: string): boolean {
 /** Arşivdeki dosyanın baytlarını okur (uygulama içi PDF okuyucu için) */
 async function readZimFile(zim: LibrarySource['zim'], path: string): Promise<Uint8Array | null> {
   const r = await zim.getResource(path).catch(() => null);
-  return r ? (r.data as Uint8Array) : null;
+  // pdf.js veriyi işçisine devreder (arabellek ayrılır): arşiv önbelleğindeki veri bozulmasın diye kopya
+  return r ? new Uint8Array(r.data as Uint8Array) : null;
 }
 
 async function openZimFile(zim: LibrarySource['zim'], path: string, download = false): Promise<boolean> {
@@ -981,7 +982,7 @@ function FileCard({ src, title, path }: { src: LibrarySource; title: string; pat
     setMsg(ok ? '' : 'Dosya arşivde bulunamadı.');
   };
   if (pdf && reading) {
-    return <PdfOkuyucu title={title} sub={src.label} language={src.language} load={() => readZimFile(src.zim, path)} onClose={() => setReading(false)} />;
+    return <PdfOkuyucu title={title} sub={src.label} language={src.language} docKey={src.id + '/' + path} load={() => readZimFile(src.zim, path)} onClose={() => setReading(false)} />;
   }
   return (
     <div class="kt-file" data-testid="lib-file">
@@ -1038,6 +1039,7 @@ function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] })
         title={reading.book.title}
         sub={reading.book.author || src.label}
         language={src.language}
+        docKey={src.id + '/' + reading.file}
         load={() => readZimFile(src.zim, reading.file)}
         onClose={() => setReading(null)}
       />

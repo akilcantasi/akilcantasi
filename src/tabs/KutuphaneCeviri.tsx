@@ -35,7 +35,22 @@ export function isTurkishLang(lang: string | undefined): boolean {
 }
 
 /** html (makale) ya da paragraphs (ör. PDF sayfası metni) verilir */
-export function ArticleTranslate({ refStr, html, paragraphs, language, label = 'Türkçeye çevir (Fener)' }: { refStr: string; html?: string; paragraphs?: string[]; language: string; label?: string }) {
+export function ArticleTranslate({
+  refStr,
+  html,
+  paragraphs,
+  language,
+  label = 'Türkçeye çevir (Fener)',
+  autoStart = false,
+}: {
+  refStr: string;
+  html?: string;
+  paragraphs?: string[];
+  language: string;
+  label?: string;
+  /** Düğmeyi beklemeden hemen çevirmeye başla (kullanıcı zaten "çevir" dedi) */
+  autoStart?: boolean;
+}) {
   const cached = cache.get(refStr);
   const [paras, setParas] = useState<Para[]>(cached?.paras ?? []);
   const [truncated, setTruncated] = useState(cached?.truncated ?? false);
@@ -43,7 +58,11 @@ export function ArticleTranslate({ refStr, html, paragraphs, language, label = '
   const [shown, setShown] = useState(!!cached);
   const abort = useRef<AbortController | null>(null);
 
+  const runRef = useRef<(() => Promise<void>) | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
+  useEffect(() => {
+    if (autoStart && !cached) void runRef.current?.();
+  }, []);
 
   if (isTurkishLang(language)) return null;
 
@@ -97,6 +116,7 @@ export function ArticleTranslate({ refStr, html, paragraphs, language, label = '
     }
   };
 
+  runRef.current = run;
   const busy = st.k === 'loading' || st.k === 'run';
 
   if (!shown)

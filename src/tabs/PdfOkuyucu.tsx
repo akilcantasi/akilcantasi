@@ -24,18 +24,53 @@ const CSS = `
 .po-hit.on { border-color: var(--accent); }
 .po-hit small { color: var(--accent2); font-weight: 600; margin-right: 6px; }
 .po-hit mark { background: rgba(245,165,36,0.35); color: var(--text); border-radius: 3px; padding: 0 1px; }
-.po-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-bottom: 20px; }
-.po-page { position: relative; background: #fff; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,0.35); max-width: 100%; }
+.po-pages { display: flex; flex-direction: column; gap: 12px; padding: 0 0 20px; overflow-x: auto; overscroll-behavior-x: contain; }
+.po-page { position: relative; background: #fff; border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,0.35); flex-shrink: 0; margin-inline: auto; }
 .po-page canvas { display: block; width: 100%; height: 100%; border-radius: 6px; }
 .po-page .po-pn { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: #555; background: rgba(255,255,255,0.8); border-radius: 6px; padding: 1px 6px; }
 .po-page.hit { outline: 3px solid var(--accent); outline-offset: 2px; }
+.po-tr { max-height: 45vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .po-msg { font-size: 14px; color: var(--text2); margin: 0; }
 .po-err { font-size: 14px; color: #ffb4a8; margin: 0; }
 `;
 
 const ZOOMS = [0.75, 1, 1.25, 1.5, 2, 2.5];
 
-export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: string; sub?: string; language?: string; load: () => Promise<Uint8Array | null>; onClose: () => void }) {
+/** Sayfa kutusundaki tuvali bırakır (tuval belleği boyut sıfırlanınca hemen geri verilir) */
+function freeCanvas(el: HTMLElement | null | undefined) {
+  el?.querySelectorAll('canvas').forEach((c) => {
+    c.width = c.height = 0;
+    c.remove();
+  });
+}
+
+/** pdf.js hatalarını Türkçe iletiye çevirir */
+export function pdfErrorText(e: any): string {
+  const name = String(e?.name ?? '');
+  const msg = String(e?.message ?? e ?? '');
+  if (name === 'PasswordException' || /password/i.test(msg)) return 'Belge parolayla korunuyor; bu okuyucu açamıyor. "Başka uygulamada aç" ile deneyin.';
+  if (name === 'InvalidPDFException' || /invalid pdf|structure/i.test(msg)) return 'Dosya geçerli bir PDF değil ya da bozuk.';
+  if (/bulunamadı/.test(msg)) return msg;
+  if (/memory|allocation/i.test(msg)) return 'Belge bu cihazın belleği için çok büyük. "Başka uygulamada aç" ile deneyin.';
+  return 'Belge açılamadı. "Başka uygulamada aç" ile deneyebilirsiniz.';
+}
+
+export function PdfOkuyucu({
+  title,
+  sub,
+  language,
+  docKey,
+  load,
+  onClose,
+}: {
+  title: string;
+  sub?: string;
+  language?: string;
+  /** Kaynak + yol: çeviri önbelleği için belgeye özgü anahtar */
+  docKey?: string;
+  load: () => Promise<Uint8Array | null>;
+  onClose: () => void;
+}) {
   const [doc, setDoc] = useState<any>(null);
   const [err, setErr] = useState('');
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
@@ -48,10 +83,15 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
   const [trPage, setTrPage] = useState<{ page: number; paras: string[] } | null>(null);
   const [width, setWidth] = useState(360);
   const texts = useRef<(string | undefined)[]>([]);
+  const folded = useRef<(string | undefined)[]>([]);
   const wrap = useRef<HTMLDivElement>(null);
   const pageEls = useRef<(HTMLDivElement | null)[]>([]);
   const rendered = useRef(new Map<number, number>()); // sayfa → çizildiği ölçek
   const tasks = useRef(new Map<number, any>());
+  const gens = useRef(new Map<number, number>()); // sayfa → çizim kuşağı (eski çizimler iptal)
+  // Gözlemcilerde ve eşzamansız çizimde hep güncel değerler okunsun
+  const live = useRef({ doc: null as any, sizes: [] as { w: number; h: number }[], zoom: 1, width: 360, page: 1 });
+  const key = docKey ?? title;
 
   // Belgeyi aç
   useEffect(() => {
@@ -62,21 +102,23 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
         const data = await load();
         if (!data) throw new Error('Dosya arşivde bulunamadı');
         const pdfjs = await loadPdfjs();
-        d = await pdfjs.getDocument({ data, isEvalSupported: false, disableFontFace: false }).promise;
+        d = await pdfjs.getDocument({ data, isEvalSupported: false }).promise;
         if (!alive) return void d.destroy();
-        // Sayfa boyutları (çizmeden önce yer ayırmak için); ilk sayfanınki hepsine varsayılır, sonra düzeltilir
+        // Sayfa boyutları (çizmeden önce yer ayırmak için); ilk sayfanınki hepsine varsayılır, çizerken düzeltilir
         const p1 = await d.getPage(1);
         const v = p1.getViewport({ scale: 1 });
         setSizes(Array.from({ length: d.numPages }, () => ({ w: v.width, h: v.height })));
         texts.current = new Array(d.numPages);
+        folded.current = new Array(d.numPages);
         setDoc(d);
       } catch (e: any) {
-        if (alive) setErr(e?.message || 'PDF açılamadı');
+        if (alive) setErr(pdfErrorText(e));
       }
     })();
     return () => {
       alive = false;
       for (const t of tasks.current.values()) t?.cancel?.();
+      for (const el of pageEls.current) freeCanvas(el);
       d?.destroy?.();
     };
   }, []);
@@ -93,35 +135,54 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
   }, [doc]);
 
   const zoom = ZOOMS[zoomI];
-  const scaleFor = (i: number) => ((width - 4) / (sizes[i]?.w || 600)) * zoom;
+  live.current = { doc, sizes, zoom, width, page };
+  const scaleFor = (w: number) => ((live.current.width - 4) / (w || 600)) * live.current.zoom;
 
-  // Sayfayı çiz
+  /** Sayfanın tuvalini bırakır (bellek) */
+  const evict = (n: number) => {
+    gens.current.set(n, (gens.current.get(n) ?? 0) + 1);
+    tasks.current.get(n)?.cancel?.();
+    tasks.current.delete(n);
+    rendered.current.delete(n);
+    freeCanvas(pageEls.current[n - 1]);
+  };
+
+  // Sayfayı çiz (kuşak sayacı: bu arada sayfa bırakıldıysa ya da yeniden istendiyse eski çizim vazgeçer)
   const draw = async (n: number) => {
-    if (!doc) return;
+    const d = live.current.doc;
     const el = pageEls.current[n - 1];
-    if (!el) return;
-    const s = scaleFor(n - 1);
-    if (rendered.current.get(n) === s) return;
-    rendered.current.set(n, s);
+    if (!d || !el) return;
+    const want = scaleFor(live.current.sizes[n - 1]?.w);
+    if (rendered.current.get(n) === want && el.querySelector('canvas')) return;
+    const g = (gens.current.get(n) ?? 0) + 1;
+    gens.current.set(n, g);
+    const stale = () => gens.current.get(n) !== g;
     try {
-      const p = await doc.getPage(n);
+      const p = await d.getPage(n);
+      if (stale()) return;
       const vp1 = p.getViewport({ scale: 1 });
-      if (Math.abs(vp1.width - sizes[n - 1].w) > 0.5 || Math.abs(vp1.height - sizes[n - 1].h) > 0.5) {
+      const known = live.current.sizes[n - 1];
+      if (!known || Math.abs(vp1.width - known.w) > 0.5 || Math.abs(vp1.height - known.h) > 0.5) {
         setSizes((old) => old.map((x, i) => (i === n - 1 ? { w: vp1.width, h: vp1.height } : x)));
       }
+      const s = scaleFor(vp1.width); // ölçek sayfanın gerçek genişliğinden
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const vp = p.getViewport({ scale: s * dpr });
-      let canvas = el.querySelector('canvas');
-      if (!canvas) {
-        canvas = document.createElement('canvas');
-        el.prepend(canvas);
-      }
+      const canvas = document.createElement('canvas');
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
       tasks.current.get(n)?.cancel?.();
       const task = p.render({ canvasContext: canvas.getContext('2d')!, viewport: vp });
       tasks.current.set(n, task);
       await task.promise;
+      if (stale()) {
+        canvas.width = canvas.height = 0;
+        return;
+      }
+      freeCanvas(el);
+      el.prepend(canvas);
+      rendered.current.set(n, s);
+      tasks.current.delete(n);
       // Metni de al (arama ve çeviri için)
       if (texts.current[n - 1] === undefined) texts.current[n - 1] = itemsToText((await p.getTextContent()).items);
     } catch (e: any) {
@@ -129,7 +190,7 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
     }
   };
 
-  // Ekrana yaklaşan sayfaları çiz, uzaklaşanları boşalt (bellek); görünen sayfayı izle
+  // Ekrana yaklaşan sayfaları çiz, uzaklaşanları boşalt (bellek); ekranın ortasındaki sayfayı izle
   useEffect(() => {
     if (!doc || typeof IntersectionObserver === 'undefined') return;
     const near = new IntersectionObserver(
@@ -137,31 +198,29 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
         for (const e of es) {
           const n = Number((e.target as HTMLElement).dataset.page);
           if (e.isIntersecting) void draw(n);
-          else if (rendered.current.has(n) && Math.abs(n - page) > 6) {
-            tasks.current.get(n)?.cancel?.();
-            rendered.current.delete(n);
-            (e.target as HTMLElement).querySelector('canvas')?.remove();
-          }
+          else if (Math.abs(n - live.current.page) > 6) evict(n);
         }
       },
       { rootMargin: '900px 0px' },
     );
+    // Ekranın orta çizgisini kesen sayfa "şu anki sayfa"dır (uzun sayfalarda da doğru)
     const vis = new IntersectionObserver(
       (es) => {
         for (const e of es) if (e.isIntersecting) setPage(Number((e.target as HTMLElement).dataset.page));
       },
-      { threshold: 0.5 },
+      { rootMargin: '-50% 0px -50% 0px', threshold: 0 },
     );
     pageEls.current.forEach((el) => el && (near.observe(el), vis.observe(el)));
     return () => {
       near.disconnect();
       vis.disconnect();
     };
-  }, [doc, sizes.length, zoomI, width]);
+  }, [doc, sizes.length]);
 
-  // Yakınlaştırma ya da genişlik değişince yeniden çiz
+  // Yakınlaştırma ya da genişlik değişince: tüm tuvalleri bırak, görünenleri yeniden çiz
   useEffect(() => {
-    rendered.current.clear();
+    if (!doc) return;
+    for (let n = 1; n <= sizes.length; n++) if (rendered.current.has(n) || pageEls.current[n - 1]?.querySelector('canvas')) evict(n);
     for (let n = Math.max(1, page - 2); n <= Math.min(sizes.length, page + 2); n++) void draw(n);
   }, [zoomI, width]);
 
@@ -175,6 +234,7 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
   useEffect(() => {
     if (!doc) return;
     const q = query.trim();
+    setHitI(0);
     if (q.length < 2) {
       setHits(null);
       setScan(null);
@@ -184,7 +244,7 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
     const t = setTimeout(async () => {
       const total = doc.numPages;
       let done = texts.current.filter((x) => x !== undefined).length;
-      setHits(searchPages(texts.current, q));
+      setHits(searchPages(texts.current, q, 200, folded.current));
       for (let n = 1; n <= total && alive; n++) {
         if (texts.current[n - 1] !== undefined) continue;
         try {
@@ -197,13 +257,12 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
         if (done % 8 === 0 || done === total) {
           if (!alive) return;
           setScan({ done, total });
-          setHits(searchPages(texts.current, q));
+          setHits(searchPages(texts.current, q, 200, folded.current));
         }
       }
       if (!alive) return;
       setScan(null);
-      setHits(searchPages(texts.current, q));
-      setHitI(0);
+      setHits(searchPages(texts.current, q, 200, folded.current));
     }, 300);
     return () => {
       alive = false;
@@ -220,12 +279,17 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
   };
 
   const translateHere = async () => {
-    let text = texts.current[page - 1];
-    if (text === undefined && doc) {
-      const p = await doc.getPage(page);
-      text = texts.current[page - 1] = itemsToText((await p.getTextContent()).items);
+    const at = page;
+    let text = texts.current[at - 1];
+    try {
+      if (text === undefined && doc) {
+        const p = await doc.getPage(at);
+        text = texts.current[at - 1] = itemsToText((await p.getTextContent()).items);
+      }
+    } catch {
+      text = '';
     }
-    setTrPage({ page, paras: pageParagraphs(text ?? '') });
+    setTrPage({ page: at, paras: pageParagraphs(text ?? '') });
   };
 
   const canTranslate = !isTurkishLang(language);
@@ -309,24 +373,31 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
             Bu sayfayı Türkçeye çevir (s. {page})
           </button>
         )}
+        {trPage && (
+          // Üst çubukta kalır: hangi sayfada olunursa olunsun çeviri görünür, kendi içinde kayar
+          <div class="po-tr" data-testid="pdf-translation-box">
+            {trPage.paras.length ? (
+              <ArticleTranslate
+                key={'pdf:' + key + ':' + trPage.page}
+                refStr={'pdf:' + key + ':' + trPage.page}
+                paragraphs={trPage.paras}
+                language={language ?? 'eng'}
+                label={`Sayfa ${trPage.page}: Türkçeye çevir`}
+                autoStart
+              />
+            ) : (
+              <p class="po-msg">Bu sayfada çevrilecek metin yok (taranmış resim olabilir).</p>
+            )}
+            <button class="btn" style="margin-top:8px" data-testid="pdf-translate-close" onClick={() => setTrPage(null)}>
+              Çeviriyi kapat
+            </button>
+          </div>
+        )}
       </div>
-
-      {trPage && (
-        <div>
-          {trPage.paras.length ? (
-            <ArticleTranslate key={'pdf:' + title + ':' + trPage.page} refStr={'pdf:' + title + ':' + trPage.page} paragraphs={trPage.paras} language={language ?? 'eng'} label={`Sayfa ${trPage.page}: Türkçeye çevir`} />
-          ) : (
-            <p class="po-msg">Bu sayfada çevrilecek metin yok (taranmış resim olabilir).</p>
-          )}
-          <button class="btn" style="margin-top:8px" data-testid="pdf-translate-close" onClick={() => setTrPage(null)}>
-            Çeviriyi kapat
-          </button>
-        </div>
-      )}
 
       {err && (
         <p class="po-err" role="alert" data-testid="pdf-error">
-          PDF açılamadı: {err}
+          {err}
         </p>
       )}
       {!doc && !err && <p class="po-msg">Belge açılıyor…</p>}
@@ -334,7 +405,7 @@ export function PdfOkuyucu({ title, sub, language, load, onClose }: { title: str
       {doc && (
         <div class="po-pages" data-testid="pdf-pages">
           {sizes.map((s, i) => {
-            const sc = scaleFor(i);
+            const sc = scaleFor(s.w);
             return (
               <div
                 key={i}

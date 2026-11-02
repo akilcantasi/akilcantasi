@@ -55,8 +55,13 @@ public final class SmsGonderici {
     }
 
     /** Eklenti (JS) değişiklikleri dinler */
-    public static void dinle(Runnable r) {
+    public static synchronized void dinle(Runnable r) {
         dinleyici = r;
+    }
+
+    /** Yalnız kendi dinleyicisini bırakır (yeni açılan ekranın dinleyicisi silinmesin) */
+    public static synchronized void birak(Runnable r) {
+        if (dinleyici == r) dinleyici = null;
     }
 
     static void degisti() {

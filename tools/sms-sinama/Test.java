@@ -75,6 +75,12 @@ public class Test {
     check(q2.temizle() == 1 && q2.bul(id) == null, "sonuçlanmışlar temizlenir");
     check(q2.iptal(id2) && q2.acikSayisi() == 0 && q2.sonrakiUyanma() == 0, "iptal kuyruktan çıkarır");
 
+    // 7b) Kalıcı hata (ör. FDN, kısa numara engeli): yeniden denenmez
+    List<Mesaj> e2 = q2.ekle(new String[] {"112"}, null, "ACİL", late + 10);
+    int k4 = q2.basladi(e2.get(0).id, 1, late + 10);
+    check(SmsKuyrugu.kaliciHata(6) && !SmsKuyrugu.kaliciHata(4), "kalıcı/geçici hata ayrımı");
+    check(q2.kaliciBasarisiz(e2.get(0).id, k4, SmsKuyrugu.hataAdi(6), late + 11) && q2.bul(e2.get(0).id).state.equals("hata") && q2.sonrakiUyanma() == 0, "kalıcı hata hemen sonuçlanır");
+
     // 8) Bozuk dosya
     Files.writeString(f.toPath(), "{bozuk");
     check(new SmsKuyrugu(f).acikSayisi() == 0, "bozuk dosyada boş kuyruk");

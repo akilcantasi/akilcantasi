@@ -7,7 +7,9 @@
 // Aynı dosya, sınama için masaüstü Linux'ta da derlenir (tools/fener-sinama).
 #include <jni.h>
 
+#include <algorithm>
 #include <atomic>
+#include <set>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -42,6 +44,9 @@ struct Motor {
 };
 
 std::string g_error;
+// Yaşayan motorlar: başka iş parçacığından gelen durdur() silinmiş motora dokunmasın
+std::set<Motor *> g_live;
+std::mutex g_live_mu;
 std::mutex g_error_mu;
 bool g_started = false;
 
@@ -152,6 +157,7 @@ JNIEXPORT void JNICALL Java_org_akilcantasi_app_FenerMotoru_baslat(JNIEnv *env, 
     llama_backend_init();
     g_started = true;
     LOGI("arka uçlar: %s", backend_names().c_str());
+    if (ggml_backend_dev_count() == 0) set_error("Arka uç yüklenemedi (işlemci kütüphanesi açılamadı)");
 }
 
 JNIEXPORT jstring JNICALL Java_org_akilcantasi_app_FenerMotoru_arkaUclar(JNIEnv *env, jclass) {
@@ -199,6 +205,10 @@ JNIEXPORT jlong JNICALL Java_org_akilcantasi_app_FenerMotoru_yukle(JNIEnv *env, 
         LOGW("sohbet şablonu: %s", e.what());
     }
     llama_set_abort_callback(ctx, abort_cb, m);
+    {
+        std::lock_guard<std::mutex> l(g_live_mu);
+        g_live.insert(m);
+    }
     LOGI("model yüklendi: ctx=%u threads=%d gpu_layers=%d", llama_n_ctx(ctx), n_threads, mp.n_gpu_layers);
     return reinterpret_cast<jlong>(m);
 }
@@ -217,13 +227,19 @@ JNIEXPORT jstring JNICALL Java_org_akilcantasi_app_FenerMotoru_bilgi(JNIEnv *env
 
 JNIEXPORT void JNICALL Java_org_akilcantasi_app_FenerMotoru_durdur(JNIEnv *, jclass, jlong h) {
     auto *m = reinterpret_cast<Motor *>(h);
-    if (m) m->stop = true;
+    std::lock_guard<std::mutex> l(g_live_mu);
+    if (m && g_live.count(m)) m->stop = true;
 }
 
 JNIEXPORT void JNICALL Java_org_akilcantasi_app_FenerMotoru_bosalt(JNIEnv *, jclass, jlong h) {
     auto *m = reinterpret_cast<Motor *>(h);
     if (!m) return;
-    m->stop = true;
+    {
+        std::lock_guard<std::mutex> l(g_live_mu);
+        if (!g_live.count(m)) return;
+        m->stop = true;
+        g_live.erase(m);
+    }
     std::lock_guard<std::mutex> l(m->mu);  // süren üretimin bitmesini bekle
     m->tmpls.reset();
     if (m->ctx) llama_free(m->ctx);

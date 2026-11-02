@@ -256,9 +256,13 @@ export const nativeFener = {
     messages: { role: string; content: string }[],
     opts: { maxTokens: number; temperature: number; topK: number; topP: number; repeat: number },
     onPiece: (t: string) => void,
+    signal?: AbortSignal,
   ): Promise<NativeFenerSonuc> {
     const p = plugin();
     const id = Math.random().toString(36).slice(2);
+    // Durdurma isteği bu sohbetin kimliğiyle gider: üretim henüz başlamamış olsa da kaybolmaz
+    const onAbort = () => void call('fenerDurdur', { id });
+    signal?.addEventListener('abort', onAbort);
     let h: any = null;
     try {
       h = await p.addListener('fenerParca', (e: { id?: string; text?: string }) => {
@@ -270,6 +274,7 @@ export const nativeFener = {
     } catch (e: any) {
       return { error: e?.message ?? String(e) };
     } finally {
+      signal?.removeEventListener('abort', onAbort);
       // Son olaylar yanıt sözünden hemen sonra gelebilir
       await new Promise((r) => setTimeout(r, 30));
       try {
