@@ -46,7 +46,6 @@ Akıl Çantası/
 ├─ docs/                    ← Fener modelleri, mesh, doğrulama notları
 ├─ tests/, e2e/             ← birim ve tarayıcı testleri
 ├─ onizle.cmd               ← Windows: tek tıkla önizleme
-├─ harita-uret.cmd          ← Windows: güncel Türkiye haritası (z15) ve afet noktaları
 ├─ apk-derle.cmd            ← Windows: Android Studio olmadan APK
 └─ paketleri-yerlestir.cmd  ← Windows: İndirilenler'deki paketleri data\ içine taşır
 ```
@@ -62,8 +61,6 @@ klasörde (`data/zim`, `data/models`…) aranır; adı `_` ya da `.` ile başlay
 | Betik | Ne yapar |
 | --- | --- |
 | `onizle.cmd [port]` | Node.js yoksa taşınabilir sürümünü indirir (~30 MB, bir kez), bilgi noktasını `data\` ile başlatır, tarayıcıda `http://localhost:8080` açar. Telefon görünümü: F12 → Ctrl+Shift+M. |
-| `harita-uret.cmd` | Güncel **Türkiye haritasını** (Protomaps günlük derlemesinden yalnızca Türkiye + KKTC sınırı içi, sokak/bina numarası/eczane ayrıntısıyla z15, ~1,5–2,5 GB) `data\maps\turkiye.pmtiles` olarak indirir (eskisi `data\maps\_eski\` içine taşınır) ve **afet noktalarını** OpenStreetMap'ten `data\maps\turkiye-afet-noktalari.geojson` olarak toplar. Yarıda kalırsa tekrar çalıştırın, kaldığı yerden sürer. Seçenekler: `-SadeceHarita`, `-SadeceNoktalar`, `-MaxZoom 14`. go-pmtiles (~10 MB) ve gerekirse Node.js bir kez indirilir. |
-| `hf-yukle.cmd` | Geliştirici aracı. Önerilen ve Türkçe kütüphane paketlerini, haritaları ve afet noktalarını Hugging Face'teki `akilcantasi/paketler` deposuna yükler; katalogdaki ilk indirme adresini Hugging Face yapar. Böylece telefonlar da paketleri hızlı ve kesintisiz indirir. Paket listesi: `tools/hf/paketler.json`. Token bir kez sorulur, isterseniz Windows şifrelemesiyle saklanır (`-TokenSil` ile silinir). `-Deneme` yalnızca planı gösterir. |
 | `paketleri-yerlestir.cmd` | İndirilenler klasöründeki bilinen paketleri `data\zim`, `data\models`, `data\ses` içine **taşır**; Whisper dosyalarından ses paketini (`.tar`) Windows'un `tar.exe`'siyle hazırlar ve özet yazar. |
 | `apk-derle.cmd` | Java 21, Node.js ve Android SDK'yı `%LOCALAPPDATA%\AkilCantasi-build` içine indirip APK derler → `data\akil-cantasi.apk` (ayrıntı: bölüm 2). |
 | `server\start-windows.cmd` | Yalnızca bilgi noktası sunucusu (Node.js kurulu olmalı). |
@@ -213,7 +210,9 @@ Diğerleri: `e2e/*-check.mjs` ve `e2e/qa-*.mjs`.
   (Protomaps günlük derlemesinden, OpenStreetMap verisi) ve afet noktalarını (Overpass) yeniden
   üretip Hugging Face'e yükler, güncellenen kataloğu bu depoya işler. Elle çalıştırmak için
   GitHub'da Actions → "Aylık harita ve afet noktaları" → Run workflow. Gizli değişken: `HF_TOKEN`.
-- Kütüphane paketlerini elle yansılamak için Windows'ta `hf-yukle.cmd` (bkz. yukarı).
+- Bir kütüphane paketini Hugging Face'e yansılamak için aynı iş elle çalıştırılır ve "sadece"
+  alanına paketin kimliği yazılır (ör. `wikipedia-tr-mini`); Kiwix paketi önce indirilir, sonra yüklenir.
+  Paket listesi: `tools/hf/paketler.json`. Depodaki kullanılmayan dosyalar: Actions → "Hugging Face bakım".
 
 ## Bilinen sınırlamalar
 

@@ -42,6 +42,6 @@ Başka ajanlar aynı anda başka dosyalarda çalışıyor.
    ```
    (Önce eski çekimleri silmek için `/tmp/<batch>/shots` içini temizle; art'ı null yapılan adımlar yeni çekimde görünmez.) Paftayı Read ile aç ve kurallara göre yeniden değerlendir. Tek sahneye yakından bakmak için `/tmp/<batch>/shots/<id>-NN.png` dosyasını aç. İyi olana kadar tekrarla. Her rehber için son paftayı kendin görmeden "bitti" deme.
 5. Kontroller: `npx tsc --noEmit 2>&1 | grep -E "scenes/(<senin dosyaların>)"` boş olmalı; `npx vitest run tests/guides.test.ts` geçmeli.
-6. Rapor: `docs/cizim-duzeltme/<batch>.md` (Türkçe). Rehber başına: hangi adımlar yeniden çizildi, hangileri null yapıldı ve neden, oyuncu tanımı, kalan şüpheler.
+6. Rapor: `docs/cizim-duzeltme/<batch>.md` (Türkçe; klasör yoksa oluştur, iş bitince silinebilir). Rehber başına: hangi adımlar yeniden çizildi, hangileri null yapıldı ve neden, oyuncu tanımı, kalan şüpheler.
 
 Son mesajın (200 kelimeyi geçmesin): kaç rehber, kaç sahne yeniden çizildi, kaç çizim kaldırıldı, en ağır sorunlar, emin olamadıkların.
