@@ -1,0 +1,88 @@
+// Rehber sekmesinin en altı: "Kendine Yetmek" rehber paketi.
+// Yüklüyse kategorileri gösterir; değilse tek düğmeyle (hepsi tek dosya) indirilir.
+import type { ComponentChildren } from 'preact';
+import { isActive } from '../lib/downloader';
+import { formatSize } from '../lib/packs';
+import { pct, speedText, startRow, usePackRows } from '../lib/packs-ui';
+
+export const KY_ID = 'kendine-yetmek';
+
+const CSS = `
+.ky { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+.ky-card { background: linear-gradient(160deg, rgba(79,209,165,0.14), rgba(79,209,165,0.04)); border: 1px solid rgba(79,209,165,0.4); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.ky-card h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.ky-card p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2); }
+.ky-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.ky-tags span { font-size: 12px; color: var(--text2); background: rgba(255,255,255,0.06); border-radius: 999px; padding: 4px 10px; }
+.ky-btn { min-height: 52px; border-radius: 999px; border: 0; background: var(--ok); color: #0e1b2c; font-size: 16px; font-weight: 600; padding: 0 20px; }
+.ky-btn:disabled { opacity: 0.7; }
+.ky-prog { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
+.ky-prog i { display: block; height: 100%; background: var(--ok); transition: width 0.3s; }
+.ky-note { font-size: 12.5px; color: var(--muted); margin: 0; line-height: 1.45; }
+.ky-err { font-size: 13px; color: #ffb4a8; margin: 0; }
+`;
+
+/** Paket yüklüyse children (kategoriler), değilse indirme kartı */
+export function KendineYetmek({ installed, children }: { installed: boolean; children: ComponentChildren }) {
+  const { rows, dlFor } = usePackRows();
+  const row = rows.find((r) => r.entry?.id === KY_ID);
+  const dl = row ? dlFor(row) : undefined;
+  const busy = isActive(dl);
+  const ready = installed || !!row?.device || !!row?.server;
+
+  if (ready) {
+    return (
+      <section class="ky rh-pack-sub" aria-labelledby="rh-ky" data-testid="guide-pack-section">
+        <style>{CSS}</style>
+        <h2 class="rh-h" id="rh-ky">
+          Kendine Yetmek
+        </h2>
+        <p class="rh-intro" style="margin:2px 0 10px">
+          Uzun süre dışarıdan yardım gelmezse: yiyecek, su, barınak, ateş, giyim, enerji, tarım ve topluluk.
+        </p>
+        {children}
+      </section>
+    );
+  }
+  if (!row) return null;
+
+  const size = formatSize(row.size);
+  return (
+    <section class="ky" data-testid="ky-card">
+      <style>{CSS}</style>
+      <div class="ky-card">
+        <h2>Kendine Yetmek</h2>
+        <p>
+          Uzun süre dışarıdan yardım gelmezse yaşamı sürdürmek için adım adım, çizimli rehberler: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve
+          pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk.
+        </p>
+        <div class="ky-tags" aria-hidden="true">
+          <span>349 rehber</span>
+          <span>1068 çizim</span>
+          <span>{size}</span>
+        </div>
+        {busy && dl ? (
+          <>
+            <div class="ky-prog" role="progressbar" aria-label="İndirme" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct(dl)}>
+              <i style={{ width: pct(dl) + '%' }} />
+            </div>
+            <p class="ky-note" data-testid="ky-progress">
+              İndiriliyor · %{pct(dl)}
+              {speedText(dl)}
+            </p>
+          </>
+        ) : (
+          <button class="ky-btn" data-testid="ky-download" onClick={() => void startRow(row)}>
+            {dl?.status === 'paused' ? 'İndirmeye devam et' : `Hepsini indir (${size})`}
+          </button>
+        )}
+        {dl?.status === 'error' && (
+          <p class="ky-err" role="alert">
+            {dl.error ?? 'İndirilemedi'} — internet bağlantısını kontrol edip yeniden deneyin.
+          </p>
+        )}
+        <p class="ky-note">Bir kez indirin, internet olmadan okuyun. Rehberler henüz uzmanlarca incelenmedi; her birinde bu uyarı görünür.</p>
+      </div>
+    </section>
+  );
+}

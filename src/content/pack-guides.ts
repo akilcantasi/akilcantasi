@@ -1,4 +1,4 @@
-// Kurulu rehber paketleri (.rehber.json, ör. "Sıfırdan" medeniyet sonrası yaşam rehberleri).
+// Kurulu rehber paketleri (.rehber.json, ör. "Kendine Yetmek": uzun süre yardım gelmezse yaşamı sürdürme rehberleri).
 // Paketler OPFS'ten ya da bağlı bilgi noktasından okunur, doğrulanır ve bellekte tutulur.
 // Paket listesi değişince (indirme, içe aktarma, silme → packsVersion) yeniden yüklenir
 // ve abonelere haber verilir. Yerleşik rehberlere (src/content/guides.ts) dokunulmaz.

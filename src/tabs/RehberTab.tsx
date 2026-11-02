@@ -1,6 +1,6 @@
 // Rehber sekmesi: elle hazırlanmış, yapay zekâ kullanmayan acil durum rehberleri.
 // Gezinme: ana ekran (kategori kutuları) → kategori (rehber listesi) → rehber (çizimli adımlar).
-// Kurulu rehber paketlerinin (ör. "Sıfırdan") kategorileri ana kategorilerden sonra ayrı bölümde.
+// Kurulu rehber paketlerinin (ör. "Kendine Yetmek") kategorileri ana kategorilerden sonra ayrı bölümde.
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { useAppState, go } from '../lib/store';
 import { GUIDES, type Guide } from '../content/guides';
@@ -10,6 +10,7 @@ import { getPackCategories, isPackGuide, packCategoryOf, usePackGuides } from '.
 import { getGuide, searchGuides } from '../lib/guides-search';
 import { Art } from '../art';
 import { IconChat, IconWarn } from '../icons';
+import { KendineYetmek } from './KendineYetmek';
 
 /** Ana ekranın üstündeki sahne: Çök-Kapan-Tutun */
 const HERO_ART = GUIDE_ART['deprem-aninda']?.find(Boolean) ?? null;
@@ -366,16 +367,14 @@ export function RehberTab() {
             ))}
           </div>
         )}
-        {!results && packCats.length > 0 && (
-          <section class="rh-pack-sub" aria-labelledby="rh-sifirdan" data-testid="guide-pack-section">
-            <h2 class="rh-h" id="rh-sifirdan">Sıfırdan</h2>
-            <p class="rh-intro" style="margin:2px 0 10px">İndirdiğiniz rehber paketleri: uzun süre dışarıdan yardım gelmezse yaşamı yeniden kurmak için.</p>
-            <div class="rh-cats" role="group" aria-label="Sıfırdan rehber kategorileri">
+        {!results && (
+          <KendineYetmek installed={packCats.length > 0}>
+            <div class="rh-cats" role="group" aria-label="Kendine Yetmek rehber kategorileri">
               {packCats.map((c) => (
                 <CategoryTile key={c.id} c={c} />
               ))}
             </div>
-          </section>
+          </KendineYetmek>
         )}
         </div>
       </div>

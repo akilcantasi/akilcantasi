@@ -1176,164 +1176,20 @@
       "sha256": "3a91f616429963abf84dce424129503284fa7c20befe43f664c43cbcfbf1accc"
     },
     {
-      "id": "sifirdan-yiyecek-bulma",
+      "id": "kendine-yetmek",
       "kind": "rehber",
-      "name": "Sıfırdan: Yiyecek bulma",
-      "desc": "Yabani ot, yemiş ve kök toplama; balık tutma; iz sürme ve tuzak; avı güvenle temizleme. Zehirli benzerler, mantar ve et hastalıkları için uyarılarla.",
-      "file": "sifirdan-yiyecek-bulma.rehber.json",
-      "size": 924636,
+      "name": "Kendine Yetmek",
+      "desc": "Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk. Adım adım, çizimli rehberler.",
+      "file": "kendine-yetmek.rehber.json",
+      "size": 13669380,
       "sizeApprox": false,
-      "sha256": "5be61422bb535bbc0e607d62a73223d5145d83d7e93456cc34c3cee6e3f279d2",
+      "sha256": "03ca27aed793110c00e6611a495127d76da875c857c188a74628b403fb2d70f5",
       "tier": "temel",
       "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-yiyecek-bulma.rehber.json"
+        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/kendine-yetmek.rehber.json"
       ],
       "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/01-yiyecek-bulma"
-    },
-    {
-      "id": "sifirdan-yiyecek-saklama",
-      "kind": "rehber",
-      "name": "Sıfırdan: Yiyecek saklama",
-      "desc": "Buzdolabı ve market olmadan et, balık, meyve, sebze, süt ve tahılı kurutma, tuzlama, tütsüleme, mayalama ve kilerde saklama yolları. Botulizm, trişin ve küfe karşı güvenlik kuralları.",
-      "file": "sifirdan-yiyecek-saklama.rehber.json",
-      "size": 1352023,
-      "sizeApprox": false,
-      "sha256": "c14097487faeea09ae0b308947996ca8d7eb9d24bcb6cfc24b4e0d4bd7eb741e",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-yiyecek-saklama.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/02-yiyecek-saklama"
-    },
-    {
-      "id": "sifirdan-tarim-hayvancilik",
-      "kind": "rehber",
-      "name": "Sıfırdan: Tarım ve hayvancılık",
-      "desc": "Toprağı tanımaktan tohum saklamaya, Türkiye bölgelerine göre ekim takviminden buğday harmanına, meyve ağacı aşılamadan tavuk, keçi ve arı bakımına kadar kendi yiyeceğini üretmenin temel rehberleri.",
-      "file": "sifirdan-tarim-hayvancilik.rehber.json",
-      "size": 1639600,
-      "sizeApprox": false,
-      "sha256": "e1b7ea0d4b40ba6ba61420febabb26f0135f0d39f46e1b96c1fc6f74df8d4210",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-tarim-hayvancilik.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/03-tarim-hayvancilik"
-    },
-    {
-      "id": "sifirdan-su-dezenfeksiyon",
-      "kind": "rehber",
-      "name": "Sıfırdan: Su ve dezenfeksiyon",
-      "desc": "Uzun dönemde su kaynağı bulma, kuyu, sarnıç, kum filtresi ve güneşle arıtma; elde olanla klor, kireç, alkol gibi dezenfektanları güvenle hazırlama ve alet, bez, yara malzemesi temizliği.",
-      "file": "sifirdan-su-dezenfeksiyon.rehber.json",
-      "size": 1303861,
-      "sizeApprox": false,
-      "sha256": "7e3441fb082e7e88b30efcf85d91fd06094026b99523a3021528cbec6e778b01",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-su-dezenfeksiyon.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/04-su-dezenfeksiyon"
-    },
-    {
-      "id": "sifirdan-hijyen-saglik",
-      "kind": "rehber",
-      "name": "Sıfırdan: Hijyen ve sağlık",
-      "desc": "Uzun süre doktor, hastane ve market yokken tuvalet, atık, temizlik, sabun, kişisel bakım ve evde hasta bakımı. İlk yardımın yerine geçmez; onu tamamlar.",
-      "file": "sifirdan-hijyen-saglik.rehber.json",
-      "size": 857790,
-      "sizeApprox": false,
-      "sha256": "695bd79b471e7b74102d2de4bab76515a97cc62811b57f9c607ff4eecc4ce248",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-hijyen-saglik.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/05-hijyen-saglik"
-    },
-    {
-      "id": "sifirdan-yapi",
-      "kind": "rehber",
-      "name": "Sıfırdan: Barınak ve yapı",
-      "desc": "Yer seçimi, temel, kerpiç ve toprak duvar, kütük ve taş yapı, kireç, çatı, kapı-pencere, kar barınağı, yurt ve keçe, çit ve ahır. Deprem güvenliği uyarılarıyla.",
-      "file": "sifirdan-yapi.rehber.json",
-      "size": 1790028,
-      "sizeApprox": false,
-      "sha256": "c87d983fef53a798534769acd8d5e44803ac9ecec0420c50ffb7183db19adadc",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-yapi.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/06-yapi"
-    },
-    {
-      "id": "sifirdan-ates-pisirme",
-      "kind": "rehber",
-      "name": "Sıfırdan: Ateş, ısınma ve pişirme",
-      "desc": "Kibritsiz ateş yakmaktan odun ve kömür hazırlamaya, baca, şömine, roket ve kütle sobasından kubbe fırın, tandır ve güneş fırınına kadar uzun dönem ateş bilgisi.",
-      "file": "sifirdan-ates-pisirme.rehber.json",
-      "size": 919179,
-      "sizeApprox": false,
-      "sha256": "46c91e581f5197cd75eaf10fbed580e90350e7b1ca85408e3e565ce53d0f5cfa",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-ates-pisirme.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/07-ates-pisirme"
-    },
-    {
-      "id": "sifirdan-giyim-zanaat",
-      "kind": "rehber",
-      "name": "Sıfırdan: Giyim ve zanaat",
-      "desc": "Yünden ipe, deriden çarığa, kilden çömleğe, hurdadan alete: elle giysi, kap, alet ve taşıt yapmanın temel yolları.",
-      "file": "sifirdan-giyim-zanaat.rehber.json",
-      "size": 1374607,
-      "sizeApprox": false,
-      "sha256": "3ac329b77c93ee8cff969d3b3e6101cd3be8f627e60306d6f1537e76576acef2",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-giyim-zanaat.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/08-giyim-zanaat"
-    },
-    {
-      "id": "sifirdan-enerji-kimya",
-      "kind": "rehber",
-      "name": "Sıfırdan: Enerji ve kimya",
-      "desc": "Kaldıraç ve palangadan su çarkına, hurda parçalarla elektrik üretiminden kireç, kömür, mum, kâğıt ve mürekkebe kadar; elle kurulacak düzenekler ve güvenli temel kimya.",
-      "file": "sifirdan-enerji-kimya.rehber.json",
-      "size": 1265412,
-      "sizeApprox": false,
-      "sha256": "c70a2b4aac78592b9f58128b5470dd4cf7203c006811bf56d95ece6b2f8c8d1f",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-enerji-kimya.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/09-enerji-kimya"
-    },
-    {
-      "id": "sifirdan-bilgi-topluluk",
-      "kind": "rehber",
-      "name": "Sıfırdan: Bilgi, haberleşme ve topluluk",
-      "desc": "Zamanı ve ölçüyü yeniden kurmak, bilgiyi korumak ve öğretmek, telsizsiz ve telsizle haberleşmek, gönüllülük ve insan haklarına dayalı bir topluluk düzeni kurmak, doğada yıllarca güvenle yaşamak.",
-      "file": "sifirdan-bilgi-topluluk.rehber.json",
-      "size": 2245405,
-      "sizeApprox": false,
-      "sha256": "25cab0e4a3af8ebc2a17da2a2b2e838c7916d31d4e6d2e9c5b547597a79c2cef",
-      "tier": "temel",
-      "urls": [
-        "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/rehber/sifirdan-bilgi-topluluk.rehber.json"
-      ],
-      "license": "GPL-3.0-or-later (Akıl Çantası)",
-      "source": "Akıl Çantası — packs-src/sifirdan/10-bilgi-topluluk"
+      "source": "Akıl Çantası — packs-src/sifirdan (10 konu)"
     }
   ],
   "sets": [

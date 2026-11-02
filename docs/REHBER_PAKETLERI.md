@@ -1,7 +1,7 @@
 # Rehber paketleri (.rehber.json)
 
 Ana uygulamadaki 168 yerleşik rehbere ek olarak isteğe bağlı indirilen rehber paketleri
-(ör. "Sıfırdan" medeniyet sonrası yaşam rehberleri). Paket tek bir JSON dosyasıdır ve
+(ör. "Kendine Yetmek" rehberleri). Paket tek bir JSON dosyasıdır ve
 kod içeremez: rehberler düz veri, çizimler önceden üretilmiş sabit SVG metnidir.
 
 ## Biçim
@@ -71,3 +71,10 @@ Betik:
 - Arama (`guides-search.ts`: `getAllGuides`, `getGuide`) paket rehberlerini de kapsar; dizin
   paket sürümü değişince yeniden kurulur. Fener RAG aynı aramayı kullanır.
 - Testler: `tests/rehber-paket.test.ts`.
+
+## Dağıtım: tek paket
+
+Konu paketleri (packs-src/sifirdan/<klasör>) geliştirmede ayrı ayrı derlenir, ama dağıtılan
+tek dosyadır: `kendine-yetmek.rehber.json` (bütün kategoriler, rehberler ve çizimler).
+Rehber sekmesinin en altında "Kendine Yetmek" kartından tek düğmeyle indirilir; Kütüphane'de
+tek satır görünür. Hugging Face'e yükleme: Actions → aylık iş → `sadece` = `kendine-yetmek`.

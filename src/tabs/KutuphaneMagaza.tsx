@@ -4,7 +4,7 @@
 //  • Paket setleri: her setin ilerlemesi ve (yüklüler düşülmüş) kalan boyutu; dokununca seçilir
 //  • Alt çubuk: seçilenlerin toplamı ve "İndir"; inerken toplu ilerleme, hız ve "Duraklat"
 //  • Tek tek seçmek isteyene raflara ayrılmış tüm koleksiyon
-//  • Rehber paketleri ("Sıfırdan rehberleri": indir, dosyadan içe aktar, sil)
+//  • Rehber paketleri ("Kendine Yetmek": indir, dosyadan içe aktar, sil)
 // Paket satırları Araçlar → Paketler ile aynıdır (src/lib/packs-ui.tsx).
 import { useMemo, useRef, useState } from 'preact/hooks';
 import { importRehberPack, packInfoForFile, usePackGuides } from '../content/pack-guides';
@@ -106,7 +106,7 @@ function RehberShelf({ rows, dlFor, memGB, rec }: Pick<ReturnType<typeof usePack
     for (const f of Array.from(files)) {
       try {
         const r = await importRehberPack(f);
-        out.push(`"${r.name}" eklendi (${r.guides} rehber). Rehber sekmesinde "Sıfırdan" bölümünde.` + (r.warnings.length ? ` ${r.warnings.length} bozuk öğe atlandı.` : ''));
+        out.push(`"${r.name}" eklendi (${r.guides} rehber). Rehber sekmesinde "Kendine Yetmek" bölümünde.` + (r.warnings.length ? ` ${r.warnings.length} bozuk öğe atlandı.` : ''));
       } catch (e) {
         out.push(`${f.name}: ${(e as Error).message}`);
       }
@@ -117,7 +117,7 @@ function RehberShelf({ rows, dlFor, memGB, rec }: Pick<ReturnType<typeof usePack
   };
   return (
     <div class="lm-group lm-rehber" data-testid="lib-rehber">
-      <h3>Sıfırdan rehberleri</h3>
+      <h3>Kendine Yetmek rehberleri</h3>
       <p class="lm-note">
         Uzun süre dışarıdan yardım gelmezse: yiyecek, su, barınak, alet ve tarım üzerine adım adım, çizimli rehberler. İndirilen paketler Rehber sekmesinde görünür.
       </p>

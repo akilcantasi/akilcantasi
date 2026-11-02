@@ -3,8 +3,9 @@
 // packs-src/sifirdan/<klasör>/ altındaki her paketi (guides.ts + isteğe bağlı scenes.tsx) okur,
 // sahneleri preact-render-to-string ile sabit SVG metnine çevirir ve
 //   data/rehber/<paket-id>.rehber.json
-//   data/rehber/manifest-girdileri.json   (public/packs-manifest.json'a eklenecek girdiler)
-// dosyalarını yazar. "_" ile başlayan klasörler (ör. _deneme) yalnız --include-test ile derlenir.
+//   data/rehber/kendine-yetmek.rehber.json  (bütün paketler tek dosyada: dağıtılan paket budur)
+//   data/rehber/manifest-girdileri.json   (public/packs-manifest.json'a eklenecek girdi)
+// dosyalarını yazar. Klasör adı verilirse yalnız o paketler derlenir ve birleşik paket yazılmaz. "_" ile başlayan klasörler (ör. _deneme) yalnız --include-test ile derlenir.
 // Biçim ve akış: docs/REHBER_PAKETLERI.md
 import fs from 'node:fs';
 import path from 'node:path';
@@ -78,6 +79,15 @@ const warn = (d: string, m: string) => {
 
 fs.mkdirSync(OUT, { recursive: true });
 const entries: any[] = [];
+const built: RehberPack[] = [];
+
+/** Birleşik paket: Rehber sekmesinde "Kendine Yetmek" bölümü, Kütüphane'de tek satır */
+const TEK = {
+  id: 'kendine-yetmek',
+  name: 'Kendine Yetmek',
+  desc: 'Uzun süre dışarıdan yardım gelmezse: yiyecek bulma ve saklama, su, hijyen ve sağlık, barınak, ateş ve pişirme, giyim ve zanaat, enerji, tarım ve hayvancılık, bilgi ve topluluk. Adım adım, çizimli rehberler.',
+  version: 1,
+};
 
 for (const d of dirs) {
   const dir = path.join(ROOT, d);
@@ -145,6 +155,7 @@ for (const d of dirs) {
     continue;
   }
 
+  built.push(out);
   const file = `${PACK.id}.rehber.json`;
   const buf = Buffer.from(JSON.stringify(out));
   fs.writeFileSync(path.join(OUT, file), buf);
@@ -166,6 +177,63 @@ for (const d of dirs) {
     license: PACK.license ?? 'GPL-3.0-or-later (Akıl Çantası)',
     source: `Akıl Çantası — ${ROOT}/${d}`,
   });
+}
+
+// Bütün paketler tek dosyada (yalnız tam derlemede)
+if (!want.length && built.length && !failed) {
+  const seen = new Set<string>();
+  const tek: RehberPack = {
+    format: REHBER_FORMAT,
+    version: REHBER_FORMAT_VERSION,
+    pack: { ...TEK, version: TEK.version + Math.max(0, ...built.map((b) => b.pack.version - 1)) },
+    categories: built.flatMap((b) => b.categories),
+    guides: built.flatMap((b) => b.guides),
+    art: {},
+  };
+  for (const b of built) {
+    for (const [k, v] of Object.entries(b.art)) {
+      if (tek.art[k] !== undefined && tek.art[k] !== v) {
+        console.log(`HATA birleşik paket: "${k}" çizimi iki pakette farklı`);
+        failed++;
+      }
+      tek.art[k] = v;
+    }
+    for (const g of b.guides) {
+      if (seen.has(g.id)) {
+        console.log(`HATA birleşik paket: "${g.id}" rehberi iki pakette var`);
+        failed++;
+      }
+      seen.add(g.id);
+    }
+  }
+  const v = validateRehberPack(JSON.parse(JSON.stringify(tek)));
+  if (!v.ok) {
+    console.log(`HATA birleşik paket doğrulanamadı:\n    ${v.errors.slice(0, 20).join('\n    ')}`);
+    failed++;
+  } else {
+    const file = `${TEK.id}.rehber.json`;
+    const buf = Buffer.from(JSON.stringify(tek));
+    fs.writeFileSync(path.join(OUT, file), buf);
+    const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+    console.log(`\nBirleşik → ${path.join(OUT, file)}`);
+    console.log(`  ${tek.guides.length} rehber, ${tek.categories.length} kategori, ${Object.keys(tek.art).length} çizim · ${(buf.length / 1024 / 1024).toFixed(1)} MB · sha256 ${sha256}`);
+    // Dağıtılan tek paket budur; tek tek paketler yalnız geliştirme ve içe aktarma içindir
+    entries.length = 0;
+    entries.push({
+      id: TEK.id,
+      kind: 'rehber',
+      name: TEK.name,
+      desc: TEK.desc,
+      file,
+      size: buf.length,
+      sizeApprox: false,
+      sha256,
+      tier: 'temel',
+      urls: [baseUrl + file],
+      license: 'GPL-3.0-or-later (Akıl Çantası)',
+      source: `Akıl Çantası — ${ROOT} (${built.length} konu)`,
+    });
+  }
 }
 
 const mv = validateManifest({ version: 1, updated: new Date().toISOString().slice(0, 10), packs: entries });
