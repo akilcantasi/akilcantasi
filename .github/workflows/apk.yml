@@ -133,8 +133,9 @@ jobs:
           [ $bad = 0 ] && echo "Yerel kütüphaneler sağlam"
           exit $bad
 
+      # "hayir", "hayır", "false", "no", "0": yalnız derle (yanlış yazımla istemeden yayınlanmasın)
       - name: Deneme derlemesi (yayınlanmaz)
-        if: github.event.inputs.yayinla == 'hayir'
+        if: contains(fromJSON('["hayir","hayır","false","no","0"]'), github.event.inputs.yayinla)
         uses: actions/upload-artifact@v4
         with:
           name: akil-cantasi-apk
@@ -142,7 +143,7 @@ jobs:
           retention-days: 7
 
       - name: Sürüm sayfası
-        if: github.event.inputs.yayinla != 'hayir'
+        if: ${{ !contains(fromJSON('["hayir","hayır","false","no","0"]'), github.event.inputs.yayinla) }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
