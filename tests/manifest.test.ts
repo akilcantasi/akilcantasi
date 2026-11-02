@@ -105,9 +105,20 @@ describe('Fener ve ses paketleri katalogda', () => {
 
   it('tek dosyalı modellerin Hugging Face adresi var (2 GB üstü olanlar yüklenirken bölünür)', () => {
     for (const p of packs.filter((x) => x.kind === 'model' && !x.group)) {
-      expect(p.size, p.id).toBeLessThan(4 * 2 ** 30);
+      // 4 GB üstü yalnızca Android'in yerel motoruyla açılır (WebView sınırı)
+      if (!p.yalnizYerel) expect(p.size, p.id).toBeLessThan(4 * 2 ** 30);
       expect(p.urls.some((u) => u.startsWith('https://huggingface.co/')), p.id).toBe(true);
     }
+  });
+
+  it('yalnız yerel motorlu modeller yerel motoru olmayan cihazın kataloğunda görünmez', async () => {
+    const { forThisDevice } = await import('../src/lib/manifest');
+    const big = packs.filter((p) => p.yalnizYerel);
+    expect(big.length).toBeGreaterThan(0);
+    for (const p of big) expect(p.kind).toBe('model');
+    const m = { ...(await import('../public/packs-manifest.json')).default } as any;
+    expect(forThisDevice(m, false).packs.some((p: any) => p.yalnizYerel)).toBe(false);
+    expect(forThisDevice(m, true).packs.length).toBe(m.packs.length);
   });
 
   it('ses paketlerinin içeriği eksiksiz bir Whisper paketi tanımlar', () => {

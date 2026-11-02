@@ -996,7 +996,8 @@
         "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf"
       ],
       "license": "Apache-2.0",
-      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-9B-GGUF"
+      "source": "Qwen (Alibaba Cloud), GGUF: Unsloth — https://huggingface.co/unsloth/Qwen3.5-9B-GGUF",
+      "yalnizYerel": true
     },
     {
       "id": "fener-gemma-4-e2b",

@@ -5,6 +5,13 @@
 // çalışmaya devam eder — hiçbir hata kullanıcıya "uygulama çöktü" olarak yansımaz.
 import type { InstalledPack, PackKind } from './packs';
 import bundled from '../../public/packs-manifest.json';
+import { nativeFener } from './native';
+
+/** Bu cihazda kullanılamayacak paketleri (yalnız yerel motorla açılan modeller) katalogdan çıkarır */
+export function forThisDevice(m: Manifest, nativeEngine = nativeFener.available()): Manifest {
+  if (nativeEngine || !m.packs.some((p) => p.yalnizYerel)) return m;
+  return { ...m, packs: m.packs.filter((p) => !p.yalnizYerel) };
+}
 
 export type Tier = 'temel' | 'standart' | 'tam';
 
@@ -23,6 +30,8 @@ export interface ManifestPack {
   sha256?: string;
   tier: Tier;
   minRamGB?: number;
+  /** Yalnızca Android uygulamasının hızlı yerel motoru açabilir (WebView'ın 4 GB sınırını aşan modeller) */
+  yalnizYerel?: boolean;
   /** Aynalar, sırayla denenir */
   urls: string[];
   license: string;
@@ -138,6 +147,7 @@ export function validateManifest(input: unknown): { ok: boolean; errors: string[
     if (p.sha256 !== undefined && p.sha256 !== '' && !/^[0-9a-f]{64}$/.test(String(p.sha256))) errs.push('sha256 geçersiz');
     if (!TIERS.includes(p.tier)) errs.push('tier geçersiz');
     if (p.minRamGB !== undefined && typeof p.minRamGB !== 'number') errs.push('minRamGB sayı olmalı');
+    if (p.yalnizYerel !== undefined && typeof p.yalnizYerel !== 'boolean') errs.push('yalnizYerel true/false olmalı');
     if (!Array.isArray(p.urls) || p.urls.length === 0) errs.push('urls boş');
     else if (!p.urls.every((u: unknown) => typeof u === 'string' && /^(https?:\/\/|\.\/|\/|osm:)/.test(u))) errs.push('urls geçersiz');
     if (typeof p.license !== 'string' || !p.license) errs.push('license yok');
@@ -247,8 +257,8 @@ export async function loadManifest(force = false): Promise<Manifest> {
   } catch {
     /* gömülü kopya kullanılır */
   }
-  current = m;
-  return m;
+  current = forThisDevice(m);
+  return current;
 }
 
 /** İnternet varsa merkezi kataloğu dener; daha yeniyse onu döndürür. Hata fırlatmaz. */
@@ -258,8 +268,8 @@ export async function refreshRemoteManifest(): Promise<Manifest | null> {
     const r = validateManifest(await fetchJson(REMOTE_MANIFEST_URL, 5000));
     const base = current ?? BUNDLED_MANIFEST;
     if (r.manifest.packs.length && newer(r.manifest, base)) {
-      current = r.manifest;
-      return r.manifest;
+      current = forThisDevice(r.manifest);
+      return current;
     }
   } catch {
     /* erişilemiyor — sorun değil */
