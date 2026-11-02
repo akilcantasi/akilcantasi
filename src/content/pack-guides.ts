@@ -144,7 +144,7 @@ export function reloadPackGuides(): Promise<void> {
   }
   loading = (async () => {
     try {
-      const { listPacks, getDeviceFile } = await import('../lib/packs');
+      const { listPacks, openBlob } = await import('../lib/packs');
       const list = (await listPacks()).filter((p) => p.kind === 'rehber');
       const next: Loaded[] = [];
       for (const p of list) {
@@ -155,16 +155,9 @@ export function reloadPackGuides(): Promise<void> {
           continue;
         }
         try {
-          let text: string;
-          if (p.origin === 'device') {
-            const f = await getDeviceFile(p.id);
-            if (!f) continue;
-            text = await f.text();
-          } else {
-            const res = await fetch(p.url!);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            text = await res.text();
-          }
+          // openBlob: tarayıcı deposu (OPFS), Android uygulamasının paket klasörü (/_paket/)
+          // ve bilgi noktası sunucusu için aynı yol
+          const text = await (await openBlob(p)).text();
           const { pack, errors } = parseRehberPack(text);
           if (errors.length) packErrors[p.id] = errors;
           else delete packErrors[p.id];

@@ -4,6 +4,7 @@ import type { ComponentChildren } from 'preact';
 import { isActive } from '../lib/downloader';
 import { formatSize } from '../lib/packs';
 import { pct, speedText, startRow, usePackRows } from '../lib/packs-ui';
+import { packErrors, reloadPackGuides } from '../content/pack-guides';
 
 export const KY_ID = 'kendine-yetmek';
 
@@ -28,9 +29,10 @@ export function KendineYetmek({ installed, children }: { installed: boolean; chi
   const row = rows.find((r) => r.entry?.id === KY_ID);
   const dl = row ? dlFor(row) : undefined;
   const busy = isActive(dl);
-  const ready = installed || !!row?.device || !!row?.server;
+  // Dosya cihazda (ya da bilgi noktasında) ama rehberler henüz okunmadı / okunamadı
+  const onDevice = !!row?.device || !!row?.server;
 
-  if (ready) {
+  if (installed) {
     return (
       <section class="ky rh-pack-sub" aria-labelledby="rh-ky" data-testid="guide-pack-section">
         <style>{CSS}</style>
@@ -61,7 +63,22 @@ export function KendineYetmek({ installed, children }: { installed: boolean; chi
           <span>1068 çizim</span>
           <span>{size}</span>
         </div>
-        {busy && dl ? (
+        {onDevice && !busy ? (
+          <>
+            {packErrors[(row.device ?? row.server)!.id] ? (
+              <p class="ky-err" role="alert" data-testid="ky-open-error">
+                Paket indi ama açılamadı: {packErrors[(row.device ?? row.server)!.id].slice(0, 2).join('; ')}
+              </p>
+            ) : (
+              <p class="ky-note" data-testid="ky-opening">
+                Paket indi, rehberler açılıyor…
+              </p>
+            )}
+            <button class="ky-btn" data-testid="ky-retry" onClick={() => void reloadPackGuides()}>
+              Yeniden dene
+            </button>
+          </>
+        ) : busy && dl ? (
           <>
             <div class="ky-prog" role="progressbar" aria-label="İndirme" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct(dl)}>
               <i style={{ width: pct(dl) + '%' }} />
