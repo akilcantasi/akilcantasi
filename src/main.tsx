@@ -59,6 +59,8 @@ function prefetchLazyChunks() {
       () => import('fzstd'),
       () => import('xz-decompress'),
       () => import('hash-wasm'),
+      // Rehber çizimleri en sonda (en büyük parça): bağlantı koparsa rehber resimleri de açılsın
+      () => import('./art').then((m) => m.loadArt()),
     ];
     // Sırayla: ilk açılışta ağı ve CPU'yu tıkamasın.
     jobs.reduce<Promise<unknown>>((p, job) => p.then(() => job().catch(() => null)), Promise.resolve());

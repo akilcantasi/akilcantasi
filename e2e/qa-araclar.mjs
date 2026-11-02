@@ -174,7 +174,9 @@ try {
     const labels = await p.$$eval('.sh-group > .label', (els) => els.map((e) => e.textContent.trim()));
     check(labels.some((l) => /Sesli soru/.test(l)), 'katalog: "Sesli soru" (ses) grubu: ' + labels.join(' / '));
     const nRows = await p.$$eval(tid('pack-row'), (els) => els.length);
-    check(nRows === manifest.packs.length, `katalog: ${nRows} satır (${manifest.packs.length} paket)`);
+    // yalnizYerel paketler (Android yerel motoru gerektiren büyük modeller) tarayıcıda listelenmez
+    const gorunen = manifest.packs.filter((x) => !x.yalnizYerel).length;
+    check(nRows === gorunen, `katalog: ${nRows} satır (${gorunen} paket)`);
     check(await p.isVisible('[data-pack="whisper-base.tar"], [data-testid="pack-row"]:has-text("Whisper base")'), 'katalog: Whisper base satırı');
     check((await p.textContent(tid('share-status'))).includes('kapalı'), 'tarayıcı: bilgi noktası kapalı');
     check(await p.isDisabled(tid('infopoint-switch')), 'tarayıcı: "Bu telefondan yayınla" devre dışı');

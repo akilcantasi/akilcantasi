@@ -131,7 +131,7 @@ Ayrıntılar:
 ## Android izinleri (Nearby belgeleri)
 
 Manifest: `CHANGE_WIFI_STATE (≤32)`, `BLUETOOTH`/`BLUETOOTH_ADMIN (≤30)`,
-`BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN (neverForLocation)`,
+`BLUETOOTH_ADVERTISE`, `BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN` (enkaz işaretleri süzülmesin diye neverForLocation yok; bkz. docs/ENKAZ.md),
 `NEARBY_WIFI_DEVICES (neverForLocation)`. `ACCESS_WIFI_STATE` ve
 `ACCESS_FINE/COARSE_LOCATION` harita için zaten sınırsız tanımlı.
 

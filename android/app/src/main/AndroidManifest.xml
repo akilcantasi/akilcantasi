@@ -34,6 +34,22 @@
 
         <!-- SMS giden kutusu: gönderim/teslim sonuçları ve yeniden deneme alarmı (dışa kapalı) -->
         <receiver android:name=".SmsAlici" android:exported="false" />
+        <!-- Enkaz modu: BLE işareti, SOS ses/ışık, aralıklı GPS (EnkazServisi) -->
+        <service
+            android:name=".EnkazServisi"
+            android:exported="false"
+            android:foregroundServiceType="location|connectedDevice|mediaPlayback" />
+        <!-- Sarsıntı nöbeti (isteğe bağlı, deneysel) -->
+        <service
+            android:name=".SarsintiServisi"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Deprem sonrası enkaz altında kalma ihtimaline karşı ivmeölçerle sarsıntı izleme; kullanıcı açar." />
+        </service>
+        <!-- Enkaz işareti nöbeti: sistemin arka plan BLE taraması sonuçları -->
+        <receiver android:name=".EnkazTarayici$Alici" android:exported="false" />
         <!-- Telefon yeniden başlayınca bekleyen SMS'ler sürer -->
         <receiver android:name=".AcilisAlici" android:exported="true">
             <intent-filter>
@@ -79,6 +95,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <!-- Son konum kaydı ve enkaz işareti nöbeti (ikisi de isteğe bağlı, varsayılan kapalı) -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- Enkaz modu ve sarsıntı nöbeti ön plan servisleri -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Şebekesiz mesh (Google Nearby Connections, AkilMeshPlugin).
          Kaynak: developers.google.com/nearby/connections/android/get-started
          ACCESS_WIFI_STATE ve ACCESS_*_LOCATION yukarıda zaten (sınırsız) tanımlı;
@@ -89,7 +113,8 @@
     <!-- Android 12+ (API 31+) -->
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
+    <!-- neverForLocation yok: bu bayrak bazı BLE işaretlerini süzer; enkaz işaretleri duyulmalı (konum izni zaten var) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <!-- Android 13+ (API 33+) -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" tools:targetApi="s" />
     <!-- Not: targetSdk 37'ye çıkılırsa ACCESS_LOCAL_NETWORK da gerekir (docs/MESH.md). -->

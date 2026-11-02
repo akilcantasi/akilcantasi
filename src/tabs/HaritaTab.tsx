@@ -50,6 +50,7 @@ import { copyText, useWaypoints } from '../lib/map/ui';
 import { IzCard, NavCard, Sheet, WaypointSheet, useTicker, type AddPreset } from '../lib/map/panels';
 import { KonumArama } from '../lib/map/KonumArama';
 import { nativeKonum, type KonumDurum } from '../lib/native';
+import { sonKonumKaydet } from '../lib/enkaz/enkaz';
 import './harita.css';
 
 type Filter = 'hepsi' | PoiType;
@@ -618,6 +619,7 @@ export function HaritaTab() {
     if (!loc) setLocState('waiting');
     const onOk = (p: GeolocationPosition) => {
       setLoc({ lat: p.coords.latitude, lon: p.coords.longitude, accuracy: p.coords.accuracy, timestamp: p.timestamp });
+      sonKonumKaydet({ lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy });
       setLocState('ok');
     };
     const onErr = (e: GeolocationPositionError) => {

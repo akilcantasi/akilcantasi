@@ -8,11 +8,13 @@ export interface ToolDef {
   /** kısa açıklama */
   desc: string;
   /** grup başlığı */
-  group: 'Kaynaklar' | 'Yön ve konum' | 'Bilgi ve eğlence' | 'Cihaz';
+  group: 'Acil durum' | 'Kaynaklar' | 'Yön ve konum' | 'Bilgi ve eğlence' | 'Cihaz';
   load: () => Promise<{ default: ComponentType }>;
 }
 
 export const TOOLS: ToolDef[] = [
+  { id: 'enkaz', title: 'Enkaz modu', desc: 'Enkaz altında bulunur olun; hazırlık', group: 'Acil durum', load: () => import('./enkaz') },
+  { id: 'enkaz-arama', title: 'Enkaz arama', desc: 'Yakındaki enkaz işaretlerini bulun', group: 'Acil durum', load: () => import('./enkaz-arama') },
   { id: 'canta', title: 'Afet çantası', desc: 'Kontrol listesi ve son kullanma tarihleri', group: 'Kaynaklar', load: () => import('./canta') },
   { id: 'hesap', title: 'Su ve yiyecek hesabı', desc: 'Kaç kişi, kaç gün, ne kadar gerekir', group: 'Kaynaklar', load: () => import('./hesap') },
   { id: 'stok', title: 'Stok listesi', desc: 'Elinizdekiler, miktar ve tarih', group: 'Kaynaklar', load: () => import('./stok') },

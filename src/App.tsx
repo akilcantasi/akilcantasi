@@ -10,6 +10,7 @@ import { IletisimTab } from './tabs/IletisimTab';
 import { AraclarTab } from './tabs/AraclarTab';
 import { StorageWarning } from './StorageWarning';
 import { KurulumHost } from './Kurulum';
+import { nativeEnkaz } from './lib/enkaz/native';
 
 const TABS: { id: TabId; label: string; sub: string; Icon: typeof IconChat }[] = [
   { id: 'fener', label: 'Fener', sub: 'asistan · çevrimdışı', Icon: IconChat },
@@ -39,6 +40,16 @@ export function App() {
     const mo = new MutationObserver(check);
     mo.observe(el, { childList: true, subtree: true });
     return () => mo.disconnect();
+  }, []);
+
+  // Bildirimden açılış (enkaz işareti duyuldu, görünürlük bitti, sarsıntı sorusu): ilgili araca git
+  useEffect(() => {
+    const git = (arac: string | null) => {
+      if (arac === 'enkaz' || arac === 'enkaz-arama') go.tool(arac);
+    };
+    if (!nativeEnkaz.available()) return;
+    void nativeEnkaz.acilisHedefi().then(git);
+    return nativeEnkaz.onAcilisHedefi(git);
   }, []);
 
   // Sekme değişince içerik en üstten başlasın (önceki sekmenin kaydırma konumu kalmasın).

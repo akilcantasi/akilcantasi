@@ -93,6 +93,8 @@ dependencies {
     // Şebekesiz mesh (AkilMeshPlugin): Nearby Connections. Sürüm: 19.5.1 (2026-09-28,
     // developers.google.com/android/guides/releases). Google Play Hizmetleri gerektirir.
     implementation "com.google.android.gms:play-services-nearby:19.5.1"
+    // Son konum kaydı: telefon yeniden başlasa da süren zamanlanmış görevler
+    implementation "androidx.work:work-runtime:2.10.0"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

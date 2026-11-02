@@ -145,6 +145,8 @@ public class KonumIzleyici {
             public void onLocationChanged(Location l) {
                 if (gps) gpsKonum = l;
                 else agKonum = l;
+                // Son bilinen konum kaydı (enkaz işareti ve SMS'ler için; yalnız bu telefonda)
+                KonumKaydi.ekle(ctx, l, gps ? "gps" : "ag");
                 if (ilkKonumMs < 0) ilkKonumMs = SystemClock.elapsedRealtime() - baslangic;
                 gonder();
             }

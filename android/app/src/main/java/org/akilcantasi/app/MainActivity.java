@@ -1,5 +1,6 @@
 package org.akilcantasi.app;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -22,6 +23,30 @@ public class MainActivity extends BridgeActivity {
 
     /** Uygulamanın paket klasöründeki dosyalar bu yoldan okunur (src/lib/native.ts NATIVE_PACK_PATH). */
     static final String PACK_PATH = "/_paket/";
+    /** Bildirimden açılınca gidilecek araç (örn. "enkaz-arama"); EnkazPlugin.acilisHedefi okur */
+    static final String EKSTRA_ARAC = "ac_arac";
+    private static String bekleyenHedef;
+
+    static synchronized String hedefAl() {
+        String h = bekleyenHedef;
+        bekleyenHedef = null;
+        return h;
+    }
+
+    private static synchronized void hedefKoy(Intent i) {
+        String a = i == null ? null : i.getStringExtra(EKSTRA_ARAC);
+        if (a == null || !a.matches("[a-z-]{1,24}")) return;
+        bekleyenHedef = a;
+        i.removeExtra(EKSTRA_ARAC);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        hedefKoy(intent);
+        String h = bekleyenHedef;
+        if (h != null) EnkazPlugin.hedefGeldi(h);
+    }
     private static final Pattern RANGE = Pattern.compile("bytes=(\\d*)-(\\d*)");
 
     @Override
@@ -29,6 +54,8 @@ public class MainActivity extends BridgeActivity {
         // Eklentiler super.onCreate'ten ÖNCE kaydedilmeli
         registerPlugin(AkilCantasiPlugin.class);
         registerPlugin(AkilMeshPlugin.class);
+        registerPlugin(EnkazPlugin.class);
+        hedefKoy(getIntent());
         super.onCreate(savedInstanceState);
 
         // Fener (llama.cpp WASM) çok iş parçacıklı çalışabilsin diye

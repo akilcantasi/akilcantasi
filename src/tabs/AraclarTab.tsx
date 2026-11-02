@@ -6,6 +6,8 @@ import { TOOLS, type ToolDef } from '../tools/registry';
 
 /** Araç simgeleri (24×24 çizgi) */
 const TOOL_ICON: Record<string, string> = {
+  enkaz: '<path d="M3 20h18"/><path d="M5 20l3-7 4 2 3-5 4 10"/><circle cx="17" cy="5" r="1.5"/><path d="M14.5 2.5a4 4 0 0 1 5 5M13 1a6 6 0 0 1 8 8"/>',
+  'enkaz-arama': '<circle cx="10" cy="10" r="6"/><path d="M14.5 14.5L20 20"/><path d="M7.5 10a2.5 2.5 0 0 1 5 0"/><path d="M10 10h.01"/>',
   hava: '<path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5a4.5 4.5 0 0 1 .5 9z"/><path d="M8 21l1-1.5M12 21l1-1.5M16 21l1-1.5"/>',
   canta: '<rect x="4" y="7" width="16" height="13" rx="2.5"/><path d="M9 7V5a3 3 0 0 1 6 0v2M12 11v5M9.5 13.5h5"/>',
   hesap: '<path d="M12 3s-6 6.5-6 11a6 6 0 0 0 12 0c0-4.5-6-11-6-11z"/>',

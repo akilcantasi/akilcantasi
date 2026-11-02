@@ -62,6 +62,8 @@ export const QUICK_CSS = `
 .qs-out-row .bad { color: #ffb4a8; }
 .qs-out-btn { min-height: 44px; min-width: 44px; border-radius: 12px; border: 1px solid var(--glass-line); background: transparent; color: var(--text); font-size: 13px; padding: 0 10px; }
 .qs-out-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.qs-enkaz { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.qs-enkaz .btn { min-height: 52px; }
 .yk-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 `;
 
@@ -224,6 +226,14 @@ export function QuickHelp() {
         </button>
       )}
       <GidenKutusu />
+      <div class="qs-enkaz">
+        <button class="btn" data-testid="quick-enkaz" onClick={() => go.tool('enkaz')}>
+          Enkaz altındayım
+        </button>
+        <button class="btn" data-testid="quick-enkaz-arama" onClick={() => go.tool('enkaz-arama')}>
+          Enkaz arama
+        </button>
+      </div>
 
       <section class="qs-fam" aria-labelledby="qs-fam-t">
         <div class="qs-fam-head">

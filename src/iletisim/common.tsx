@@ -6,6 +6,7 @@ import { KIND_LABEL, STATUS_LABEL, formatCoords, parseMissing, timeAgo, type Boa
 import { loadProfile, saveProfile, type Profile } from './outbox';
 import { board, type ServiceState } from './client';
 import type { Pos } from './sms';
+import { sonKonumKaydet } from '../lib/enkaz/enkaz';
 
 export const CSS = `
 .cm-back { align-self: flex-start; min-height: 44px; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px; color: var(--accent2); font-size: 14px; font-weight: 500; padding: 0 14px; }
@@ -197,6 +198,7 @@ export function quickPosition(timeoutMs = 7000, maxAgeMs = 10 * 60 * 1000): Prom
     navigator.geolocation.getCurrentPosition(
       (p) => {
         lastPos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, at: Date.now() };
+        sonKonumKaydet(lastPos);
         finish(lastPos);
       },
       () => finish(lastPos),
