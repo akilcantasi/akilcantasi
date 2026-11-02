@@ -12,6 +12,14 @@ export default defineConfig({
     outDir: 'dist',
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        // .mjs varlıklar (pdf.js işçisi) .js adıyla yazılır: Android WebView'ın yerel
+        // sunucusu .mjs için JavaScript MIME türü vermeyebilir, modül işçisi de reddedilir.
+        assetFileNames: (a: { name?: string; names?: string[] }) =>
+          /\.mjs$/.test(a.names?.[0] ?? a.name ?? '') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]',
+      },
+    },
   },
   worker: { format: 'es' },
   optimizeDeps: { exclude: ['@wllama/wllama'] },

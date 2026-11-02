@@ -8,11 +8,15 @@
                        küme). python-libzim artık xz yazamadığı için okuyucunun
                        xz ve eski ad alanı desteğini test etmekte kullanılır.
 
+  sample_kitap_en.zim  python-libzim ile, nautilus düzeninde (database.js + PDF'ler)
+                       küçük İngilizce kitaplık. Uygulama içi PDF okuyucunun
+                       (arama, sayfa çevirisi) testleri için; reportlab gerekir.
+
   sample_med_en.zim    python-libzim ile, Xapian başlık + tam metin dizinli küçük
                        İngilizce tıbbi arşiv (WikiMed benzeri). Çoklu kaynak ve
                        saf-TS Xapian okuyucusunun testleri için.
 
-Kullanım:  pip install libzim && python3 tools/make_sample_zim.py [all|tr|xz|med]
+Kullanım:  pip install libzim && python3 tools/make_sample_zim.py [all|tr|xz|med|kitap]
 İçerik yalnızca test amaçlı, kısa ve genel ansiklopedik metinlerdir.
 """
 import hashlib
@@ -442,6 +446,89 @@ def build_oldns_xz(path):
     print("yazıldı:", path, len(body), "bayt")
 
 
+# ---------------------------------------------------------------------------
+# 3) Nautilus kitaplığı (database.js + PDF), PDF okuyucu testleri için
+# ---------------------------------------------------------------------------
+
+BOOKS = [
+    ("Water Storage Basics", "Example Extension Service", "Storing drinking water at home.", "files/water-storage.pdf", [
+        ["Water Storage Basics", "", "Store at least four litres of drinking water per person per day.",
+         "Use clean food-grade containers with tight lids.", "Keep containers away from sunlight and chemicals."],
+        ["Treating Stored Water", "", "Boiling is the most reliable way to make water safe.",
+         "Bring water to a rolling boil for one minute.", "Let it cool before drinking. Replace stored water every six months."],
+        ["Checklist", "", "Containers labelled with the filling date.", "A spare lid and a funnel.",
+         "Household bleach without scent, used only as instructed."],
+    ]),
+    ("Simple First Aid", "Example Health Office", "Basic first aid steps.", "files/first-aid.pdf", [
+        ["Simple First Aid", "", "Press firmly on a bleeding wound with a clean cloth.",
+         "Keep the injured person warm and calm.", "Call emergency services when the injury is serious."],
+        ["Burns", "", "Cool a burn under clean running water for twenty minutes.",
+         "Do not use ice. Do not break blisters."],
+    ]),
+]
+
+
+def make_pdf(pages):
+    from io import BytesIO
+    from reportlab.lib.pagesizes import A5
+    from reportlab.pdfgen import canvas
+
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A5, invariant=1)
+    w, h = A5
+    for lines in pages:
+        y = h - 60
+        for i, line in enumerate(lines):
+            c.setFont("Helvetica-Bold" if i == 0 else "Helvetica", 15 if i == 0 else 11)
+            c.drawString(40, y, line)
+            y -= 22
+        c.showPage()
+    c.save()
+    return buf.getvalue()
+
+
+def build_nautilus(path):
+    from libzim.writer import Creator, Item, StringProvider, Hint, Compression
+
+    class It(Item):
+        def __init__(self, p, t, data, mime, front=False):
+            super().__init__()
+            self.p, self.t, self.data, self.mime, self.front = p, t, data, mime, front
+
+        def get_path(self):
+            return self.p
+
+        def get_title(self):
+            return self.t
+
+        def get_mimetype(self):
+            return self.mime
+
+        def get_contentprovider(self):
+            return StringProvider(self.data)
+
+        def get_hints(self):
+            return {Hint.FRONT_ARTICLE: self.front}
+
+    db = "var DATABASE = [\n" + "".join(
+        "{'_id': '%05d', 'ti': %r, 'dsc': %r, 'aut': %r, 'fp': [%r]},\n" % (i, t, d, a, f.split("/", 1)[1])
+        for i, (t, a, d, f, _) in enumerate(BOOKS)) + "];"
+    if os.path.exists(path):
+        os.remove(path)
+    creator = Creator(path).config_indexing(False, "eng").config_compression(Compression.zstd)
+    with creator as c:
+        c.set_mainpath("index.html")
+        for k, v in {"Title": "Sample Library", "Description": "Small English PDF library for tests",
+                     "Language": "eng", "Creator": "Akil Cantasi", "Publisher": "Akil Cantasi",
+                     "Name": "sample_kitap_en", "Date": "2026-01-01"}.items():
+            c.add_metadata(k, v)
+        c.add_item(It("index.html", "Sample Library", page("Sample Library", '<script src="database.js"></script>'), "text/html", True))
+        c.add_item(It("database.js", "", db, "application/javascript"))
+        for t, a, d, f, pages in BOOKS:
+            c.add_item(It(f, t, make_pdf(pages), "application/pdf"))
+    print("yazıldı:", path, os.path.getsize(path), "bayt")
+
+
 if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -452,11 +539,13 @@ if __name__ == "__main__":
     if what in ("all", "med"):
         build_libzim(os.path.join(OUT_DIR, "sample_med_en.zim"), MED_ARTICLES, MED_REDIRECTS, MED_METADATA,
                      main="Bleeding", index_lang="eng", image=False)
+    if what in ("all", "kitap"):
+        build_nautilus(os.path.join(OUT_DIR, "sample_kitap_en.zim"))
     # Doğrulama: libzim ile geri oku
     try:
         from libzim.reader import Archive
 
-        for n in ("sample_tr.zim", "sample_xz_oldns.zim", "sample_med_en.zim"):
+        for n in ("sample_tr.zim", "sample_xz_oldns.zim", "sample_med_en.zim", "sample_kitap_en.zim"):
             if not os.path.exists(os.path.join(OUT_DIR, n)):
                 continue
             a = Archive(os.path.join(OUT_DIR, n))

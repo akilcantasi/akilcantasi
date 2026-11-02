@@ -34,7 +34,8 @@ export function isTurkishLang(lang: string | undefined): boolean {
   return /^(tur|tr)\b/i.test((lang ?? '').trim());
 }
 
-export function ArticleTranslate({ refStr, html, language }: { refStr: string; html: string; language: string }) {
+/** html (makale) ya da paragraphs (ör. PDF sayfası metni) verilir */
+export function ArticleTranslate({ refStr, html, paragraphs, language, label = 'Türkçeye çevir (Fener)' }: { refStr: string; html?: string; paragraphs?: string[]; language: string; label?: string }) {
   const cached = cache.get(refStr);
   const [paras, setParas] = useState<Para[]>(cached?.paras ?? []);
   const [truncated, setTruncated] = useState(cached?.truncated ?? false);
@@ -60,7 +61,7 @@ export function ArticleTranslate({ refStr, html, language }: { refStr: string; h
     }
     if (!model) return setSt({ k: 'nomodel' });
 
-    const { chunks, truncated: tr } = planChunks(extractParagraphs(html, 100000));
+    const { chunks, truncated: tr } = planChunks(paragraphs ?? extractParagraphs(html ?? '', 100000));
     if (!chunks.length) return setSt({ k: 'error', msg: 'Bu sayfada çevrilecek metin bulunamadı.' });
     setTruncated(tr);
     let list: Para[] = chunks.map((c) => ({ src: c, tr: '', done: false }));
@@ -105,7 +106,7 @@ export function ArticleTranslate({ refStr, html, language }: { refStr: string; h
           <path d="M4 5h8M8 3v2M10 5c0 4-3 7-6 8M6 9c1 2 3 3.5 5 4" />
           <path d="M13 21l4-9 4 9M14.5 18h5" />
         </svg>
-        Türkçeye çevir (Fener)
+        {label}
       </button>
     );
 

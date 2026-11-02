@@ -1,7 +1,7 @@
 // Kütüphane sekmesi: cihazdaki (ya da bağlı sunucudaki) tüm ZIM paketlerinde
 // (Vikipedi, WikiMed, Vikikitap, Vikisözlük, Vikigezgin, Gutenberg…)
 // çevrimdışı başlık + tam metin araması ve makale okuyucu.
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { useAppState, go, setState } from '../lib/store';
 import {
@@ -23,6 +23,7 @@ import { sanitize } from '../lib/sanitize';
 import { loadNautilus, type NautilusBook } from '../lib/zim/nautilus';
 import { LibraryStore, MAGAZA_CSS } from './KutuphaneMagaza';
 import { ArticleTranslate, TRANSLATE_CSS } from './KutuphaneCeviri';
+import { PdfOkuyucu } from './PdfOkuyucu';
 
 const CSS_BASE = `
 .kt-meta { display: flex; flex-direction: column; gap: 6px; }
@@ -665,6 +666,12 @@ export function isFilePath(p: string): boolean {
  * Pencere tıklamayla aynı anda açılır (açılır pencere izni dokunmadan sonraki birkaç saniyeyle
  * sınırlıdır; büyük PDF arşivden bundan uzun sürede okunabilir), dosya hazır olunca içine yüklenir.
  */
+/** Arşivdeki dosyanın baytlarını okur (uygulama içi PDF okuyucu için) */
+async function readZimFile(zim: LibrarySource['zim'], path: string): Promise<Uint8Array | null> {
+  const r = await zim.getResource(path).catch(() => null);
+  return r ? (r.data as Uint8Array) : null;
+}
+
 async function openZimFile(zim: LibrarySource['zim'], path: string, download = false): Promise<boolean> {
   const name = decodeURIComponent(path.split('/').pop() || 'dosya');
   let w: Window | null = null;
@@ -704,8 +711,8 @@ function ArticleView({ refStr }: { refStr: string }) {
   const [state, setLocal] = useState<ArticleState>({ status: 'loading' });
   const [size, setSize] = useState(() => Math.min(2, Math.max(0, Number(lsGet(LS_SIZE)) || 0)));
   const [findOpen, setFindOpen] = useState(false);
-  // Arama kutusu açılınca odak kutuya (render tamamlandıktan sonra)
-  useEffect(() => {
+  // Arama kutusu açılınca odak kutuya (DOM'a eklendiği anda; boyamayı beklemeden)
+  useLayoutEffect(() => {
     if (findOpen) findRef.current?.focus();
   }, [findOpen]);
   const [findQ, setFindQ] = useState('');
@@ -966,12 +973,16 @@ function ArticleView({ refStr }: { refStr: string }) {
 
 function FileCard({ src, title, path }: { src: LibrarySource; title: string; path: string }) {
   const [msg, setMsg] = useState('');
+  const pdf = /\.pdf$/i.test(path);
+  const [reading, setReading] = useState(pdf);
   const run = async (download: boolean) => {
     setMsg('Hazırlanıyor…');
     const ok = await openZimFile(src.zim, path, download);
     setMsg(ok ? '' : 'Dosya arşivde bulunamadı.');
   };
-  const pdf = /\.pdf$/i.test(path);
+  if (pdf && reading) {
+    return <PdfOkuyucu title={title} sub={src.label} language={src.language} load={() => readZimFile(src.zim, path)} onClose={() => setReading(false)} />;
+  }
   return (
     <div class="kt-file" data-testid="lib-file">
       <div class="row">
@@ -981,11 +992,18 @@ function FileCard({ src, title, path }: { src: LibrarySource; title: string; pat
       <h1 class="kt-title" id="kt-title">
         {title}
       </h1>
-      <p class="muted">Bu bir {pdf ? 'PDF belgesi' : 'dosya'}. Telefonunuzun ya da bilgisayarınızın kendi görüntüleyicisinde açılır.</p>
+      <p class="muted">
+        {pdf ? 'Bu bir PDF belgesi. Uygulamanın içinde okuyabilir, içinde arama yapabilir ve sayfaları çevirebilirsiniz.' : 'Bu bir dosya. Telefonunuzun ya da bilgisayarınızın kendi görüntüleyicisinde açılır.'}
+      </p>
       <div class="row">
-        <button class="btn primary" data-testid="lib-file-open" onClick={() => run(false)}>
-          Aç
+        <button class="btn primary" data-testid="lib-file-open" onClick={() => (pdf ? setReading(true) : run(false))}>
+          {pdf ? 'Okumaya başla' : 'Aç'}
         </button>
+        {pdf && (
+          <button class="btn" data-testid="lib-file-external" onClick={() => run(false)}>
+            Başka uygulamada aç
+          </button>
+        )}
         <button class="btn" data-testid="lib-file-save" onClick={() => run(true)}>
           Cihaza kaydet
         </button>
@@ -999,15 +1017,32 @@ function FileCard({ src, title, path }: { src: LibrarySource; title: string; pat
 function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [reading, setReading] = useState<{ book: NautilusBook; file: string } | null>(null);
   const fq = foldCharwise(q.trim());
   const shown = fq
     ? books.filter((b) => foldCharwise(`${b.title} ${b.author} ${b.description}`).includes(fq))
     : books;
   const open = async (b: NautilusBook, f: string) => {
+    if (/\.pdf$/i.test(f)) {
+      setReading({ book: b, file: f });
+      return;
+    }
     setBusy(b.id + f);
     await openZimFile(src.zim, f);
     setBusy(null);
   };
+  if (reading) {
+    return (
+      <PdfOkuyucu
+        key={reading.file}
+        title={reading.book.title}
+        sub={reading.book.author || src.label}
+        language={src.language}
+        load={() => readZimFile(src.zim, reading.file)}
+        onClose={() => setReading(null)}
+      />
+    );
+  }
   return (
     <div class="kt-books" data-testid="lib-books">
       <div class="row">
@@ -1044,7 +1079,7 @@ function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] })
         ))}
       </ul>
       {!shown.length && <p class="empty">Eşleşen kitap yok.</p>}
-      <p class="muted kt-small">Kitaplar İngilizce PDF belgeleridir; cihazınızın PDF görüntüleyicisinde açılır.</p>
+      <p class="muted kt-small">Kitaplar İngilizce PDF belgeleridir; uygulamanın içinde açılır, içlerinde arama yapılabilir ve sayfalar Fener ile Türkçeye çevrilebilir.</p>
     </div>
   );
 }
