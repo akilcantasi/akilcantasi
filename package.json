@@ -1,6 +1,6 @@
 {
   "name": "akil-cantasi",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Akıl Çantası — internetsiz afet bilgi uygulaması",
   "scripts": {
     "dev": "vite",
