@@ -68,6 +68,13 @@ public class EnkazPlugin extends Plugin {
         if (EnkazTarayici.nobetAcik(c)) EnkazTarayici.nobet(c, true);
     }
 
+    /** Uygulama öne gelince: enkaz modu açık olması gerekirken servis çalışmıyorsa başlat */
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        if (EnkazServisi.aktif(getContext())) EnkazServisi.yenile(getContext());
+    }
+
     @Override
     protected void handleOnDestroy() {
         EnkazServisi.dinleyiciler.remove(durumDinleyici);
@@ -150,6 +157,8 @@ public class EnkazPlugin extends Plugin {
 
     @PermissionCallback
     private void izinSonucu(PluginCall call) {
+        // İzin yeni verildiyse açık enkaz modunun işareti hemen denensin
+        EnkazServisi.yenile(getContext());
         JSObject r = new JSObject();
         r.put("izinler", izinler());
         call.resolve(r);
@@ -195,6 +204,21 @@ public class EnkazPlugin extends Plugin {
 
     @PluginMethod
     public void bluetoothAc(PluginCall call) {
+        // Android 12+: açma isteği için önce Bluetooth izni gerekir
+        if (Build.VERSION.SDK_INT >= 31 && !izin(Manifest.permission.BLUETOOTH_CONNECT)) {
+            requestPermissionForAlias("bluetooth", call, "bluetoothIzinli");
+            return;
+        }
+        bluetoothIzinli(call);
+    }
+
+    @PermissionCallback
+    private void bluetoothIzinli(PluginCall call) {
+        BluetoothAdapter a = EnkazBluetoothAdi.adaptor(getContext());
+        if (a == null || a.isEnabled() || (Build.VERSION.SDK_INT >= 31 && !izin(Manifest.permission.BLUETOOTH_CONNECT))) {
+            izinSonucu(call);
+            return;
+        }
         try {
             Intent i = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(call, i, "bluetoothSonuc");
@@ -229,8 +253,10 @@ public class EnkazPlugin extends Plugin {
         try {
             EnkazServisi.baslat(c, etiket, kat == null ? EnkazIsareti.KAT_YOK : kat, false);
         } catch (Exception ex) {
-            call.reject("Enkaz modu başlatılamadı: " + ex.getMessage());
-            return;
+            // İzin pencereleri kapanırken uygulama henüz "önde" sayılmayabilir (Android 12+ arka
+            // plandan ön plan servisi başlatılamaz): kısa süre sonra yeniden denenir; olmazsa
+            // uygulama öne geldiğinde (handleOnResume) başlar
+            getBridge().getActivity().getWindow().getDecorView().postDelayed(() -> EnkazServisi.yenile(c), 800);
         }
         izinSonucu(call);
     }

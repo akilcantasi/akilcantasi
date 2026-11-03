@@ -164,6 +164,8 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
   const reklamOk = d.reklam === 'yayiliyor';
   const susturuldu = (d.sesDuraklatBitis ?? 0) > simdi;
   const gorunur = d.gorunurBitis > simdi;
+  // Bir SOS turu ~8 sn sürer: düğme bu sırada "Çalıyor…" der (basınca bir şey olduğu görülsün)
+  const caliyor = !!d.sonSes && simdi - d.sonSes < 8500;
   const aralik = d.sesAraligiSn >= 60 ? `${Math.round(d.sesAraligiSn / 60)} dakikada bir` : `${d.sesAraligiSn} saniyede bir`;
 
   const gorun = async () => {
@@ -182,10 +184,30 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
         </span>
       </div>
       {d.otomatik && <p class="ek-msg">Sarsıntıdan sonra yanıt gelmediği için kendiliğinden açıldı. İyiyseniz aşağıdan kapatın.</p>}
+      {!d.aktif && (
+        <div class="ek-row" style="border-top:0" data-testid="ek-calismiyor">
+          <span class="ek-ic wait" aria-hidden="true" />
+          <div class="t">
+            <b>Başlatılıyor…</b>
+            <span>Birkaç saniye içinde başlamazsa dokunun.</span>
+            <button class="btn" data-testid="ek-yeniden" onClick={() => nativeEnkaz.baslat(d.etiket, d.kat === -128 ? null : d.kat)}>
+              Yeniden başlat
+            </button>
+          </div>
+        </div>
+      )}
       <div>
         <Row ok={reklamOk} title="Bluetooth işareti" text={REKLAM_YAZI[d.reklam ?? 'baslamadi'] ?? `Yayılamadı (${d.reklam}).`}>
           {d.reklam === 'bluetooth-kapali' && (
-            <button class="btn" data-testid="ek-bt-ac" onClick={() => nativeEnkaz.bluetoothAc()}>
+            <button
+              class="btn"
+              data-testid="ek-bt-ac"
+              onClick={async () => {
+                setMsg(null);
+                const r = await nativeEnkaz.bluetoothAc();
+                if (r && !r.izinler.bluetoothAcik) setMsg({ t: "Bluetooth açılmadı. Bildirim panelinden Bluetooth'u açabilirsiniz; işaret kendiliğinden başlar.", bad: true });
+              }}
+            >
               Bluetooth'u aç
             </button>
           )}
@@ -205,8 +227,8 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
           }
         >
           <div class="ek-btns">
-            <button class="btn primary" data-testid="ek-ses" onClick={() => nativeEnkaz.sesCal()}>
-              Şimdi ses çal
+            <button class="btn primary" data-testid="ek-ses" disabled={caliyor} onClick={() => nativeEnkaz.sesCal()}>
+              {caliyor ? 'Çalıyor…' : 'Şimdi ses çal'}
             </button>
             {susturuldu ? (
               <button class="btn" data-testid="ek-ses-ac" onClick={() => nativeEnkaz.sesDuraklat(0)}>

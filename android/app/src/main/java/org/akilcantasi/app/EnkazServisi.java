@@ -125,6 +125,30 @@ public class EnkazServisi extends Service {
     public static void sesCal(Context c) {
         EnkazServisi s = calisan;
         if (s != null) s.h.post(() -> s.sesCalSimdi(true));
+        // Servis çalışmıyorsa (ör. ilk açılışta izin pencereleri sırasında başlayamadıysa) başlatılır;
+        // başlarken zaten 3 sn sonra ses çalar
+        else if (aktif(c)) yenile(c);
+    }
+
+    /**
+     * İzin verildi, Bluetooth açıldı ya da uygulama öne geldi: servis çalışmıyorsa başlatır,
+     * çalışıyorsa işareti hemen yeniden dener.
+     */
+    public static void yenile(Context c) {
+        EnkazServisi s = calisan;
+        if (s != null) {
+            s.h.post(() -> {
+                s.reklamBaslat();
+                bildir(s);
+            });
+            return;
+        }
+        if (!aktif(c)) return;
+        try {
+            calistir(c);
+        } catch (Exception ignored) {
+            // Arka plandan başlatılamadı; uygulama öne gelince EnkazPlugin yeniden dener
+        }
     }
 
     /** dk = 0: sesi yeniden aç */
@@ -214,6 +238,7 @@ public class EnkazServisi extends Service {
             wakeLock.acquire();
         } catch (Exception ignored) {}
         alarmSesiniAc();
+        btDinleyiciKaydet();
         reklamBaslat();
         h.post(dongu);
         // İlk ses birkaç saniye sonra (kullanıcı ekranı görsün)
@@ -265,6 +290,10 @@ public class EnkazServisi extends Service {
     public void onDestroy() {
         if (calisan == this) calisan = null;
         h.removeCallbacksAndMessages(null);
+        try {
+            if (btAlici != null) unregisterReceiver(btAlici);
+        } catch (Exception ignored) {}
+        btAlici = null;
         reklamDurdur();
         torch(false);
         alarmSesiniGeriAl();
@@ -286,7 +315,8 @@ public class EnkazServisi extends Service {
             if (simdi - sonSes >= sesAraligi(pil) && simdi >= sesDuraklatBitis) sesCalSimdi(false);
             if (simdi - sonGps >= 30 * 60_000L) gpsDene();
             // İşaret içeriği (pil, konum yaşı) 5 dakikada bir tazelenir
-            if (simdi - sonReklam >= 5 * 60_000L) reklamBaslat();
+            // İşaret yayılmıyorsa (Bluetooth kapalı, izin yeni verildi…) her turda yeniden dene
+            if (simdi - sonReklam >= 5 * 60_000L || !"yayiliyor".equals(reklamDurum)) reklamBaslat();
             gorunurlukDenetle(simdi);
             guncelleBildirim();
             h.postDelayed(this, 15_000);
@@ -314,6 +344,28 @@ public class EnkazServisi extends Service {
     // ------------------------------------------------------------------ BLE işareti
 
     private long sonReklam;
+    private android.content.BroadcastReceiver btAlici;
+
+    /** Bluetooth açılınca işaret beklemeden başlasın */
+    private void btDinleyiciKaydet() {
+        if (btAlici != null) return;
+        btAlici = new android.content.BroadcastReceiver() {
+            @Override
+            public void onReceive(Context c, Intent i) {
+                int st = i.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1);
+                if (st == BluetoothAdapter.STATE_ON) h.postDelayed(EnkazServisi.this::reklamBaslat, 500);
+                else if (st == BluetoothAdapter.STATE_OFF) {
+                    reklamDurum = "bluetooth-kapali";
+                    bildir(EnkazServisi.this);
+                }
+            }
+        };
+        try {
+            registerReceiver(btAlici, new android.content.IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+        } catch (Exception ignored) {
+            btAlici = null;
+        }
+    }
 
     @SuppressLint("MissingPermission")
     private void reklamBaslat() {
@@ -321,6 +373,7 @@ public class EnkazServisi extends Service {
         reklamDurdur();
         if (Build.VERSION.SDK_INT >= 31 && !izin(Manifest.permission.BLUETOOTH_ADVERTISE)) {
             reklamDurum = "izin-yok";
+            bildir(this);
             return;
         }
         BluetoothManager bm = (BluetoothManager) getSystemService(Context.BLUETOOTH_SERVICE);
@@ -331,6 +384,7 @@ public class EnkazServisi extends Service {
         }
         if (!ad.isEnabled()) {
             reklamDurum = "bluetooth-kapali";
+            bildir(this);
             return;
         }
         reklamci = ad.getBluetoothLeAdvertiser();
