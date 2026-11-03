@@ -191,7 +191,8 @@ export interface AramaHedefi {
  * yoksa null. Başka biçimlerdeki konumlar da okunur: "39.92080, 32.85410", OpenStreetMap bağlantısı.
  */
 export function smsCoz(metin: string, simdi = Date.now()): AramaHedefi | null {
-  const t = metin.replace(/\s+/g, ' ').trim();
+  // Uzun yapıştırmalar kısaltılır (düzenli ifadeler uzun metinde yavaşlar; SMS zaten kısadır)
+  const t = metin.slice(0, 2000).replace(/\s+/g, ' ').trim();
   if (!t) return null;
   const h: AramaHedefi = { zaman: simdi };
   const kod = t.match(/\bAK[\s-]?([0-9A-F]{6})\b/i);

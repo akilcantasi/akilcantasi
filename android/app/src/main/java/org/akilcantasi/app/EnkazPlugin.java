@@ -480,8 +480,8 @@ public class EnkazPlugin extends Plugin {
             return;
         }
         Double d = call.getDouble("dogruluk");
-        Long z = call.getLong("zaman");
-        KonumKaydi.ekle(getContext(), lat, lon, d == null ? 0f : d.floatValue(), z == null ? System.currentTimeMillis() : z,
+        // Zaman sayfadan alınmaz (ileri bir tarih sonraki tüm kayıtları engellerdi)
+        KonumKaydi.ekle(getContext(), lat, lon, d == null ? 0f : Math.max(0f, d.floatValue()), System.currentTimeMillis(),
                 call.getString("kaynak", "uygulama"));
         call.resolve(new JSObject());
     }

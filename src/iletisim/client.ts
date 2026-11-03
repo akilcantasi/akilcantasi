@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { mesh } from '../lib/mesh';
 import { native } from '../lib/native';
-import { FOUND_SUFFIX, fromMesh, mergeItems, toMeshText, validateDraft, type BoardDraft, type BoardItem } from './board';
+import { FOUND_SUFFIX, fromMesh, fromServer, mergeItems, toMeshText, validateDraft, type BoardDraft, type BoardItem } from './board';
 import { BoardCache, Outbox, loadProfile, normalizeServer } from './outbox';
 
 export type ConnState = 'checking' | 'connected' | 'offline';
@@ -57,6 +57,8 @@ class BoardService {
   private meshOff: (() => void) | null = null;
   /** mesh'ten gelen (sunucuya henüz iletilmemiş olabilir) kayıtlar */
   private meshItems: BoardItem[] = [];
+  /** Bu telefonun kendi bilgi noktası: adres ve gizli anahtar */
+  private kendi: { base: string; anahtar: string } | null = null;
   state: ServiceState = {
     conn: 'checking',
     base: '',
@@ -116,7 +118,11 @@ class BoardService {
     if (custom) cands.push(custom);
     if (native.isAndroid()) {
       const st = await native.getInfoPointStatus().catch(() => null);
-      if (st?.running) cands.push(`http://127.0.0.1:${st.port ?? 8080}`);
+      if (st?.running) {
+        const base = `http://127.0.0.1:${st.port ?? 8080}`;
+        this.kendi = st.anahtar ? { base, anahtar: st.anahtar } : null;
+        cands.push(base);
+      } else this.kendi = null;
     }
     cands.push('');
     for (const base of cands) {
@@ -163,13 +169,19 @@ class BoardService {
       if (r.result === 'retry') this.meshItems.push(m);
     }
     // 3) yeni kayıtlar
+    // Sunucu kayıtları eskiden yeniye, sayfa sayfa verir ("more": true → devamı var).
     const cached = this.cache.load();
-    const since = cached.server === base ? cached.since : 0;
-    const r = await fetchJson(api(base, '/api/board?since=' + since));
-    if (r.status !== 200 || !Array.isArray(r.data?.items)) throw new Error('Pano okunamadı');
-    const got: BoardItem[] = r.data.items.filter((i: any) => i && typeof i.id === 'string' && Number.isFinite(i.rev));
-    const maxRev = got.reduce((a, i) => Math.max(a, i.rev), since);
-    const merged = this.cache.merge(got, maxRev, base);
+    let since = cached.server === base ? cached.since : 0;
+    let merged: BoardItem[] = cached.items;
+    for (let sayfa = 0; sayfa < 20; sayfa++) {
+      const r = await fetchJson(api(base, '/api/board?since=' + since));
+      if (r.status !== 200 || !Array.isArray(r.data?.items)) throw new Error('Pano okunamadı');
+      const got: BoardItem[] = r.data.items.map(fromServer).filter((i: BoardItem | null): i is BoardItem => !!i);
+      const maxRev = got.reduce((a, i) => Math.max(a, i.rev), since);
+      merged = this.cache.merge(got, maxRev, base);
+      if (r.data.more !== true || maxRev <= since) break;
+      since = maxRev;
+    }
     this.set({ lastSync: Date.now() });
     this.recompute(merged);
   }
@@ -179,14 +191,18 @@ class BoardService {
     try {
       r = await fetchJson(api(base, '/api/board'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.kendi && this.kendi.base === base ? { 'X-Akil-Anahtar': this.kendi.anahtar } : {}),
+        },
         body: JSON.stringify(d),
       });
     } catch (e: any) {
       return { result: 'retry', error: 'Bağlantı yok' };
     }
     if (r.status === 200 || r.status === 201) {
-      if (r.data?.item) this.cache.merge([r.data.item], this.cache.load().since, this.cache.load().server || base);
+      const it = r.data?.item ? fromServer(r.data.item) : null;
+      if (it) this.cache.merge([it], this.cache.load().since, this.cache.load().server || base);
       return { result: 'ok' };
     }
     if (r.status === 429) return { result: 'retry', error: r.data?.error ?? 'Çok sık gönderim' };

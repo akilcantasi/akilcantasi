@@ -2,7 +2,7 @@
 // kayıtlar burada bekler; sunucuya ulaşılınca sırayla gönderilir. Sunucu
 // kimliğe göre tekilleştirdiği için yeniden göndermek güvenlidir.
 import type { BoardDraft, BoardItem } from './board';
-import { mergeItems } from './board';
+import { fromServer, mergeItems } from './board';
 
 export interface KV {
   getItem(k: string): string | null;
@@ -148,7 +148,15 @@ export class BoardCache {
 
   load(): { items: BoardItem[]; since: number; server: string } {
     const v = readJson<{ items: BoardItem[]; since: number; server: string }>(this.kv, KEYS.cache, { items: [], since: 0, server: '' });
-    return { items: Array.isArray(v.items) ? v.items : [], since: Number(v.since) || 0, server: String(v.server ?? '') };
+    // Önbellekteki her kayıt yeniden doğrulanır: eski sürümlerin ya da bozuk bir sunucunun
+    // yazdığı hatalı kayıt ekranı çökertmesin
+    const items = (Array.isArray(v.items) ? v.items : [])
+      .map((i: any) => {
+        const ok = fromServer(i);
+        return ok && i.viaMesh === true ? { ...ok, viaMesh: true } : ok;
+      })
+      .filter((i): i is BoardItem => !!i);
+    return { items, since: Number(v.since) || 0, server: String(v.server ?? '') };
   }
 
   /** Yeni kayıtları ekler; en yeni CACHE_MAX kayıt tutulur */

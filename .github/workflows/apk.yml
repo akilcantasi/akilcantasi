@@ -94,9 +94,14 @@ jobs:
         env:
           AKIL_KEYSTORE_PAROLA: ${{ secrets.APK_KEYSTORE_PAROLA }}
           AKIL_VERSION_CODE: ${{ github.run_number }}
+          # Girdi kabuğa doğrudan yazılmaz (komut enjeksiyonu); ortam değişkeninden okunur ve denetlenir
+          SURUM_GIRDI: ${{ github.event.inputs.surum }}
         run: |
           set -e
-          ad="${{ github.event.inputs.surum }}"
+          ad="$SURUM_GIRDI"
+          if [ -n "$ad" ] && ! printf '%s' "$ad" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9]+)?$'; then
+            echo "::error::Sürüm adı geçersiz: X.Y.Z biçiminde olmalı"; exit 1
+          fi
           [ -n "$ad" ] || ad="${GITHUB_REF_NAME#v}"
           case "$ad" in main|"") ad="$(date -u +%Y.%m.%d)-$GITHUB_RUN_NUMBER";; esac
           echo "AKIL_SURUM=$ad" >> "$GITHUB_ENV"

@@ -366,6 +366,12 @@ JNIEXPORT jstring JNICALL Java_org_akilcantasi_app_FenerMotoru_sohbet(JNIEnv *en
         if (llama_vocab_is_eog(vocab, tok)) break;
         int len = llama_token_to_piece(vocab, tok, buf, sizeof buf, 0, false);
         if (len > 0) pending.append(buf, (size_t) len);
+        else if (len < 0) {
+            // Parça arabelleğe sığmadı (-len bayt gerekli): büyük arabellekle yeniden
+            std::string big((size_t) -len, '\0');
+            int n2 = llama_token_to_piece(vocab, tok, &big[0], (int32_t) big.size(), 0, false);
+            if (n2 > 0) pending.append(big.data(), (size_t) n2);
+        }
         produced++;
         size_t ok = utf8_complete_prefix(pending);
         if (ok > 0) {

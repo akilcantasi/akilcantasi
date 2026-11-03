@@ -673,8 +673,32 @@ async function readZimFile(zim: LibrarySource['zim'], path: string): Promise<Uin
   return r ? new Uint8Array(r.data as Uint8Array) : null;
 }
 
+/**
+ * Arşivdeki dosyanın tarayıcıda açılabilecek güvenli türü; değilse null (indirilir).
+ * Blob adresleri uygulamanın kökenini taşır: arşivin bildirdiği türe güvenilip HTML, SVG ya da
+ * XML açılırsa arşivdeki kod uygulamanın içinde (Android'de yerel eklentilere erişerek) çalışır.
+ * Bu yüzden yalnız betik çalıştıramayan türler açılır, tür de arşivden değil buradan gelir.
+ */
+export function guvenliAcmaTuru(mime: string | undefined, path: string): string | null {
+  const m = (mime || '').toLowerCase().split(';')[0].trim();
+  const ext = (path.split('.').pop() || '').toLowerCase();
+  if (m === 'application/pdf' || ext === 'pdf') return 'application/pdf';
+  const resim: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+  if (resim[ext] && (m === '' || m === resim[ext] || m.startsWith('image/')) && m !== 'image/svg+xml') return resim[ext];
+  const ses: Record<string, string> = { mp3: 'audio/mpeg', ogg: 'audio/ogg', oga: 'audio/ogg', wav: 'audio/wav', m4a: 'audio/mp4', opus: 'audio/ogg' };
+  if (ses[ext]) return ses[ext];
+  const video: Record<string, string> = { mp4: 'video/mp4', webm: 'video/webm', ogv: 'video/ogg' };
+  if (video[ext]) return video[ext];
+  if (ext === 'txt' || ext === 'csv') return 'text/plain;charset=utf-8';
+  return null;
+}
+
 async function openZimFile(zim: LibrarySource['zim'], path: string, download = false): Promise<boolean> {
   const name = decodeURIComponent(path.split('/').pop() || 'dosya');
+  // Güvenli türde değilse açılmaz, indirilir (bkz. guvenliAcmaTuru)
+  const peek = await zim.getResource(path).catch(() => null);
+  const tur = peek ? guvenliAcmaTuru(peek.mime, path) : null;
+  if (!tur) download = true;
   let w: Window | null = null;
   if (!download) {
     try {
@@ -688,12 +712,12 @@ async function openZimFile(zim: LibrarySource['zim'], path: string, download = f
       w = null;
     }
   }
-  const r = await zim.getResource(path).catch(() => null);
+  const r = peek;
   if (!r) {
     if (w) w.document.body.textContent = 'Dosya arşivde bulunamadı.';
     return false;
   }
-  const url = URL.createObjectURL(new Blob([r.data as BlobPart], { type: r.mime || 'application/octet-stream' }));
+  const url = URL.createObjectURL(new Blob([r.data as BlobPart], { type: download || !tur ? 'application/octet-stream' : tur }));
   setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
   if (w && !w.closed) {
     w.location.href = url;
@@ -848,7 +872,12 @@ function ArticleView({ refStr }: { refStr: string }) {
     const href = a.getAttribute('href');
     if (href?.startsWith('#')) {
       e.preventDefault();
-      const id = decodeURIComponent(href.slice(1));
+      let id = href.slice(1);
+      try {
+        id = decodeURIComponent(id);
+      } catch {
+        // bozuk % kodlaması: olduğu gibi aranır
+      }
       if (id) bodyRef.current?.querySelector(`[id="${CSS_escape(id)}"]`)?.scrollIntoView({ block: 'start' });
     }
   };

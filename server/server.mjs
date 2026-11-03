@@ -133,6 +133,8 @@ function parseArgs(argv) {
     else if (a === '--dist') o.dist = next();
     else if (a.startsWith('--dist=')) o.dist = a.slice(7);
     else if (a === '--host') o.host = next();
+    // Bilgi noktasına IP yerine bir adla (ör. yerel DNS) erişilecekse: --ad bilgi.noktasi
+    else if (a === '--ad') (o.hostNames ??= []).push(next());
     else if (a === '--quiet' || a === '-q') o.quiet = true;
     else if (a === '--uzaktan-indirme' || a === '--remote-fetch') o.remoteFetch = true;
     else if (a === '--help' || a === '-h') o.help = true;
@@ -225,8 +227,13 @@ async function openBoard(dataDir, o = {}) {
       const time = Number(raw.time) || Date.now();
       items.set(v.item.id, { ...v.item, time, rev: Number(raw.rev) || time, ...(raw.local ? { local: true } : {}) });
     }
-  } catch {
-    /* dosya yok ya da bozuk: boş pano */
+  } catch (e) {
+    // Dosya yok: boş pano. Bozuksa üzerine yazılmasın diye yedeklenir (kayıtlar elle kurtarılabilsin)
+    if (e?.code !== 'ENOENT') {
+      const yedek = file + '.bozuk-' + Date.now();
+      await fsp.rename(file, yedek).catch(() => {});
+      console.warn('Pano dosyası okunamadı; yedeklendi:', yedek);
+    }
   }
   let lastRev = 0;
   for (const it of items.values()) lastRev = Math.max(lastRev, it.rev);
@@ -234,6 +241,7 @@ async function openBoard(dataDir, o = {}) {
   const nextRev = () => (lastRev = Math.max(Date.now(), lastRev + 1));
 
   let timer = null;
+  let saveError = null;
   let writing = Promise.resolve();
   const writeNow = () => {
     timer = null;
@@ -243,7 +251,12 @@ async function openBoard(dataDir, o = {}) {
       try {
         await fsp.writeFile(tmp, body);
         await fsp.rename(tmp, file);
-      } catch {}
+        saveError = null;
+      } catch (e) {
+        // Disk dolu vb.: kayıtlar yalnız bellekte; işletmen görsün
+        saveError = String(e?.code ?? e?.message ?? e);
+        console.warn('Pano kaydedilemedi:', saveError);
+      }
     });
     return writing;
   };
@@ -252,6 +265,9 @@ async function openBoard(dataDir, o = {}) {
   };
 
   const hits = new Map(); // ip → [zamanlar]
+  /** Herkesin toplamı: dakikada en çok bu kadar yeni kayıt (IP değiştirerek doldurmaya karşı) */
+  const GENEL_DAKIKA = 120;
+  let genel = [];
   const rateOk = (ip) => {
     const now = Date.now();
     const arr = (hits.get(ip) ?? []).filter((t) => now - t < 60_000);
@@ -259,18 +275,31 @@ async function openBoard(dataDir, o = {}) {
       hits.set(ip, arr);
       return Math.ceil((60_000 - (now - arr[0])) / 1000);
     }
+    genel = genel.filter((t) => now - t < 60_000);
+    if (genel.length >= GENEL_DAKIKA) return Math.max(1, Math.ceil((60_000 - (now - genel[0])) / 1000));
     arr.push(now);
+    genel.push(now);
     hits.set(ip, arr);
-    if (hits.size > 5000) hits.clear();
+    // Hepsini silmek herkesin sınırını sıfırlıyordu: yalnız eskiyenler ayıklanır
+    if (hits.size > 5000) for (const [k, v] of hits) if (!v.length || now - v[v.length - 1] >= 60_000) hits.delete(k);
     return 0;
   };
+  /** Kayıp ilanları ve bilgi noktası duyuruları en son silinir */
+  const korunur = (it) => !!it.local || it.kind === 'kayip';
 
   return {
+    /**
+     * since'tan sonraki kayıtlar ESKİDEN YENİYE, en çok bir sayfa; fazlası varsa more. (Yeniden
+     * eskiye verilince istemci en yeni rev'i alıp eski kayıtları hiç göremiyordu.)
+     */
     list(since) {
       const out = [];
       for (const it of items.values()) if (it.rev > since) out.push(it);
-      out.sort((a, b) => b.rev - a.rev);
-      return out.slice(0, BOARD_LIMITS.page);
+      out.sort((a, b) => a.rev - b.rev);
+      return { items: out.slice(0, BOARD_LIMITS.page), more: out.length > BOARD_LIMITS.page };
+    },
+    get saveError() {
+      return saveError;
     },
     rateOk,
     /** @returns {{status:number, item:any, duplicate?:boolean}} */
@@ -290,7 +319,8 @@ async function openBoard(dataDir, o = {}) {
       const it = { ...item, time: rev, rev, ...(local ? { local: true } : {}) };
       items.set(it.id, it);
       if (items.size > maxItems) {
-        const old = [...items.values()].sort((a, b) => a.time - b.time);
+        // Önce sıradan kayıtlar silinir (biri panoyu doldurarak kayıp ilanlarını silemesin)
+        const old = [...items.values()].sort((a, b) => Number(korunur(a)) - Number(korunur(b)) || a.time - b.time);
         for (const x of old.slice(0, items.size - maxItems)) items.delete(x.id);
       }
       scheduleSave();
@@ -502,7 +532,8 @@ export async function startServer(opts = {}) {
       try {
         since = Number(new URL(req.url ?? '/', 'http://x').searchParams.get('since')) || 0;
       } catch {}
-      sendJson(req, res, 200, { items: board.list(since), now: Date.now() });
+      const page = board.list(since);
+      sendJson(req, res, 200, { items: page.items, ...(page.more ? { more: true } : {}), now: Date.now() });
       return;
     }
     if (req.method !== 'POST') {
@@ -539,12 +570,46 @@ export async function startServer(opts = {}) {
       sendJson(req, res, 400, { error: v.error });
       return;
     }
-    const r = board.add(v.item, isLoopback(ip));
+    // "bilgi noktasından" etiketi: yalnız bu bilgisayarın kendi sayfasından (başka bir sitenin
+    // tarayıcıdan gönderdiği istek ya da başka köken loopback olsa da sayılmaz)
+    const r = board.add(v.item, isLoopback(ip) && ayniKoken(req));
     sendJson(req, res, r.status, { ok: true, item: r.item, duplicate: !!r.duplicate });
   }
 
+  /**
+   * İstek bu sunucunun kendi sayfasından mı? Tarayıcılar başka bir sitenin isteğine o sitenin
+   * Origin'ini koyar (sahtesi yapılamaz). Origin yoksa (curl, eski istemci) kabul edilir.
+   */
+  function ayniKoken(req) {
+    const o = req.headers.origin;
+    if (!o) return true;
+    try {
+      return new URL(o).host === String(req.headers.host ?? '');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * DNS yeniden bağlama saldırısına karşı: Host yalnız IP adresi, localhost, .local adı ya da
+   * --ad ile verilen ad olabilir. (Saldırganın alan adı bu sunucuya yönlendirilse de reddedilir.)
+   */
+  function hostUygun(req) {
+    const h = String(req.headers.host ?? '').toLowerCase();
+    if (!h) return true;
+    let ad;
+    try {
+      ad = new URL('http://' + h).hostname.replace(/^\[|\]$/g, '');
+    } catch {
+      return false;
+    }
+    if (ad === 'localhost' || ad.endsWith('.local') || ad === String(SERVER_NAME).toLowerCase()) return true;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ad) || ad.includes(':')) return true;
+    return (opts.hostNames ?? []).map((x) => String(x).toLowerCase()).includes(ad);
+  }
+
   async function handleFetch(req, res, ip) {
-    const allowed = isLoopback(ip || '') || remoteFetch;
+    const allowed = (isLoopback(ip || '') && ayniKoken(req)) || remoteFetch;
     if (req.method === 'GET' || req.method === 'HEAD') {
       sendJson(req, res, 200, { available: true, allowed, jobs: fetcher.list() });
       return;
@@ -556,6 +621,12 @@ export async function startServer(opts = {}) {
     if (!allowed) {
       req.resume();
       sendJson(req, res, 403, { error: 'Bu bilgi noktası yalnızca kendi bilgisayarından indirme kabul ediyor.' });
+      return;
+    }
+    // Yalnız JSON: tarayıcının "basit istek" olarak ön denetimsiz göndereceği türler reddedilir
+    if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) {
+      req.resume();
+      sendJson(req, res, 415, { error: 'JSON bekleniyor' });
       return;
     }
     const body = await readBody(req, 2048);
@@ -579,6 +650,11 @@ export async function startServer(opts = {}) {
 
   async function handle(req, res) {
     opts.onRequest?.(req);
+    if (!hostUygun(req)) {
+      req.resume();
+      sendText(req, res, 421, 'Bilinmeyen sunucu adı');
+      return;
+    }
     const ip = clientIp(req);
     if (ip && !isLoopback(ip)) seen.set(ip, Date.now());
 
@@ -619,7 +695,12 @@ export async function startServer(opts = {}) {
     if (pathname.startsWith('/data/')) {
       const rel = pathname.slice('/data/'.length);
       const p = safeJoin(dataDir, rel);
-      if (!p || !PACK_EXTS.includes(path.extname(p).toLowerCase()) || p === path.join(dataDir, 'board.json')) {
+      // Gizli (. ile başlayan), _ ile başlayan klasörler ve pano dosyası (büyük/küçük harf
+      // duyarsız dosya sistemlerinde de) sunulmaz
+      const parcalar = rel.split('/');
+      const gizli = parcalar.some((x) => x.startsWith('.') || x.startsWith('_')) || parcalar.length > 2;
+      const pano = p && path.basename(p).toLowerCase().startsWith('board.json');
+      if (!p || gizli || pano || !PACK_EXTS.includes(path.extname(p).toLowerCase())) {
         sendText(req, res, p ? 404 : 403, p ? 'Bulunamadı' : 'Erişim yok');
         return;
       }
@@ -677,7 +758,9 @@ export async function startServer(opts = {}) {
 
   const server = http.createServer((req, res) => {
     handle(req, res).catch((e) => {
-      if (!res.headersSent) sendText(req, res, 500, 'Sunucu hatası: ' + (e?.message ?? e));
+      // Ayrıntı (dosya yolları vb.) yalnız sunucu günlüğüne
+      console.warn('İstek hatası:', req.method, req.url, e?.message ?? e);
+      if (!res.headersSent) sendText(req, res, 500, 'Sunucu hatası');
       else res.destroy();
     });
   });

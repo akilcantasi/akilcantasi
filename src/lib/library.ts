@@ -76,7 +76,20 @@ export function devZimUrls(): string[] {
   try {
     if (typeof location === 'undefined') return [];
     const v = new URLSearchParams(location.search).get('devzim');
-    return v ? v.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    if (!v) return [];
+    // Yalnız aynı kökenden (devmap/devpoi gibi): dış bir bağlantı kütüphaneyi başka bir arşivle
+    // değiştiremesin
+    return v
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .filter((u) => {
+        try {
+          return new URL(u, location.href).origin === location.origin;
+        } catch {
+          return false;
+        }
+      });
   } catch {
     return [];
   }

@@ -486,6 +486,11 @@ public final class PaketIndirici {
         try {
             int code = c.getResponseCode();
             if (code != 206) throw new IOException(host(url) + ": yanıt " + code);
+            // Sunucu istenen yerden başlamalı ve aynı dosyayı vermeli (aksi halde dosya bozulur)
+            String cr = c.getHeaderField("Content-Range");
+            Matcher crm = cr == null ? null : Pattern.compile("bytes\\s+(\\d+)-\\d+/(\\d+)").matcher(cr);
+            if (crm == null || !crm.find() || Long.parseLong(crm.group(1)) != s.pos || (j.total > 0 && Long.parseLong(crm.group(2)) != j.total))
+                throw new IOException(host(url) + ": beklenmeyen aralık " + cr);
             j.mirror = url;
             InputStream in = c.getInputStream();
             byte[] buf = new byte[256 * 1024];
@@ -544,6 +549,16 @@ public final class PaketIndirici {
         try { pool.awaitTermination(PROBE_MS + 4000, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
         pool.shutdownNow();
         List<Probe> res = new ArrayList<>(out);
+        // Boyut bilinmiyorsa aynalar farklı sürümler sunabilir: parçalar karışmasın diye yalnız
+        // en çok aynada görülen toplam boyuttakiler kullanılır
+        if (j.size <= 0 && !res.isEmpty()) {
+            java.util.Map<Long, Integer> say = new java.util.HashMap<>();
+            for (Probe p : res) say.merge(p.total, 1, Integer::sum);
+            long cogu = res.get(0).total;
+            for (java.util.Map.Entry<Long, Integer> e : say.entrySet()) if (e.getValue() > say.get(cogu)) cogu = e.getKey();
+            final long secilen = cogu;
+            res.removeIf(p -> p.total != secilen);
+        }
         Collections.sort(res, (a, b) -> Double.compare(b.speed, a.speed));
         return res;
     }
@@ -568,11 +583,32 @@ public final class PaketIndirici {
     private static final Pattern KIWIX1 = Pattern.compile("^https?://[^/]*kiwix\\.org/zim/(.+)$");
     private static final Pattern KIWIX2 = Pattern.compile("^https?://[^/]+/(?:.*/)?kiwix(?:\\.org)?(?:-md)?/zim/(.+)$");
 
+    /**
+     * İndirme yalnız https üzerinden ve bilinen kaynaklardan yapılır (Kiwix ve aynaları, Hugging
+     * Face, proje sitesi, GitHub). Sayfaya sızan bir betik paketleri rastgele bir adresten gelen
+     * dosyayla değiştiremesin; düz http'de araya giren de içeriği değiştiremesin.
+     */
+    static final String[] IZINLI_ALANLAR = {
+        "kiwix.org", "ftp.fau.de", "ftp.nluug.nl", "mirrors.dotsrc.org", "mirror.accum.se", "dumps.wikimedia.org",
+        "wi.mirror.driftle.ss", "huggingface.co", "hf.co", "akilcantasi.com", "github.com", "githubusercontent.com",
+    };
+
+    static boolean izinliAdres(String u) {
+        if (u == null) return false;
+        try {
+            URL x = new URL(u);
+            if (!"https".equals(x.getProtocol())) return false;
+            String h = x.getHost().toLowerCase(java.util.Locale.ROOT);
+            for (String a : IZINLI_ALANLAR) if (h.equals(a) || h.endsWith("." + a)) return true;
+        } catch (Exception ignored) {}
+        return false;
+    }
+
     /** server/fetcher.mjs expandMirrors ile aynı kural. */
     static List<String> expandMirrors(List<String> urls) {
         List<String> out = new ArrayList<>();
         for (String u : urls) {
-            if (u == null || !u.matches("^https?://.*")) continue;
+            if (!izinliAdres(u)) continue;
             Matcher m = KIWIX1.matcher(u);
             boolean ok = m.find();
             if (!ok) {

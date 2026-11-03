@@ -208,6 +208,9 @@ public class AkilCantasiPlugin extends Plugin {
             for (String a : InfoPointServer.lanAddresses()) arr.put(a);
             ret.put("addresses", arr);
             ret.put("clients", server.clientCount());
+            // Bu telefondaki uygulamanın "bilgi noktasından" kayıt yazabilmesi için gizli anahtar
+            // (yalnız uygulamanın kendisine verilir; tarayıcıdaki sayfalar bilmez).
+            ret.put("anahtar", server.anahtar());
         }
         return ret;
     }
@@ -391,7 +394,9 @@ public class AkilCantasiPlugin extends Plugin {
     public void fenerYukle(PluginCall call) {
         call.setKeepAlive(false);
         final String dosya = call.getString("dosya", "");
-        final int nCtx = call.getInt("nCtx", 2048);
+        // Bağlam 256–8192 arasına sınırlanır: 0 modelin tüm eğitim bağlamı, eksi değer çok büyük
+        // sayı demek; ikisi de belleği taşırıp uygulamayı çökertir
+        final int nCtx = Math.max(256, Math.min(8192, call.getInt("nCtx", 2048)));
         final boolean gpuIste = Boolean.TRUE.equals(call.getBoolean("gpu", true));
         fenerIs.execute(() -> {
             JSObject ret = new JSObject();
@@ -548,6 +553,27 @@ public class AkilCantasiPlugin extends Plugin {
         }
     }
 
+    /** Bir istekte en çok alıcı (8 yakın + 112), mesaj uzunluğu, saatlik toplam SMS */
+    static final int SMS_EN_COK_ALICI = 9, SMS_EN_COK_UZUNLUK = 1000, SMS_SAATLIK = 30;
+    private static final java.util.ArrayDeque<Long> smsZamanlari = new java.util.ArrayDeque<>();
+
+    /**
+     * Sayfaya sızan bir betiğin telefonu SMS göndermek için kullanmasına karşı yerel sınırlar:
+     * yalnız telefon numarası biçimi, sınırlı alıcı ve uzunluk, saatte en çok 30 SMS.
+     * (Ücretli kısa numaralar için Android ayrıca kendi onayını sorar.) null: uygun; değilse neden.
+     */
+    static synchronized String smsSiniri(String[] to, String body) {
+        if (to.length == 0) return "alici-yok";
+        if (to.length > SMS_EN_COK_ALICI) return "cok-alici";
+        if (body == null || body.isEmpty() || body.length() > SMS_EN_COK_UZUNLUK) return "uzunluk";
+        for (String t : to) if (t == null || !t.matches("^\\+?[0-9]{3,15}$")) return "numara";
+        long simdi = System.currentTimeMillis();
+        while (!smsZamanlari.isEmpty() && simdi - smsZamanlari.peekFirst() > 3600_000L) smsZamanlari.pollFirst();
+        if (smsZamanlari.size() + to.length > SMS_SAATLIK) return "cok-sik";
+        for (int i = 0; i < to.length; i++) smsZamanlari.addLast(simdi);
+        return null;
+    }
+
     private void smsKuyrugaEkle(PluginCall call) {
         String body = call.getString("body", "");
         JSArray to = call.getArray("to", new JSArray());
@@ -557,6 +583,15 @@ public class AkilCantasiPlugin extends Plugin {
         for (int i = 0; i < to.length(); i++) {
             t[i] = to.optString(i, "");
             n[i] = names != null && i < names.length() ? names.optString(i, "") : "";
+        }
+        String sinir = smsSiniri(t, body);
+        if (sinir != null) {
+            JSObject ret = new JSObject();
+            ret.put("queued", false);
+            ret.put("izin", true);
+            ret.put("hata", sinir);
+            call.resolve(ret);
+            return;
         }
         java.util.List<SmsKuyrugu.Mesaj> added = SmsGonderici.kuyruk(getContext()).ekle(t, n, body, System.currentTimeMillis());
         JSArray ids = new JSArray();

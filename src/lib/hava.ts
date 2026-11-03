@@ -20,7 +20,13 @@ export interface HavaPaketi {
 export const AY_ADI = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 export function isHavaPaketi(x: any): x is HavaPaketi {
-  return !!x && x.v === 1 && Array.isArray(x.iller) && x.iller.length > 0 && Array.isArray(x.iller[0]?.normal?.t);
+  if (!(!!x && x.v === 1 && Array.isArray(x.iller) && x.iller.length > 0 && Array.isArray(x.iller[0]?.normal?.t))) return false;
+  // Kaynak listesi metin olmalı (arayüzde bağlantı olarak çizilir)
+  if (x.kaynaklar !== undefined) {
+    if (!Array.isArray(x.kaynaklar)) return false;
+    x.kaynaklar = x.kaynaklar.filter((k: any) => k && typeof k.ad === 'string' && typeof k.lisans === 'string' && typeof k.adres === 'string');
+  } else x.kaynaklar = [];
+  return true;
 }
 
 /** "2026-12" → "Aralık 2026" */

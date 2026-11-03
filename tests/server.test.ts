@@ -328,3 +328,79 @@ describe('mesaj panosu /api/board', () => {
     expect((await fetch(bbase + '/api/status', { method: 'POST' })).status).toBe(405);
   });
 });
+
+describe('güvenlik sertleştirmesi', () => {
+  let s: RunningServer;
+  let dir: string;
+  let b: string;
+  const post = (p: string, body: unknown, headers: Record<string, string> = { 'Content-Type': 'application/json' }) =>
+    fetch(b + p, { method: 'POST', headers, body: JSON.stringify(body) });
+  const istek = (p: string, headers: Record<string, string>, method = 'GET', body?: string): Promise<{ status: number; body: string }> =>
+    new Promise((res, rej) => {
+      const req = http.request({ host: '127.0.0.1', port: s.port, path: p, method, headers }, (r) => {
+        let t = '';
+        r.on('data', (c) => (t += c));
+        r.on('end', () => res({ status: r.statusCode!, body: t }));
+      });
+      req.on('error', rej);
+      req.end(body);
+    });
+
+  beforeAll(async () => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'akil-guv-'));
+    fs.writeFileSync(path.join(dir, '.gizli.json'), '{}');
+    fs.mkdirSync(path.join(dir, 'a', 'b'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'a', 'b', 'derin.zim'), 'x');
+    s = await startServer({ port: 0, host: '127.0.0.1', data: dir, dist: dir, apkDirs: [dir], board: { maxItems: 3, ratePerMin: 100 } });
+    b = `http://127.0.0.1:${s.port}`;
+  });
+  afterAll(async () => {
+    await s?.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('yabancı alan adıyla gelen istek (DNS yeniden bağlama) reddedilir', async () => {
+    expect((await istek('/api/status', { Host: 'kotu.example' })).status).toBe(421);
+    expect((await istek('/api/status', { Host: `127.0.0.1:${s.port}` })).status).toBe(200);
+    expect((await istek('/api/status', { Host: `192.168.43.1:${s.port}` })).status).toBe(200);
+    expect((await istek('/api/status', { Host: `localhost:${s.port}` })).status).toBe(200);
+  });
+
+  it('başka sitenin gönderdiği pano kaydı "bilgi noktasından" sayılmaz', async () => {
+    const r = await post('/api/board', { id: 'guv000-1', kind: 'duyuru', from: 'Sahte', text: 'Tahliye' }, { 'Content-Type': 'application/json', Origin: 'https://kotu.example' });
+    expect((await r.json()).item.local).toBeUndefined();
+    const k = await post('/api/board', { id: 'guv000-2', kind: 'duyuru', from: 'Nokta', text: 'Su dağıtımı' }, { 'Content-Type': 'application/json', Origin: b });
+    expect((await k.json()).item.local).toBe(true);
+  });
+
+  it('indirme denetimi: düz metin ve başka köken reddedilir', async () => {
+    const duz = await istek('/api/fetch', { 'Content-Type': 'text/plain', Host: `127.0.0.1:${s.port}` }, 'POST', '{"action":"cancel","file":"x.zim"}');
+    expect(duz.status).toBe(415);
+    const yabanci = await istek('/api/fetch', { 'Content-Type': 'application/json', Origin: 'https://kotu.example', Host: `127.0.0.1:${s.port}` }, 'POST', '{"action":"cancel","file":"x.zim"}');
+    expect(yabanci.status).toBe(403);
+  });
+
+  it('gizli dosya ve derin klasör sunulmaz', async () => {
+    expect((await fetch(b + '/data/.gizli.json')).status).not.toBe(200);
+    expect((await fetch(b + '/data/a/b/derin.zim')).status).not.toBe(200);
+  });
+
+  it('pano dolunca önce sıradan kayıtlar silinir; kayıp ilanı kalır', async () => {
+    await post('/api/board', { id: 'kayip0-1', kind: 'kayip', from: 'Ayşe', text: 'Mehmet aranıyor', status: 'araniyor' }, { 'Content-Type': 'application/json', Origin: 'https://kotu.example' });
+    for (let i = 0; i < 6; i++) await post('/api/board', { id: `spam00-${i}`, kind: 'mesaj', from: 'X', text: 'dolgu ' + i }, { 'Content-Type': 'application/json', Origin: 'https://kotu.example' });
+    const ids = (await (await fetch(b + '/api/board')).json()).items.map((i: any) => i.id);
+    expect(ids).toContain('kayip0-1');
+    expect(ids).toHaveLength(3);
+  });
+
+  it('kayıtlar eskiden yeniye gelir', async () => {
+    const it = (await (await fetch(b + '/api/board')).json()).items;
+    for (let i = 1; i < it.length; i++) expect(it[i].rev).toBeGreaterThan(it[i - 1].rev);
+  });
+
+  it('500 yanıtı iç ayrıntı sızdırmaz', async () => {
+    // Yol çözümünde hata çıkaran bozuk kodlama
+    const r = await istek('/%E0%A4%A', { Host: `127.0.0.1:${s.port}` });
+    expect(r.body).not.toMatch(/\/tmp|Error:|at /);
+  });
+});

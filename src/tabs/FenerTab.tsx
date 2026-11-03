@@ -1,3 +1,4 @@
+import { Fragment } from 'preact';
 // Fener — çevrimdışı asistan. Soruyu önce rehberlerde ve Vikipedi'de arar;
 // cihazda model varsa kaynaklara dayalı cevap üretir, yoksa doğrudan
 // rehberden yanıt verir. Konuşma modül düzeyinde tutulur (sekme değişince kaybolmaz).
@@ -254,10 +255,10 @@ function RichText({ text }: { text: string }) {
   return (
     <>
       {lines.map((spans, i) => (
-        <>
+        <Fragment key={i}>
           {spans.map((s, j) => (s.bold ? <strong key={j}>{s.text}</strong> : s.text))}
           {i < lines.length - 1 ? '\n' : null}
-        </>
+        </Fragment>
       ))}
     </>
   );

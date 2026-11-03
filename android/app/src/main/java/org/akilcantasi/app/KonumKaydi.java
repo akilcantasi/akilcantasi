@@ -80,8 +80,9 @@ public final class KonumKaydi {
             float[] d = new float[1];
             Location.distanceBetween(s.optDouble("lat"), s.optDouble("lon"), lat, lon, d);
             long fark = zaman - s.optLong("zaman");
-            // Eskiyse yazma; aynı yerde ve yakın zamanda ise yalnız daha doğruysa güncelle
-            if (fark < 0) return false;
+            // Eskiyse yazma; ama telefon saati geri gittiyse (şebekesiz saat kayması) kayıt
+            // tamamen durmasın: 10 dakikadan fazla "geçmişe" düşen yeni konum yine yazılır
+            if (fark < 0 && fark > -10 * 60_000L) return false;
             if (d[0] < AYNI_YER_M && fark < AYNI_SURE_MS) {
                 if (dogruluk > 0 && dogruluk < s.optDouble("dogruluk", 1e9)) {
                     try {

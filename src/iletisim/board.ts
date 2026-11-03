@@ -193,6 +193,21 @@ export function toMeshText(d: BoardDraft): string {
   return d.status ? `[${d.status}] ${d.text}` : d.text;
 }
 
+/**
+ * Bilgi noktası sunucusundan gelen kaydı doğrular. Sunucu adresini kullanıcı değiştirebildiği
+ * için kötü niyetli ya da bozuk bir sunucu yanlış türde alanlar gönderebilir; doğrulanmadan
+ * önbelleğe yazılırsa İletişim ekranı her açılışta çöker. İstemciye özel alanlar atılır.
+ */
+export function fromServer(raw: any): BoardItem | null {
+  const v = validateDraft(raw);
+  if (!v.ok) return null;
+  const time = Number(raw.time), rev = Number(raw.rev);
+  if (!Number.isFinite(time) || !Number.isFinite(rev) || rev < 0 || rev > 1e15 || time < 0 || time > 1e15) return null;
+  const it: BoardItem = { ...v.item, time, rev };
+  if (raw.local === true) it.local = true;
+  return it;
+}
+
 export function fromMesh(m: { id: string; kind: string; from: string; text: string; time: number; lat?: number; lon?: number }): BoardItem | null {
   let kind = m.kind;
   let id = String(m.id ?? '');

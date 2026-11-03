@@ -67,7 +67,17 @@ public class MainActivity extends BridgeActivity {
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 WebResourceResponse res = null;
                 String path = request.getUrl().getPath();
-                if (path != null && path.startsWith(PACK_PATH)) res = packResponse(request, path.substring(PACK_PATH.length()));
+                // Yalnız uygulamanın kendi adresi (https://localhost/_paket/…): başka bir sunucunun
+                // /_paket/ yolu yerel paketlerden yanıtlanmasın
+                String host = request.getUrl().getHost();
+                if (path != null && path.startsWith(PACK_PATH) && "localhost".equals(host)) {
+                    try {
+                        res = packResponse(request, path.substring(PACK_PATH.length()));
+                    } catch (RuntimeException e) {
+                        // Bozuk aralık (ör. çok büyük sayı) uygulamayı çökertmesin
+                        res = new WebResourceResponse("text/plain", null, 416, "Range Not Satisfiable", new HashMap<>(), empty());
+                    }
+                }
                 if (res == null) res = super.shouldInterceptRequest(view, request);
                 if (res == null) return null;
                 Map<String, String> headers = res.getResponseHeaders();

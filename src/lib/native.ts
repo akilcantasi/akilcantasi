@@ -35,6 +35,8 @@ export interface InfoPointStatus {
   port?: number;
   addresses?: string[];
   clients?: number;
+  /** Kendi bilgi noktasına "yerel" kayıt yazmak için başlatmada üretilen gizli anahtar */
+  anahtar?: string;
 }
 
 function cap(): any {

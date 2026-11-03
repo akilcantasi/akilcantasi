@@ -235,9 +235,14 @@ export default function Hava() {
         {data.kaynaklar.map((k, i) => (
           <span key={k.ad}>
             {i > 0 ? ' · ' : ''}
-            <a href={k.adres} target="_blank" rel="noopener">
-              {k.ad}
-            </a>{' '}
+            {/* Paket verisinden gelen bağlantı: yalnız https (javascript: vb. çalışmasın) */}
+            {typeof k.adres === 'string' && /^https:\/\//i.test(k.adres) ? (
+              <a href={k.adres} target="_blank" rel="noopener noreferrer">
+                {k.ad}
+              </a>
+            ) : (
+              <span>{k.ad}</span>
+            )}{' '}
             ({k.lisans})
           </span>
         ))}

@@ -59,7 +59,58 @@ public class InfoPointServer {
     }
 
     /** boardFile: pano kayıtlarının saklandığı dosya (null → yalnızca bellekte) */
+    /**
+     * Bu telefondaki uygulamanın kendi gönderilerini ("bilgi noktasından") tanımak için her
+     * başlatmada üretilen gizli anahtar. Yalnız loopback'ten gelmek yetmez: telefondaki başka
+     * bir uygulama da 127.0.0.1'e bağlanabilir.
+     */
+    private final String anahtar;
+    /** Canlı bağlantılar: yavaş istek/okumayan istemci bekçisi */
+    private final java.util.concurrent.ConcurrentHashMap<Socket, Izlenen> canli = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger> ipBaglanti = new java.util.concurrent.ConcurrentHashMap<>();
+    private java.util.concurrent.ScheduledExecutorService bekci;
+    static final int IP_EN_COK_BAGLANTI = 24;
+    static final long BASLIK_SURESI_MS = 15_000, YAZMA_DURGUN_MS = 60_000;
+
+    static final class Izlenen {
+        final long baslangic = System.currentTimeMillis();
+        volatile long son = baslangic;
+        volatile boolean yaziyor;
+    }
+
+    /** Yazdıkça bekçiye "ilerliyor" bildiren akış */
+    static final class IzlenenAkis extends java.io.FilterOutputStream {
+        private final Izlenen iz;
+        IzlenenAkis(OutputStream o, Izlenen iz) { super(o); this.iz = iz; }
+        @Override public void write(byte[] b, int off, int len) throws IOException {
+            iz.yaziyor = true;
+            out.write(b, off, len);
+            iz.son = System.currentTimeMillis();
+        }
+        @Override public void write(int b) throws IOException {
+            iz.yaziyor = true;
+            out.write(b);
+            iz.son = System.currentTimeMillis();
+        }
+    }
+
+    public String anahtar() { return anahtar; }
+
+    /** Yalnız yerel ağlardan (ve bu telefondan) bağlantı kabul edilir */
+    static boolean yerelAg(InetAddress a) {
+        if (a == null) return false;
+        if (a.isLoopbackAddress() || a.isSiteLocalAddress() || a.isLinkLocalAddress()) return true;
+        byte[] b = a.getAddress();
+        if (b.length == 4) return (b[0] & 0xFF) == 100 && (b[1] & 0xC0) == 64; // 100.64.0.0/10
+        return (b[0] & 0xFE) == 0xFC; // IPv6 fc00::/7
+    }
+
     public InfoPointServer(AssetManager assets, File packsDir, File apk, int port, File boardFile) {
+        byte[] r = new byte[16];
+        new java.security.SecureRandom().nextBytes(r);
+        StringBuilder hx = new StringBuilder();
+        for (byte x : r) hx.append(String.format("%02x", x));
+        this.anahtar = hx.toString();
         this.assets = assets;
         this.packsDir = packsDir;
         this.apk = apk;
@@ -76,9 +127,30 @@ public class InfoPointServer {
             while (running) {
                 try {
                     Socket s = socket.accept();
+                    // Yerel ağ dışından (telefon herkese açık bir ağa ya da mobil IPv6'ya bağlıysa) red
+                    if (!yerelAg(s.getInetAddress())) {
+                        try { s.close(); } catch (IOException ignored) {}
+                        continue;
+                    }
+                    // Tek cihaz bütün iş parçacıklarını tutamasın
+                    String ip = s.getInetAddress().getHostAddress();
+                    java.util.concurrent.atomic.AtomicInteger say = ipBaglanti.computeIfAbsent(ip, k -> new java.util.concurrent.atomic.AtomicInteger());
+                    if (!s.getInetAddress().isLoopbackAddress() && say.incrementAndGet() > IP_EN_COK_BAGLANTI) {
+                        say.decrementAndGet();
+                        try { s.close(); } catch (IOException ignored) {}
+                        continue;
+                    }
+                    if (s.getInetAddress().isLoopbackAddress()) say.incrementAndGet();
                     try {
-                        pool.execute(() -> handle(s));
+                        pool.execute(() -> {
+                            try {
+                                handle(s);
+                            } finally {
+                                if (say.decrementAndGet() <= 0) ipBaglanti.remove(ip, say);
+                            }
+                        });
                     } catch (java.util.concurrent.RejectedExecutionException busy) {
+                        say.decrementAndGet();
                         try { s.close(); } catch (IOException ignored) {}
                     }
                 } catch (IOException e) {
@@ -88,13 +160,28 @@ public class InfoPointServer {
         }, "akil-infopoint");
         t.setDaemon(true);
         t.start();
+        // Bekçi: başlıklarını 15 sn'de bitirmeyen ya da 60 sn'dir okumayan bağlantıyı kapatır
+        bekci = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        bekci.scheduleWithFixedDelay(() -> {
+            long simdi = System.currentTimeMillis();
+            for (Map.Entry<Socket, Izlenen> e : canli.entrySet()) {
+                Izlenen iz = e.getValue();
+                boolean kapat = iz.yaziyor ? simdi - iz.son > YAZMA_DURGUN_MS : simdi - iz.baslangic > BASLIK_SURESI_MS;
+                if (kapat) {
+                    try { e.getKey().close(); } catch (IOException ignored) {}
+                    canli.remove(e.getKey());
+                }
+            }
+        }, 5, 5, TimeUnit.SECONDS);
     }
 
     public void stop() {
         running = false;
         try { if (socket != null) socket.close(); } catch (IOException ignored) {}
         if (pool != null) pool.shutdownNow();
+        if (bekci != null) bekci.shutdownNow();
         board.flush();
+        board.kapat();
     }
 
     public boolean isRunning() { return running; }
@@ -169,10 +256,12 @@ public class InfoPointServer {
     }
 
     private void handle(Socket s) {
+        Izlenen iz = new Izlenen();
+        canli.put(s, iz);
         try (Socket sock = s) {
             sock.setSoTimeout(5_000); // yalnızca istek okuma; yanıt yazmayı etkilemez
             InputStream in = new BufferedInputStream(sock.getInputStream());
-            OutputStream out = sock.getOutputStream();
+            OutputStream out = new IzlenenAkis(sock.getOutputStream(), iz);
             try {
                 String line = readLine(in);
                 if (line == null) return;
@@ -193,7 +282,9 @@ public class InfoPointServer {
                 if (!loopback) clients.put(ip, System.currentTimeMillis());
                 int qi = rawPath.indexOf('?');
                 if ((qi >= 0 ? rawPath.substring(0, qi) : rawPath).equals("/api/board")) {
-                    handleBoard(out, in, method, rawPath, headers, ip, loopback);
+                    // "bilgi noktasından" yalnız bu telefondaki uygulama (gizli anahtarla)
+                    boolean yerel = loopback && anahtar.equals(headers.get("x-akil-anahtar"));
+                    handleBoard(out, in, method, rawPath, headers, ip, yerel);
                 } else {
                     route(out, method, rawPath, headers);
                 }
@@ -202,6 +293,8 @@ public class InfoPointServer {
             }
             out.flush();
         } catch (Exception ignored) {
+        } finally {
+            canli.remove(s);
         }
     }
 
@@ -418,7 +511,7 @@ public class InfoPointServer {
                "Cross-Origin-Embedder-Policy: require-corp\r\n" +
                "Cross-Origin-Resource-Policy: cross-origin\r\n" +
                "Access-Control-Allow-Origin: *\r\n" +
-               "Access-Control-Allow-Headers: Range, If-Range, Content-Type\r\n" +
+               "Access-Control-Allow-Headers: Range, If-Range, Content-Type, X-Akil-Anahtar\r\n" +
                "Access-Control-Allow-Methods: GET, HEAD, POST, OPTIONS\r\n" +
                "X-Content-Type-Options: nosniff\r\n" +
                // server/server.mjs CSP ile aynı: arşivden gelen içerik betik çalıştıramasın
@@ -559,16 +652,30 @@ public class InfoPointServer {
             return lastRev;
         }
 
+        /**
+         * since'tan sonraki kayıtlar, ESKİDEN YENİYE en çok PAGE tane; fazlası varsa "more":true.
+         * (Yeniden eskiye verilince istemci en yeni rev'i alıp eskileri hiç göremiyordu.)
+         */
         synchronized String listJson(long since) {
             List<Item> out = new ArrayList<>();
             for (Item it : items.values()) if (it.rev > since) out.add(it);
-            out.sort((a, b) -> Long.compare(b.rev, a.rev));
+            out.sort((a, b) -> Long.compare(a.rev, b.rev));
             StringBuilder sb = new StringBuilder("{\"items\":[");
             for (int i = 0; i < out.size() && i < PAGE; i++) {
                 if (i > 0) sb.append(',');
                 sb.append(out.get(i).toJson());
             }
-            return sb.append("],\"now\":").append(System.currentTimeMillis()).append('}').toString();
+            sb.append(']');
+            if (out.size() > PAGE) sb.append(",\"more\":true");
+            return sb.append(",\"now\":").append(System.currentTimeMillis()).append('}').toString();
+        }
+
+        /** Herkesin toplamı: dakikada en çok bu kadar yeni kayıt (IP değiştirerek doldurmaya karşı) */
+        static final int GENEL_DAKIKA = 120;
+        private final java.util.ArrayDeque<Long> genel = new java.util.ArrayDeque<>();
+
+        void kapat() {
+            saver.shutdownNow();
         }
 
         /** 0 → izin var; aksi halde beklenecek saniye */
@@ -577,8 +684,12 @@ public class InfoPointServer {
             java.util.ArrayDeque<Long> q = hits.computeIfAbsent(ip == null ? "?" : ip, k -> new java.util.ArrayDeque<>());
             while (!q.isEmpty() && now - q.peekFirst() >= 60_000) q.pollFirst();
             if (q.size() >= ratePerMin) return (int) Math.max(1, (60_000 - (now - q.peekFirst()) + 999) / 1000);
+            while (!genel.isEmpty() && now - genel.peekFirst() >= 60_000) genel.pollFirst();
+            if (genel.size() >= GENEL_DAKIKA) return (int) Math.max(1, (60_000 - (now - genel.peekFirst()) + 999) / 1000);
             q.addLast(now);
-            if (hits.size() > 5000) hits.clear();
+            genel.addLast(now);
+            // Hepsini silmek yerine eskiyenleri ayıkla (silmek herkesin sınırını sıfırlıyordu)
+            if (hits.size() > 5000) hits.values().removeIf(d -> d.isEmpty() || now - d.peekLast() >= 60_000);
             return 0;
         }
 
@@ -599,12 +710,21 @@ public class InfoPointServer {
             item.local = local;
             items.put(item.id, item);
             if (items.size() > maxItems) {
+                // Önce sıradan mesajlar silinir; kayıp ilanları ve bilgi noktası duyuruları en son
+                // (biri panoyu doldurarak kayıp ilanlarını silemesin)
                 List<Item> old = new ArrayList<>(items.values());
-                old.sort((a, b) -> Long.compare(a.time, b.time));
+                old.sort((a, b) -> {
+                    int pa = korunur(a) ? 1 : 0, pb = korunur(b) ? 1 : 0;
+                    return pa != pb ? Integer.compare(pa, pb) : Long.compare(a.time, b.time);
+                });
                 for (int i = 0; i < old.size() - maxItems; i++) items.remove(old.get(i).id);
             }
             scheduleSave();
             return new Result(201, item, false);
+        }
+
+        static boolean korunur(Item it) {
+            return it.local || "kayip".equals(it.kind);
         }
 
         private void scheduleSave() {
