@@ -104,7 +104,10 @@ public class EnkazServisi extends Service {
 
     /** etiket: "Ayşe · B blok 3. kat"; kat: KAT_YOK olabilir; otomatik: sarsıntıdan sonra kendiliğinden */
     public static void baslat(Context c, String etiket, int kat, boolean otomatik) {
-        prefs(c).edit().putBoolean("aktif", true).putString("etiket", etiket == null ? "" : etiket).putInt("kat", kat)
+        // Yeni oturum: önceki mesajlaşma silinir (enkaz modu zaten açıksa sürer)
+        SharedPreferences.Editor e = prefs(c).edit();
+        if (!aktif(c)) e.remove("mesajlar").remove("sonMesajNo").remove("yanit").remove("yanitSayac").remove("yanitZaman");
+        e.putBoolean("aktif", true).putString("etiket", etiket == null ? "" : etiket).putInt("kat", kat)
                 .putBoolean("otomatik", otomatik).putLong("baslangic", System.currentTimeMillis()).apply();
         calistir(c);
     }
@@ -175,6 +178,14 @@ public class EnkazServisi extends Service {
             d.put("sesAraligiSn", sesAraligi(pilYuzde(c)) / 1000);
             d.put("bluetoothAdi", EnkazBluetoothAdi.aktif(c));
             d.put("gorunurBitis", p.getLong("gorunurBitis", 0));
+            d.put("kod", EnkazIsareti.kod(kimlik(c)));
+            d.put("mesajlar", new org.json.JSONArray(p.getString("mesajlar", "[]")));
+            if (p.getInt("yanit", 0) > 0) {
+                JSONObject y = new JSONObject();
+                y.put("kod", p.getInt("yanit", 0));
+                y.put("zaman", p.getLong("yanitZaman", 0));
+                d.put("yanit", y);
+            }
             if (s != null) {
                 d.put("reklam", s.reklamDurum);
                 d.put("sonSes", s.sonSes);
@@ -182,6 +193,7 @@ public class EnkazServisi extends Service {
                 d.put("sesDuraklatBitis", s.sesDuraklatBitis);
                 d.put("sonGps", s.sonGps);
                 d.put("gpsDeneniyor", s.gpsDeneniyor);
+                d.put("mesajDinleme", s.taramaCb != null);
             }
             JSONObject k = KonumKaydi.son(c);
             if (k != null) d.put("sonKonum", k);
@@ -240,6 +252,7 @@ public class EnkazServisi extends Service {
         alarmSesiniAc();
         btDinleyiciKaydet();
         reklamBaslat();
+        mesajTaramaBaslat();
         h.post(dongu);
         // İlk ses birkaç saniye sonra (kullanıcı ekranı görsün)
         h.postDelayed(() -> sesCalSimdi(false), 3000);
@@ -294,6 +307,8 @@ public class EnkazServisi extends Service {
             if (btAlici != null) unregisterReceiver(btAlici);
         } catch (Exception ignored) {}
         btAlici = null;
+        mesajTaramaDurdur();
+        if (tts != null) try { tts.shutdown(); } catch (Exception ignored) {}
         reklamDurdur();
         torch(false);
         alarmSesiniGeriAl();
@@ -318,6 +333,7 @@ public class EnkazServisi extends Service {
             // İşaret yayılmıyorsa (Bluetooth kapalı, izin yeni verildi…) her turda yeniden dene
             if (simdi - sonReklam >= 5 * 60_000L || !"yayiliyor".equals(reklamDurum)) reklamBaslat();
             gorunurlukDenetle(simdi);
+            mesajTaramaAyarla(simdi, pil);
             guncelleBildirim();
             h.postDelayed(this, 15_000);
         }
@@ -353,7 +369,10 @@ public class EnkazServisi extends Service {
             @Override
             public void onReceive(Context c, Intent i) {
                 int st = i.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1);
-                if (st == BluetoothAdapter.STATE_ON) h.postDelayed(EnkazServisi.this::reklamBaslat, 500);
+                if (st == BluetoothAdapter.STATE_ON) {
+                    h.postDelayed(EnkazServisi.this::reklamBaslat, 500);
+                    h.postDelayed(EnkazServisi.this::mesajTaramaBaslat, 800);
+                }
                 else if (st == BluetoothAdapter.STATE_OFF) {
                     reklamDurum = "bluetooth-kapali";
                     bildir(EnkazServisi.this);
@@ -439,6 +458,9 @@ public class EnkazServisi extends Service {
         e.kat = p.getInt("kat", EnkazIsareti.KAT_YOK);
         e.pil = pil;
         e.guc = 3;
+        e.onay = p.getInt("sonMesajNo", 0);
+        e.yanit = p.getInt("yanit", 0);
+        e.yanitSayac = p.getInt("yanitSayac", 0);
         JSONObject k = KonumKaydi.son(c);
         if (k != null) {
             e.lat = k.optDouble("lat");
@@ -448,6 +470,137 @@ public class EnkazServisi extends Service {
             // (kayıttaki zaman telefon saatiyle yazılır; bkz. KonumKaydi.ekle)
         }
         return e;
+    }
+
+    // ------------------------------------------------------------------ kurtarıcı mesajları
+
+    android.bluetooth.le.ScanCallback taramaCb;
+    private android.speech.tts.TextToSpeech tts;
+    private boolean ttsHazir;
+
+    /** Enkazdaki kişi hazır bir yanıt verir: işarete eklenir (kurtarıcının telefonunda görünür) */
+    public static void yanitVer(Context c, int kod) {
+        SharedPreferences p = prefs(c);
+        p.edit().putInt("yanit", kod).putInt("yanitSayac", (p.getInt("yanitSayac", 0) + 1) & 0xFF)
+                .putLong("yanitZaman", System.currentTimeMillis()).apply();
+        yenile(c);
+    }
+
+    /**
+     * Pil %20'nin üstündeyse sürekli düşük güçte dinler; altında 2 dakikada bir 20 sn.
+     * (Kurtarıcı mesajı 3 dakika yayıldığı için kaçmaz.)
+     */
+    private void mesajTaramaAyarla(long simdi, int pil) {
+        boolean surekli = pil < 0 || pil >= 20;
+        boolean acik = surekli || (simdi / 1000) % 120 < 20;
+        if (acik && taramaCb == null) mesajTaramaBaslat();
+        else if (!acik && taramaCb != null) mesajTaramaDurdur();
+    }
+
+    @SuppressLint("MissingPermission")
+    private void mesajTaramaBaslat() {
+        if (taramaCb != null || !EnkazTarayici.izin(this)) return;
+        android.bluetooth.le.BluetoothLeScanner t = EnkazTarayici.tarayici(this);
+        if (t == null) return;
+        final int ben = kimlik(this);
+        taramaCb = new android.bluetooth.le.ScanCallback() {
+            @Override
+            public void onScanResult(int tip, android.bluetooth.le.ScanResult r) {
+                if (r.getScanRecord() == null) return;
+                int[] m = EnkazIsareti.mesajCoz(EnkazIsareti.hamdanAyikla(r.getScanRecord().getBytes(), EnkazIsareti.SIRKET)[2]);
+                if (m == null || m[0] != ben) return;
+                h.post(() -> mesajGeldi(m[1], m[2], r.getRssi()));
+            }
+        };
+        try {
+            t.startScan(EnkazTarayici.suzgec(), new android.bluetooth.le.ScanSettings.Builder()
+                    .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_POWER).build(), taramaCb);
+        } catch (Exception e) {
+            taramaCb = null;
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private void mesajTaramaDurdur() {
+        if (taramaCb == null) return;
+        try {
+            android.bluetooth.le.BluetoothLeScanner t = EnkazTarayici.tarayici(this);
+            if (t != null) t.stopScan(taramaCb);
+        } catch (Exception ignored) {}
+        taramaCb = null;
+    }
+
+    private void mesajGeldi(int no, int kod, int rssi) {
+        SharedPreferences p = prefs(this);
+        if (p.getInt("sonMesajNo", 0) == no) return; // aynı mesaj tekrar duyuldu
+        String metin = Mesajlar.mesaj(kod);
+        if (metin.isEmpty()) return;
+        try {
+            org.json.JSONArray eski = new org.json.JSONArray(p.getString("mesajlar", "[]"));
+            org.json.JSONArray yeni = new org.json.JSONArray();
+            JSONObject o = new JSONObject();
+            o.put("no", no).put("kod", kod).put("zaman", System.currentTimeMillis()).put("rssi", rssi);
+            yeni.put(o);
+            for (int i = 0; i < eski.length() && yeni.length() < 10; i++) yeni.put(eski.get(i));
+            p.edit().putString("mesajlar", yeni.toString()).putInt("sonMesajNo", no).apply();
+        } catch (Exception ignored) {}
+        // Onay hemen işarete girsin: kurtarıcı "ulaştı" görsün
+        reklamBaslat();
+        mesajDuyur(metin);
+        bildir(this);
+    }
+
+    /** Titreşim, kısa uyarı sesi, sesli okuma (Türkçe ses varsa) ve bildirim */
+    private void mesajDuyur(String metin) {
+        try {
+            android.os.Vibrator v = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (v != null) {
+                long[] desen = { 0, 400, 200, 400, 200, 800 };
+                if (Build.VERSION.SDK_INT >= 26) v.vibrate(android.os.VibrationEffect.createWaveform(desen, -1));
+                else v.vibrate(desen, -1);
+            }
+        } catch (Exception ignored) {}
+        try {
+            android.media.ToneGenerator tg = new android.media.ToneGenerator(AudioManager.STREAM_ALARM, 100);
+            tg.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 600);
+            h.postDelayed(tg::release, 900);
+        } catch (Exception ignored) {}
+        konus("Kurtarıcılardan mesaj. " + metin, 1200);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationCompat.Builder b = new NotificationCompat.Builder(this, KANAL_UYARI)
+                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setContentTitle("Kurtarıcılardan mesaj")
+                .setContentText(metin)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setAutoCancel(true)
+                .setContentIntent(uygulamayaAc(this, "enkaz", 5));
+        try {
+            nm.notify(4313, b.build());
+        } catch (Exception ignored) {}
+    }
+
+    /** Çevrimdışı Türkçe ses yüklüyse metni alarm sesi düzeyinde okur */
+    private void konus(String metin, long gecikme) {
+        h.postDelayed(() -> {
+            try {
+                if (tts == null) {
+                    tts = new android.speech.tts.TextToSpeech(this, st -> {
+                        ttsHazir = st == android.speech.tts.TextToSpeech.SUCCESS
+                                && tts.setLanguage(new java.util.Locale("tr", "TR")) >= android.speech.tts.TextToSpeech.LANG_AVAILABLE;
+                        if (ttsHazir) oku(metin);
+                    });
+                    tts.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+                } else if (ttsHazir) oku(metin);
+            } catch (Exception ignored) {}
+        }, gecikme);
+    }
+
+    private void oku(String metin) {
+        try {
+            tts.speak(metin, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "enkaz-mesaj");
+        } catch (Exception ignored) {}
     }
 
     // ------------------------------------------------------------------ SOS ses ve ışık

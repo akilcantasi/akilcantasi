@@ -143,7 +143,7 @@ export function sure(ms: number): string {
  * Enkazdan giden SMS. Kısa tutulur (Türkçe karakterli SMS 70 karakterde bölünür, şebeke zayıf):
  * önce durum, sonra bina tarifi, sonra son konum ve yaşı.
  */
-export function enkazSms(o: { ad: string; bina: Bina | null; konum: KayitliKonum | null; simdi: number }): string {
+export function enkazSms(o: { ad: string; bina: Bina | null; konum: KayitliKonum | null; simdi: number; kod?: string }): string {
   const p: string[] = ['ENKAZ ALTINDAYIM.'];
   if (o.ad.trim()) p.push(`Adım ${o.ad.trim()}.`);
   if (o.bina) {
@@ -157,11 +157,76 @@ export function enkazSms(o: { ad: string; bina: Bina | null; konum: KayitliKonum
     p.push(`Son konum: ${o.konum.lat.toFixed(5)}, ${o.konum.lon.toFixed(5)} (${acc}${sureOnce(o.simdi - o.konum.zaman)}).`);
   } else if (!o.bina) p.push('Konumum bilinmiyor.');
   p.push('Telefonum enkaz işareti ve SOS sesi veriyor.');
+  if (o.kod) p.push(`İşaret kodu: ${o.kod}.`);
   return p.join(' ');
 }
 
+// ---------------------------------------------------------------- işaret kodu ve SMS'ten hedef
+
+/** Kimlikten kısa kod: son 24 bit, "AK-34ABCD" (EnkazIsareti.kod ile aynı) */
+export function isaretKodu(kimlik: number): string {
+  return 'AK-' + (kimlik & 0xffffff).toString(16).toUpperCase().padStart(6, '0');
+}
+
+/** "ak-34abcd", "AK 34ABCD", "34abcd" → "AK-34ABCD"; değilse null */
+export function koduDuzelt(s: string): string | null {
+  const m = s.trim().match(/^(?:ak[\s-]*)?([0-9a-f]{6})$/i);
+  return m ? 'AK-' + m[1].toUpperCase() : null;
+}
+
+export interface AramaHedefi {
+  kod?: string;
+  lat?: number;
+  lon?: number;
+  ad?: string;
+  bina?: string;
+  /** SMS'teki konum yaşı ("12 dk önce") */
+  yas?: string;
+  /** Hedefin kaydedildiği an */
+  zaman: number;
+}
+
+/**
+ * Enkazdan gelen SMS metninden (ya da yalnız koddan) arama hedefi çıkarır. Kod ya da koordinat
+ * yoksa null. Başka biçimlerdeki konumlar da okunur: "39.92080, 32.85410", OpenStreetMap bağlantısı.
+ */
+export function smsCoz(metin: string, simdi = Date.now()): AramaHedefi | null {
+  const t = metin.replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  const h: AramaHedefi = { zaman: simdi };
+  const kod = t.match(/\bAK[\s-]?([0-9A-F]{6})\b/i);
+  if (kod) h.kod = 'AK-' + kod[1].toUpperCase();
+  else {
+    const yalniz = koduDuzelt(t);
+    if (yalniz) h.kod = yalniz;
+  }
+  const osm = t.match(/mlat=(-?\d+(?:\.\d+)?)&mlon=(-?\d+(?:\.\d+)?)/);
+  const duz = t.match(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+  const k = osm ?? duz;
+  if (k) {
+    const lat = Number(k[1]), lon = Number(k[2]);
+    if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+      h.lat = lat;
+      h.lon = lon;
+    }
+  }
+  const yas = t.match(/Son konum:[^(]*\(([^)]*?)\)/);
+  if (yas) h.yas = yas[1].split(',').pop()!.trim();
+  const ad = t.match(/Adım ([^.]{1,40})\./);
+  if (ad) h.ad = ad[1].trim();
+  // Bina tarifi (ve varsa not) "Son konum" / "Telefonum" / "İşaret kodu" cümlesine kadar
+  const bina = t.match(/Bina: (.*?)\.(?= Son konum:| Telefonum| İşaret kodu|$)/);
+  if (bina) h.bina = bina[1].trim();
+  return h.kod || h.lat != null ? h : null;
+}
+
+/** Duyulan işaret aranan kişi mi */
+export function hedefMi(h: AramaHedefi | null, kimlik: number): boolean {
+  return !!h?.kod && h.kod === isaretKodu(kimlik);
+}
+
 /** Arama modunda duyulan işareti 112'ye/birine bildirme metni */
-export function duyulanSms(d: { etiket?: string; kat?: number; lat?: number; lon?: number; yasDk: number; pil: number }, ben: { lat: number; lon: number } | null): string {
+export function duyulanSms(d: { etiket?: string; kod?: string; kat?: number; lat?: number; lon?: number; yasDk: number; pil: number; yanit?: number }, ben: { lat: number; lon: number } | null, yanitMetni = ''): string {
   const p: string[] = ['Enkaz altında biri olabilir: telefonundan enkaz işareti duyuluyor.'];
   if (d.etiket) p.push(`İşaret: ${d.etiket}.`);
   if (d.kat != null && !(d.etiket ?? '').includes('kat')) p.push(`Kat: ${katYazi(d.kat)}.`);
@@ -169,6 +234,8 @@ export function duyulanSms(d: { etiket?: string; kat?: number; lat?: number; lon
     p.push(`İşaretteki son konum: ${d.lat.toFixed(5)}, ${d.lon.toFixed(5)}${d.yasDk >= 0 ? ` (${sureOnce(d.yasDk * 60000)})` : ''}.`);
   if (ben) p.push(`Duyduğum yer: ${ben.lat.toFixed(5)}, ${ben.lon.toFixed(5)}.`);
   if (d.pil >= 0) p.push(`Telefon pili %${d.pil}.`);
+  if (yanitMetni) p.push(`Yanıtı: ${yanitMetni}`);
+  if (d.kod) p.push(`İşaret kodu: ${d.kod}.`);
   return p.join(' ');
 }
 

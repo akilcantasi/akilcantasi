@@ -131,3 +131,33 @@ describe('sinyal (arama modu)', () => {
     expect(sb.egilim(8000)).toBe('sabit');
   });
 });
+
+import { hedefMi, isaretKodu, koduDuzelt, smsCoz } from '../src/lib/enkaz/enkaz';
+
+describe('işaret kodu ve SMS', () => {
+  const simdi = 1_700_000_000_000;
+  it('kod biçimi Java ile aynı', () => {
+    expect(isaretKodu(0x1234abcd)).toBe('AK-34ABCD');
+    expect(isaretKodu(-1)).toBe('AK-FFFFFF');
+    expect(isaretKodu(5)).toBe('AK-000005');
+    expect(koduDuzelt('ak 34abcd')).toBe('AK-34ABCD');
+    expect(koduDuzelt('34abcd')).toBe('AK-34ABCD');
+    expect(koduDuzelt('xyz')).toBeNull();
+  });
+  it('enkaz SMS’i kodla gider ve geri okunur', () => {
+    const m = enkazSms({ ad: 'Ayşe', bina: ev, konum: { lat: 39.9208, lon: 32.8541, dogruluk: 9, zaman: simdi - 12 * 60000, kaynak: 'gps' }, simdi, kod: 'AK-34ABCD' });
+    expect(m.endsWith('İşaret kodu: AK-34ABCD.')).toBe(true);
+    const h = smsCoz(m, simdi)!;
+    expect(h).toMatchObject({ kod: 'AK-34ABCD', lat: 39.9208, lon: 32.8541, ad: 'Ayşe', yas: '12 dk önce' });
+    expect(h.bina).toBe('Örnek Mah. 5. Sokak No 3, B blok, 3. kat, daire 7. Yatak odası arka cephede');
+    expect(hedefMi(h, 0x7734abcd)).toBe(true);
+    expect(hedefMi(h, 0x1234abce)).toBe(false);
+  });
+  it('başka biçimler: yalnız kod, OSM bağlantısı, düz koordinat', () => {
+    expect(smsCoz('ak-00ff10')).toMatchObject({ kod: 'AK-00FF10' });
+    expect(smsCoz('Yardım https://www.openstreetmap.org/?mlat=41.01234&mlon=28.97654#map=17')).toMatchObject({ lat: 41.01234, lon: 28.97654 });
+    expect(smsCoz('Konum: 39.92080, 32.85410 (±12 m)')).toMatchObject({ lat: 39.9208, lon: 32.8541 });
+    expect(smsCoz('merhaba')).toBeNull();
+    expect(smsCoz('')).toBeNull();
+  });
+});

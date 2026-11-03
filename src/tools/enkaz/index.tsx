@@ -7,6 +7,7 @@ import { go } from '../../lib/store';
 import { nativeSms } from '../../lib/native';
 import { KAYNAK_CSS } from '../_kaynak/ui';
 import { nativeEnkaz, type EnkazDurum, type KayitliKonum, type KonumKaydiModu } from '../../lib/enkaz/native';
+import { ACIL_YANIT, MESAJLAR, YANITLAR } from '../../lib/enkaz/mesajlar';
 import {
   MAX_BINA,
   binaYeri,
@@ -76,6 +77,17 @@ html.reduce-motion .ek-dot { animation: none; }
 .ek-kayit { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .ek-kayit li { display: flex; justify-content: space-between; gap: 8px; color: var(--text2); }
 .ek-kayit .mono { font-size: 12.5px; }
+.ek-kod { font-size: 13px; color: var(--text2); margin: 0; }
+.ek-kod b { font-family: var(--code); letter-spacing: 0.04em; color: var(--text); font-size: 15px; }
+.ek-msj { display: flex; flex-direction: column; gap: 10px; border-color: var(--accent); }
+.ek-gelen { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+.ek-gelen b { font-size: 19px; line-height: 1.3; }
+.ek-gelen small { font-size: 12.5px; color: var(--muted); }
+.ek-eski { margin: 0; padding-left: 18px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.ek-yanitlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ek-yanitlar button { min-height: 52px; border-radius: 12px; border: 1px solid var(--line3); background: var(--bg2); color: var(--text); font-size: 13.5px; padding: 6px 8px; line-height: 1.25; text-align: left; }
+.ek-yanitlar button.acil { border-color: var(--danger); }
+.ek-yanitlar button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 `;
 
 const REKLAM_YAZI: Record<string, string> = {
@@ -183,6 +195,11 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
           {sure(simdi - (d.baslangic || simdi))}
         </span>
       </div>
+      {d.kod && (
+        <p class="ek-kod" data-testid="ek-kod">
+          İşaret kodunuz <b>{d.kod}</b> · SMS'e eklendi; kurtarıcı bu kodla sizi arar.
+        </p>
+      )}
       {d.otomatik && <p class="ek-msg">Sarsıntıdan sonra yanıt gelmediği için kendiliğinden açıldı. İyiyseniz aşağıdan kapatın.</p>}
       {!d.aktif && (
         <div class="ek-row" style="border-top:0" data-testid="ek-calismiyor">
@@ -264,6 +281,7 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
           {msg.t}
         </p>
       )}
+      <Mesajlasma d={d} simdi={simdi} />
       <GidenKutusu />
       <section class="card" style="background:var(--bg2)">
         <h2 class="kn-h">Enerjinizi koruyun</h2>
@@ -279,9 +297,55 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
   );
 }
 
+/** Kurtarıcıdan gelen hazır mesajlar ve hazır yanıtlar (Bluetooth işaretiyle) */
+function Mesajlasma({ d, simdi }: { d: EnkazDurum; simdi: number }) {
+  const [son, ...eski] = d.mesajlar ?? [];
+  const yanit = d.yanit?.kod ?? 0;
+  return (
+    <section class="card ek-msj" data-testid="ek-mesajlar">
+      <h2 class="kn-h">Kurtarıcılarla mesaj</h2>
+      {son ? (
+        <div class="ek-gelen" role="alert" data-testid="ek-gelen">
+          <small>Kurtarıcılardan · {sureOnce(simdi - son.zaman)}</small>
+          <b>{MESAJLAR[son.kod] ?? '?'}</b>
+        </div>
+      ) : (
+        <p class="kn-sub">
+          Henüz mesaj yok. Yakına gelen bir kurtarıcı uygulamadan kısa mesaj gönderebilir; gelince telefon titrer ve sesli okur.
+          {d.aktif && d.mesajDinleme === false ? " Mesajları duymak için Bluetooth açık olmalı." : ''}
+        </p>
+      )}
+      {eski.length > 0 && (
+        <ol class="ek-eski">
+          {eski.map((m) => (
+            <li key={m.no + '-' + m.zaman}>
+              {MESAJLAR[m.kod]} <span>· {sureOnce(simdi - m.zaman)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p class="kn-sub">Yanıt verin; kurtarıcının ekranında görünür:</p>
+      <div class="ek-yanitlar" role="group" aria-label="Hazır yanıtlar">
+        {YANITLAR.map((t, i) =>
+          i === 0 ? null : (
+            <button key={i} class={ACIL_YANIT.has(i) ? 'acil' : ''} aria-pressed={yanit === i} data-testid={'ek-yanit-' + i} onClick={() => nativeEnkaz.yanitVer(i)}>
+              {t}
+            </button>
+          ),
+        )}
+      </div>
+      {yanit > 0 && (
+        <p class="kn-sub" data-testid="ek-yanitim">
+          Son yanıtınız: <b>{YANITLAR[yanit]}</b> ({sureOnce(simdi - (d.yanit?.zaman ?? simdi))}). İşaretinizle yayılıyor.
+        </p>
+      )}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------- başlatma
 
-function Baslat({ binalar, ad, sonKonum, onBasladi }: { binalar: Bina[]; ad: string; sonKonum: KayitliKonum | null; onBasladi: () => void }) {
+function Baslat({ binalar, ad, sonKonum, kod, onBasladi }: { binalar: Bina[]; ad: string; sonKonum: KayitliKonum | null; kod?: string; onBasladi: () => void }) {
   const [acik, setAcik] = useState(false);
   // Kullanıcı seçmediyse: son konuma en yakın kayıtlı bina, yoksa ilki (bina sonradan eklenirse de)
   const [secim, setBinaId] = useState<string | null>(null);
@@ -292,7 +356,7 @@ function Baslat({ binalar, ad, sonKonum, onBasladi }: { binalar: Bina[]; ad: str
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const yerel = nativeEnkaz.available();
   const bina = binalar.find((b) => b.id === binaId) ?? null;
-  const metin = enkazSms({ ad, bina, konum: sonKonum, simdi: Date.now() });
+  const metin = enkazSms({ ad, bina, konum: sonKonum, simdi: Date.now(), kod: yerel ? kod : undefined });
 
   const baslat = async () => {
     const r = await nativeEnkaz.baslat(isaretEtiketi(ad, bina), bina?.kat ?? null);
@@ -711,7 +775,7 @@ export default function EnkazTool() {
         <Aktif d={d} bina={bina} ad={p.name} />
       ) : (
         <>
-          <Baslat binalar={binalar} ad={p.name} sonKonum={sonKonum} onBasladi={yenile} />
+          <Baslat binalar={binalar} ad={p.name} sonKonum={sonKonum} kod={d?.kod} onBasladi={yenile} />
           <button class="btn" data-testid="ek-arama-git" onClick={() => go.tool('enkaz-arama')}>
             Kurtarıcıysanız: enkaz arama
           </button>

@@ -38,9 +38,32 @@ Araçlar → Acil durum: **Enkaz modu** (`src/tools/enkaz`) ve **Enkaz arama** (
    - "İyi misiniz?" bildirimi; 3 dk yanıt yoksa enkaz modu açılır (yalnız işaret, ses ve ışık;
      SMS göndermez). İşarette "otomatik" bayrağı olur; kurtarıcı ekranında belirtilir.
 
+## İşaret kodu ve SMS bağlantısı
+
+Her telefonun işaret kimliğinden kısa bir kod türetilir: kimliğin son 24 biti, `AK-34ABCD`.
+Enkaz modunun SMS'inin sonuna "İşaret kodu: AK-34ABCD." eklenir. SMS'i alan yakın ya da kurtarıcı
+metni Enkaz arama → "Belirli birini mi arıyorsunuz?" alanına yapıştırır; kod, son konum, yaşı,
+ad ve bina tarifi okunur (`smsCoz`). Uzak aşama: "Haritada yön göster" (harita hedefi). Yakın
+aşama: o kodun işareti duyulunca kendiliğinden seçilir, listede en üste çıkar ("Aranan kişi").
+Uygulama SMS'leri kendisi okumaz (ayrı izin gerekir; Play Protect uyarısını büyütür).
+
+## Kurtarıcı ile kısa mesaj
+
+Bağlantı kurmadan, Bluetooth yayınıyla. Metin sığmadığı için hazır mesajların numarası gider
+(`Mesajlar.java` ve `src/lib/enkaz/mesajlar.ts`, aynı olmalı; test denetler).
+
+- Kurtarıcı (Enkaz arama → seçili işaret → "Mesaj gönder"): `AK 0x03 + hedef kimlik + mesaj no +
+  kod` 3 dakika yayılır (`EnkazTarayici.mesajGonder`).
+- Enkazdaki telefon kurtarıcı mesajlarını düşük güçte sürekli dinler (pil < %20 ise 2 dakikada
+  bir 20 sn). Kendisine gelen mesajda titrer, kısa uyarı sesi verir, Türkçe çevrimdışı ses
+  yüklüyse sesli okur, bildirim gösterir; mesaj numarasını işaretine "onay" olarak ekler.
+- Kurtarıcının ekranında onay görülünce "Ulaştı ✓".
+- Enkazdaki kişi hazır yanıtlardan birine dokunur ("Yaralıyım", "İki kişiyiz"…); yanıt kodu
+  işarete eklenir ve kurtarıcının ekranında, 112'ye bildirme SMS'inde görünür.
+
 ## BLE işaret biçimi
 
-Üretici verisi, şirket kimliği `0xFFFF` (Bluetooth SIG deneme değeri), 21 bayt:
+Üretici verisi, şirket kimliği `0xFFFF` (Bluetooth SIG deneme değeri):
 
 | bayt | içerik |
 |---|---|
@@ -53,6 +76,13 @@ Araçlar → Acil durum: **Enkaz modu** (`src/tools/enkaz`) ve **Enkaz arama** (
 | 18 | kat (işaretli; −128 bilinmiyor) |
 | 19 | doğruluk / 4 m (0xFF bilinmiyor) |
 | 20 | yayın gücü düzeyi (0–3) |
+| 21 | onaylanan son kurtarıcı mesajı numarası (0 yok) |
+| 22 | hazır yanıt kodu (0 yok) |
+| 23 | yanıt sayacı |
+
+24 bayt: 3 bayt bayrak + 4 bayt başlıkla tam 31 bayt. Eski 21 baytlık işaretler de okunur.
+
+Kurtarıcı mesajı: `A` `K` `0x03` + hedef kimlik (4) + mesaj no (1, 1–255) + mesaj kodu (1).
 
 Tarama yanıtı: `A` `K` `0x02` + UTF-8 etiket (en çok 24 bayt). Android'in ayrıştırılmış
 kaydı aynı şirket kimliğinden yalnız birini tuttuğu için ikisi ham baytlardan okunur

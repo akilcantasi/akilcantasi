@@ -344,6 +344,31 @@ public class EnkazPlugin extends Plugin {
         call.resolve(new JSObject());
     }
 
+    // ------------------------------------------------------------------ mesajlaşma
+
+    /** Enkazdaki kişinin hazır yanıtı: { kod } */
+    @PluginMethod
+    public void yanitVer(PluginCall call) {
+        EnkazServisi.yanitVer(getContext(), call.getInt("kod", 0));
+        call.resolve(new JSObject());
+    }
+
+    /** Kurtarıcı: { hedef (kimlik), kod } → { no } ya da { hata } */
+    @PluginMethod
+    public void mesajGonder(PluginCall call) {
+        int no = EnkazTarayici.mesajGonder(getContext(), call.getInt("hedef", 0), call.getInt("kod", 0));
+        JSObject r = new JSObject();
+        if (no > 0) r.put("no", no);
+        else r.put("hata", no == -1 ? "izin-yok" : no == -2 ? "bluetooth-kapali" : "hata");
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void mesajDurdur(PluginCall call) {
+        EnkazTarayici.mesajDurdur(getContext());
+        call.resolve(new JSObject());
+    }
+
     // ------------------------------------------------------------------ arama ve nöbet
 
     @PluginMethod
@@ -376,6 +401,7 @@ public class EnkazPlugin extends Plugin {
     @PluginMethod
     public void aramaDurdur(PluginCall call) {
         EnkazTarayici.aramaDurdur(getContext());
+        EnkazTarayici.mesajDurdur(getContext());
         call.resolve(new JSObject());
     }
 

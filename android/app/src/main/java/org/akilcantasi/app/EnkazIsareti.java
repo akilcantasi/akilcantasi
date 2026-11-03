@@ -19,16 +19,24 @@ import java.nio.charset.StandardCharsets;
  *   bayt 18     kat (işaretli; -128: bilinmiyor)
  *   bayt 19     konum doğruluğu / 4 m (0xFF: 1 km ve üstü ya da bilinmiyor)
  *   bayt 20     yayın gücü düzeyi (0 çok düşük … 3 yüksek)
- *   = 21 bayt (Android'in eklediği 3 baytlık bayraklarla 31 baytlık sınırın içinde)
+ *   bayt 21     son alınan kurtarıcı mesajının numarası (onay; 0: yok)
+ *   bayt 22     enkazdaki kişinin hazır yanıtı (Mesajlar.YANITLAR; 0: yok)
+ *   bayt 23     yanıt sayacı (aynı yanıt yeniden verildiğinde artar)
+ *   = 24 bayt (Android'in eklediği 3 baytlık bayraklar + 4 bayt başlıkla tam 31 bayt).
+ *   Eski 21 baytlık işaretler de okunur (son üç alan 0 sayılır).
  *
  * Tarama yanıtı (aynı şirket kimliği): 'A' 'K' 0x02 + UTF-8 etiket (en çok ETIKET_BAYT bayt),
  * örn. "Ayşe · B blok 3. kat".
+ *
+ * Kurtarıcı mesajı (kurtarıcının telefonu yayar): 'A' 'K' 0x03 + hedef kimlik (4) + mesaj
+ * numarası (1, 1–255 döner) + hazır mesaj kodu (1; Mesajlar.MESAJLAR) = 9 bayt.
  */
 public final class EnkazIsareti {
 
     public static final int SIRKET = 0xFFFF;
     public static final int SURUM = 1;
-    public static final int UZUNLUK = 21;
+    public static final int UZUNLUK = 24;
+    static final int ESKI_UZUNLUK = 21;
     public static final int ETIKET_BAYT = 24;
     public static final int KAT_YOK = -128;
 
@@ -44,6 +52,10 @@ public final class EnkazIsareti {
     /** metre; -1 bilinmiyor */
     public int dogruluk = -1;
     public int guc = 3;
+    /** Onaylanan son kurtarıcı mesajı (0: yok) */
+    public int onay = 0;
+    /** Hazır yanıt kodu (0: yok) ve sayacı */
+    public int yanit = 0, yanitSayac = 0;
 
     public boolean konumVar() {
         return !Double.isNaN(lat) && !Double.isNaN(lon);
@@ -65,12 +77,15 @@ public final class EnkazIsareti {
         b[18] = (byte) (kat == KAT_YOK ? KAT_YOK : Math.max(-127, Math.min(127, kat)));
         b[19] = (byte) (dogruluk < 0 ? 0xFF : Math.min(254, (dogruluk + 3) / 4));
         b[20] = (byte) Math.max(0, Math.min(3, guc));
+        b[21] = (byte) onay;
+        b[22] = (byte) yanit;
+        b[23] = (byte) yanitSayac;
         return b;
     }
 
     /** Geçersizse null */
     public static EnkazIsareti coz(byte[] b) {
-        if (b == null || b.length < UZUNLUK || b[0] != 'A' || b[1] != 'K') return null;
+        if (b == null || b.length < ESKI_UZUNLUK || b[0] != 'A' || b[1] != 'K') return null;
         int surum = (b[2] & 0xFF) >> 4;
         if (surum != SURUM) return null;
         EnkazIsareti e = new EnkazIsareti();
@@ -94,6 +109,11 @@ public final class EnkazIsareti {
         int d = b[19] & 0xFF;
         e.dogruluk = d == 0xFF ? -1 : d * 4;
         e.guc = b[20] & 0x03;
+        if (b.length >= UZUNLUK) {
+            e.onay = b[21] & 0xFF;
+            e.yanit = b[22] & 0xFF;
+            e.yanitSayac = b[23] & 0xFF;
+        }
         return e;
     }
 
@@ -113,14 +133,37 @@ public final class EnkazIsareti {
         return new String(b, 3, b.length - 3, StandardCharsets.UTF_8);
     }
 
+    /** Kurtarıcı mesajı: hedef kimlik, numara, kod */
+    public static byte[] mesajKodla(int hedef, int no, int kod) {
+        byte[] b = new byte[9];
+        b[0] = 'A';
+        b[1] = 'K';
+        b[2] = 3;
+        int32(b, 3, hedef);
+        b[7] = (byte) no;
+        b[8] = (byte) kod;
+        return b;
+    }
+
+    /** [hedef, numara, kod] ya da null */
+    public static int[] mesajCoz(byte[] b) {
+        if (b == null || b.length < 9 || b[0] != 'A' || b[1] != 'K' || b[2] != 3) return null;
+        return new int[] { int32(b, 3), b[7] & 0xFF, b[8] & 0xFF };
+    }
+
+    /** Ekranda ve SMS'te görünen kısa kod: kimliğin son 24 biti, "AK-3F2A9C" */
+    public static String kod(int kimlik) {
+        return String.format("AK-%06X", kimlik & 0xFFFFFF);
+    }
+
     /**
      * Ham reklam + tarama yanıtı baytlarından (ScanRecord.getBytes) bu şirket kimliğine ait tüm
      * üretici verilerini çıkarır. Android'in ayrıştırılmış kaydı aynı kimlikli iki veriden yalnız
      * birini tuttuğu için işaret ve etiket ham baytlardan okunur.
-     * Dönen dizi: [işaret ya da null, etiket baytları ya da null]
+     * Dönen dizi: [işaret, etiket, kurtarıcı mesajı] (olmayan null)
      */
     public static byte[][] hamdanAyikla(byte[] ham, int sirket) {
-        byte[][] r = new byte[2][];
+        byte[][] r = new byte[3][];
         if (ham == null) return r;
         int i = 0;
         while (i < ham.length) {
@@ -134,6 +177,7 @@ public final class EnkazIsareti {
                     System.arraycopy(ham, i + 4, v, 0, v.length);
                     if (v.length >= 3 && v[0] == 'A' && v[1] == 'K') {
                         if (v[2] == 2) r[1] = v;
+                        else if (v[2] == 3) r[2] = v;
                         else r[0] = v;
                     }
                 }

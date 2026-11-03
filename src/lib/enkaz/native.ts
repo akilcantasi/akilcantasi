@@ -43,6 +43,14 @@ export interface EnkazDurum {
   sonGps?: number;
   gpsDeneniyor?: boolean;
   sonKonum?: KayitliKonum;
+  /** İşaret kodu ("AK-34ABCD"); SMS'e eklenir, kurtarıcı aramada bununla bulur */
+  kod?: string;
+  /** Kurtarıcılardan gelen mesajlar (en yeni başta) */
+  mesajlar?: { no: number; kod: number; zaman: number; rssi: number }[];
+  /** Enkazdaki kişinin son yanıtı */
+  yanit?: { kod: number; zaman: number };
+  /** Kurtarıcı mesajlarını dinliyor mu */
+  mesajDinleme?: boolean;
   // durum() çağrısında ek alanlar
   izinler?: EnkazIzinler;
   nobet?: boolean;
@@ -65,6 +73,13 @@ export interface Duyulan {
   dogruluk: number;
   guc: number;
   etiket?: string;
+  /** "AK-34ABCD" */
+  kod?: string;
+  /** Onaylanan son kurtarıcı mesajı numarası (0 yok) */
+  onay?: number;
+  /** Enkazdaki kişinin hazır yanıtı (0 yok) ve sayacı */
+  yanit?: number;
+  yanitSayac?: number;
   /** Arama modunda: duyulduğu an; depoda: ilk/son */
   zaman?: number;
   ilk?: number;
@@ -125,6 +140,9 @@ export const nativeEnkaz = {
   sesDuraklat: (dk: number) => call('sesDuraklat', { dk }),
   gorunurOl: (etiket: string) => call<{ sn: number; ad?: string; hata?: string }>('gorunurOl', { etiket }),
   hazirlik: (etiket: string, kat: number | null) => call('hazirlik', kat == null ? { etiket } : { etiket, kat }),
+  yanitVer: (kod: number) => call('yanitVer', { kod }),
+  mesajGonder: (hedef: number, kod: number) => call<{ no?: number; hata?: string }>('mesajGonder', { hedef, kod }),
+  mesajDurdur: () => call('mesajDurdur'),
   aramaBaslat: () => call<{ basladi: boolean; hata?: string; izinler?: EnkazIzinler }>('aramaBaslat'),
   aramaDurdur: () => call('aramaDurdur'),
   duyulanlar: async () => (await call<{ liste: Duyulan[] }>('duyulanlar'))?.liste ?? [],

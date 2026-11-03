@@ -84,6 +84,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Enkaz modu: kurtarıcıdan mesaj gelince titreşim -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Paket indirme: arka planda süren indirme ve ilerleme bildirimi -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

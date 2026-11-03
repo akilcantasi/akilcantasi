@@ -143,12 +143,69 @@ public final class EnkazTarayici {
             if (e.kat != EnkazIsareti.KAT_YOK) o.put("kat", e.kat);
             o.put("dogruluk", e.dogruluk);
             o.put("guc", e.guc);
+            o.put("kod", EnkazIsareti.kod(e.kimlik));
+            o.put("onay", e.onay);
+            o.put("yanit", e.yanit);
+            o.put("yanitSayac", e.yanitSayac);
             String et = EnkazIsareti.etiketCoz(ay[1]);
             if (et != null) o.put("etiket", et);
             return o;
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    // ------------------------------------------------------------------ kurtarıcı mesajı gönderme
+
+    private static android.bluetooth.le.AdvertiseCallback mesajCb;
+    private static final android.os.Handler ANA = new android.os.Handler(android.os.Looper.getMainLooper());
+    private static final Runnable MESAJ_BITIR = () -> mesajDurdur(null);
+    static final long MESAJ_SURE_MS = 3 * 60_000L;
+
+    /**
+     * Hazır mesajı hedef işarete 3 dakika boyunca yayar (enkazdaki telefon düşük güçte dinler;
+     * pili azsa 2 dakikada bir 20 sn). Yeni mesaj öncekinin yerini alır. → mesaj numarası ya da
+     * hata için negatif (-1 izin, -2 Bluetooth kapalı/desteklenmiyor, -3 hata)
+     */
+    @SuppressLint("MissingPermission")
+    static synchronized int mesajGonder(Context c, int hedef, int kod) {
+        if (Build.VERSION.SDK_INT >= 31
+                && ContextCompat.checkSelfPermission(c, Manifest.permission.BLUETOOTH_ADVERTISE) != PackageManager.PERMISSION_GRANTED) return -1;
+        BluetoothAdapter a = EnkazBluetoothAdi.adaptor(c);
+        android.bluetooth.le.BluetoothLeAdvertiser adv = a == null || !a.isEnabled() ? null : a.getBluetoothLeAdvertiser();
+        if (adv == null) return -2;
+        mesajDurdur(c);
+        SharedPreferences sp = p(c);
+        int no = sp.getInt("mesajNo", 0) % 255 + 1;
+        sp.edit().putInt("mesajNo", no).apply();
+        android.bluetooth.le.AdvertiseSettings ayar = new android.bluetooth.le.AdvertiseSettings.Builder()
+                .setAdvertiseMode(android.bluetooth.le.AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                .setTxPowerLevel(android.bluetooth.le.AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+                .setConnectable(false).setTimeout(0).build();
+        android.bluetooth.le.AdvertiseData veri = new android.bluetooth.le.AdvertiseData.Builder()
+                .addManufacturerData(EnkazIsareti.SIRKET, EnkazIsareti.mesajKodla(hedef, no, kod)).build();
+        mesajCb = new android.bluetooth.le.AdvertiseCallback() {};
+        try {
+            adv.startAdvertising(ayar, veri, mesajCb);
+        } catch (Exception e) {
+            mesajCb = null;
+            return -3;
+        }
+        mesajReklamci = adv;
+        ANA.removeCallbacks(MESAJ_BITIR);
+        ANA.postDelayed(MESAJ_BITIR, MESAJ_SURE_MS);
+        return no;
+    }
+
+    private static android.bluetooth.le.BluetoothLeAdvertiser mesajReklamci;
+
+    @SuppressLint("MissingPermission")
+    static synchronized void mesajDurdur(Context c) {
+        ANA.removeCallbacks(MESAJ_BITIR);
+        try {
+            if (mesajReklamci != null && mesajCb != null) mesajReklamci.stopAdvertising(mesajCb);
+        } catch (Exception ignored) {}
+        mesajCb = null;
     }
 
     // ------------------------------------------------------------------ duyulanlar deposu

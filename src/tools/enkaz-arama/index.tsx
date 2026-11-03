@@ -5,7 +5,23 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { go } from '../../lib/store';
 import { KAYNAK_CSS } from '../_kaynak/ui';
 import { nativeEnkaz, type Duyulan } from '../../lib/enkaz/native';
-import { SinyalIzi, duyulanSms, katYazi, mesafeTahmini, sureOnce, yakinlik, yakinlikYazi, type Egilim } from '../../lib/enkaz/enkaz';
+import {
+  SinyalIzi,
+  duyulanSms,
+  hedefMi,
+  isaretKodu,
+  katYazi,
+  mesafeTahmini,
+  smsCoz,
+  sureOnce,
+  yakinlik,
+  yakinlikYazi,
+  type AramaHedefi,
+  type Egilim,
+} from '../../lib/enkaz/enkaz';
+import { ACIL_YANIT, MESAJLAR, YANITLAR } from '../../lib/enkaz/mesajlar';
+import { bearingDeg, compassLong, distanceM, formatDistance } from '../../lib/map/geo';
+import { setNavTarget } from '../../lib/map/nav';
 import { isIOS, smsHref } from '../../iletisim/sms';
 import { quickPosition } from '../../iletisim/common';
 
@@ -31,7 +47,162 @@ const CSS = `
 .ea-kv dd { margin: 0; overflow-wrap: anywhere; }
 .ea-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .ea-btns > * { flex: 1 1 140px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.ea-hedef { display: flex; flex-direction: column; gap: 8px; border-color: var(--blue); }
+.ea-hedef textarea { min-height: 84px; resize: vertical; }
+.ea-aranan { display: inline-block; font-size: 12px; font-weight: 600; color: #04210f; background: var(--ok); border-radius: 999px; padding: 2px 8px; }
+.ea-yanit { border-radius: 12px; padding: 10px 12px; background: var(--bg2); border: 1px solid var(--line3); font-size: 15px; }
+.ea-yanit.acil { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.ea-msjlar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ea-msjlar button { min-height: 48px; border-radius: 12px; border: 1px solid var(--line3); background: var(--bg2); color: var(--text); font-size: 13px; padding: 6px 8px; line-height: 1.25; text-align: left; }
+.ea-msjlar button[aria-pressed='true'] { border-color: var(--accent); background: var(--accent-soft); }
+.ea-durum { font-size: 13px; margin: 0; }
+.ea-durum.ok { color: var(--ok); font-weight: 600; }
 `;
+
+const HEDEF_KEY = 'ac.enkaz.hedef';
+
+function hedefOku(): AramaHedefi | null {
+  try {
+    const o = JSON.parse(localStorage.getItem(HEDEF_KEY) || 'null');
+    return o && (o.kod || Number.isFinite(o.lat)) ? o : null;
+  } catch {
+    return null;
+  }
+}
+
+function hedefYaz(h: AramaHedefi | null) {
+  try {
+    if (h) localStorage.setItem(HEDEF_KEY, JSON.stringify(h));
+    else localStorage.removeItem(HEDEF_KEY);
+  } catch {}
+}
+
+/** Aranan kişi: enkazdan gelen SMS'i yapıştırınca kod, konum ve bina çıkarılır */
+function Hedef({ h, setH, ben, duyuluyor }: { h: AramaHedefi | null; setH: (h: AramaHedefi | null) => void; ben: { lat: number; lon: number } | null; duyuluyor: boolean }) {
+  const [metin, setMetin] = useState('');
+  const [hata, setHata] = useState('');
+  const [acik, setAcik] = useState(false);
+  if (!h)
+    return acik ? (
+      <section class="card ea-hedef" data-testid="ea-hedef-form">
+        <b>Aranan kişi</b>
+        <p class="kn-sub">Enkazdaki kişiden gelen SMS'i ya da işaret kodunu (ör. AK-34ABCD) yapıştırın. Kod, konum ve bina bilgisi kendiliğinden okunur.</p>
+        <textarea class="input" value={metin} data-testid="ea-hedef-metin" onInput={(e) => setMetin((e.target as HTMLTextAreaElement).value)} placeholder="ENKAZ ALTINDAYIM. … İşaret kodu: AK-…" />
+        {hata && <p class="kn-sub" style="color:var(--danger)">{hata}</p>}
+        <div class="ea-btns">
+          <button
+            class="btn primary"
+            data-testid="ea-hedef-ekle"
+            onClick={() => {
+              const x = smsCoz(metin);
+              if (!x) return setHata('Bu metinde işaret kodu ya da koordinat bulunamadı.');
+              setH(x);
+              setMetin('');
+              setHata('');
+            }}
+          >
+            Ekle
+          </button>
+          <button class="btn" onClick={() => setAcik(false)}>
+            Vazgeç
+          </button>
+        </div>
+      </section>
+    ) : (
+      <button class="btn" data-testid="ea-hedef-ac" onClick={() => setAcik(true)}>
+        Belirli birini mi arıyorsunuz? SMS'ini yapıştırın
+      </button>
+    );
+  const konumVar = h.lat != null && h.lon != null;
+  const uzak = konumVar && ben ? distanceM(ben, { lat: h.lat!, lon: h.lon! }) : null;
+  return (
+    <section class="card ea-hedef" data-testid="ea-hedef">
+      <div class="row">
+        <b class="grow">Aranan kişi{h.ad ? `: ${h.ad}` : ''}</b>
+        {duyuluyor && <span class="ea-aranan">işareti duyuluyor</span>}
+      </div>
+      <dl class="ea-kv">
+        {h.kod && (
+          <>
+            <dt>İşaret kodu</dt>
+            <dd class="mono">{h.kod}</dd>
+          </>
+        )}
+        {h.bina && (
+          <>
+            <dt>Bina</dt>
+            <dd>{h.bina}</dd>
+          </>
+        )}
+        {konumVar && (
+          <>
+            <dt>Son konumu</dt>
+            <dd class="mono">
+              {h.lat!.toFixed(5)}, {h.lon!.toFixed(5)}
+              {h.yas ? ` (${h.yas}, SMS'teki haliyle)` : ''}
+            </dd>
+          </>
+        )}
+        {uzak != null && (
+          <>
+            <dt>Size göre</dt>
+            <dd data-testid="ea-hedef-uzaklik">
+              {formatDistance(uzak)} · {compassLong(bearingDeg(ben!, { lat: h.lat!, lon: h.lon! }))} yönünde
+            </dd>
+          </>
+        )}
+      </dl>
+      <p class="kn-sub">{duyuluyor ? 'İşareti duyuluyor: aşağıdaki göstergeyle yaklaşın.' : konumVar ? 'Önce haritayla bu noktaya gidin; yaklaşınca işareti burada duyulur ve kendiliğinden seçilir.' : 'İşareti duyulunca kendiliğinden seçilir.'}</p>
+      <div class="ea-btns">
+        {konumVar && (
+          <button
+            class="btn primary"
+            data-testid="ea-hedef-harita"
+            onClick={() => {
+              setNavTarget({ kind: 'coord', name: `Enkaz${h.ad ? ' · ' + h.ad : ''}${h.kod ? ' · ' + h.kod : ''}`, lat: h.lat!, lon: h.lon! });
+              go.tab('harita');
+            }}
+          >
+            Haritada yön göster
+          </button>
+        )}
+        <button class="btn" data-testid="ea-hedef-sil" onClick={() => setH(null)}>
+          Kaldır
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/** Seçili işarete hazır mesaj gönderir; ulaştığını işaretteki onaydan anlar */
+function MesajGonder({ d, gonderilen, gonder }: { d: Duyulan; gonderilen: { no: number; kod: number; zaman: number } | null; gonder: (kod: number) => void }) {
+  const simdi = Date.now();
+  const ulasti = !!gonderilen && d.onay === gonderilen.no;
+  const suruyor = !!gonderilen && !ulasti && simdi - gonderilen.zaman < 3 * 60000;
+  return (
+    <div class="col" style="gap:8px" data-testid="ea-mesaj">
+      <b style="font-size:15px">Mesaj gönder</b>
+      <div class="ea-msjlar" role="group" aria-label="Hazır mesajlar">
+        {MESAJLAR.map((t, i) =>
+          i === 0 ? null : (
+            <button key={i} aria-pressed={gonderilen?.kod === i} data-testid={'ea-msj-' + i} onClick={() => gonder(i)}>
+              {t}
+            </button>
+          ),
+        )}
+      </div>
+      {gonderilen && (
+        <p class={'ea-durum' + (ulasti ? ' ok' : '')} data-testid="ea-msj-durum">
+          {ulasti
+            ? `✓ Ulaştı: "${MESAJLAR[gonderilen.kod]}" (telefonu titredi ve sesli okudu)`
+            : suruyor
+              ? `Gönderiliyor: "${MESAJLAR[gonderilen.kod]}"… 3 dakika boyunca yayılır.`
+              : 'Ulaştığı görülmedi. Daha yaklaşıp yeniden gönderin.'}
+        </p>
+      )}
+    </div>
+  );
+}
 
 const EGILIM_YAZI: Record<Egilim, string> = {
   yaklasiyor: '↑ Yaklaşıyorsunuz',
@@ -103,6 +274,16 @@ export default function EnkazArama() {
   const [, tik] = useState(0);
   const izler = useRef(new Map<number, SinyalIzi>());
   const [ben, setBen] = useState<{ lat: number; lon: number } | null>(null);
+  const [hedef, setHedefS] = useState<AramaHedefi | null>(() => hedefOku());
+  const setHedef = (h: AramaHedefi | null) => {
+    setHedefS(h);
+    hedefYaz(h);
+  };
+  const hedefRef = useRef(hedef);
+  hedefRef.current = hedef;
+  /** kimlik → son gönderilen mesaj */
+  const [gonderilen, setGonderilen] = useState<Map<number, { no: number; kod: number; zaman: number }>>(new Map());
+  const [msjHata, setMsjHata] = useState('');
 
   const baslat = async () => {
     const r = await nativeEnkaz.aramaBaslat();
@@ -130,7 +311,8 @@ export default function EnkazArama() {
       if (!iz) izler.current.set(d.kimlik, (iz = new SinyalIzi()));
       iz.ekle(d.rssi, t);
       setCanli((m) => new Map(m).set(d.kimlik, { ...d, zaman: t }));
-      setSecili((s) => s ?? d.kimlik);
+      // Aranan kişinin işareti duyulunca kendiliğinden seçilir
+      setSecili((s) => (hedefMi(hedefRef.current, d.kimlik) ? d.kimlik : (s ?? d.kimlik)));
     });
     void baslat();
     quickPosition(10000).then((p) => p && setBen({ lat: p.lat, lon: p.lon }));
@@ -144,7 +326,15 @@ export default function EnkazArama() {
 
   const simdi = Date.now();
   // 10 sn'dir duyulmayan işaret "kayıp" sayılır
-  const liste = [...canli.values()].sort((a, b) => b.rssi - a.rssi);
+  // Aranan kişi en üstte, sonra sinyal gücüne göre
+  const liste = [...canli.values()].sort((a, b) => Number(hedefMi(hedef, b.kimlik)) - Number(hedefMi(hedef, a.kimlik)) || b.rssi - a.rssi);
+  const hedefDuyuluyor = liste.some((d) => hedefMi(hedef, d.kimlik) && simdi - (d.zaman ?? 0) < 10000);
+  const gonder = async (kimlik: number, kod: number) => {
+    setMsjHata('');
+    const r = await nativeEnkaz.mesajGonder(kimlik, kod);
+    if (r?.no) setGonderilen((m) => new Map(m).set(kimlik, { no: r.no!, kod, zaman: Date.now() }));
+    else setMsjHata(r?.hata === 'bluetooth-kapali' ? "Bluetooth kapalı." : r?.hata === 'izin-yok' ? 'Bluetooth izni gerekli.' : 'Gönderilemedi.');
+  };
   const sec = secili != null ? canli.get(secili) : undefined;
   const iz = secili != null ? izler.current.get(secili) : undefined;
   const taze = sec && simdi - (sec.zaman ?? 0) < 10000;
@@ -180,6 +370,7 @@ export default function EnkazArama() {
           </button>
         </section>
       )}
+      <Hedef h={hedef} setH={setHedef} ben={ben} duyuluyor={hedefDuyuluyor} />
       {durum !== 'hata' && !liste.length && (
         <section class="card kn-form" data-testid="ea-bos">
           <b>İşaret aranıyor…</b>
@@ -191,7 +382,8 @@ export default function EnkazArama() {
       {sec && (
         <section class="card ea-meter" data-testid="ea-gosterge" aria-live="polite">
           <div class="row">
-            <b class="grow" style="font-size:16px">{sec.etiket || `İşaret #${(sec.kimlik >>> 0).toString(16).slice(-4)}`}</b>
+            <b class="grow" style="font-size:16px">{sec.etiket || isaretKodu(sec.kimlik)}</b>
+            {hedefMi(hedef, sec.kimlik) && <span class="ea-aranan">Aranan kişi</span>}
             <span class="tag">{taze ? 'duyuluyor' : 'kayboldu'}</span>
           </div>
           <div class="ea-big" data-testid="ea-yakinlik">
@@ -206,7 +398,14 @@ export default function EnkazArama() {
           <p class="kn-sub">
             Kabaca {ort != null ? `${Math.round(mesafeTahmini(ort, sec.guc))} m` : '?'} (beton ve moloz bunu büyük ölçüde değiştirir; yönü yaklaşma/uzaklaşmadan bulun). Sinyal {ort != null ? Math.round(ort) : '?'} dBm.
           </p>
+          {(sec.yanit ?? 0) > 0 && (
+            <div class={'ea-yanit' + (ACIL_YANIT.has(sec.yanit!) ? ' acil' : '')} data-testid="ea-yanit">
+              Enkazdaki kişinin yanıtı: <b>{YANITLAR[sec.yanit!] ?? '?'}</b>
+            </div>
+          )}
           <dl class="ea-kv">
+            <dt>İşaret kodu</dt>
+            <dd class="mono">{isaretKodu(sec.kimlik)}</dd>
             {sec.kat != null && (
               <>
                 <dt>Kat</dt>
@@ -235,11 +434,13 @@ export default function EnkazArama() {
               </>
             )}
           </dl>
+          <MesajGonder d={sec} gonderilen={gonderilen.get(sec.kimlik) ?? null} gonder={(k) => gonder(sec.kimlik, k)} />
+          {msjHata && <p class="ea-durum" style="color:var(--danger)">{msjHata}</p>}
           <div class="ea-btns">
             <button class="btn" aria-pressed={bip} data-testid="ea-bip" onClick={() => setBip(!bip)}>
               {bip ? 'Bipi kapat' : 'Sesli ipucu (bip)'}
             </button>
-            <a class="btn primary" data-testid="ea-sms" href={smsHref('112', duyulanSms(sec, ben), isIOS())}>
+            <a class="btn primary" data-testid="ea-sms" href={smsHref('112', duyulanSms({ ...sec, kod: isaretKodu(sec.kimlik) }, ben, (sec.yanit ?? 0) > 0 ? YANITLAR[sec.yanit!] : ''), isIOS())}>
               112'ye SMS ile bildir
             </a>
             <a class="btn" href="tel:112">
@@ -256,9 +457,11 @@ export default function EnkazArama() {
               <button key={d.kimlik} class="ea-item" aria-pressed={d.kimlik === secili} data-testid="ea-item" onClick={() => setSecili(d.kimlik)}>
                 <Cubuk rssi={izler.current.get(d.kimlik)?.ort ?? d.rssi} />
                 <span class="t">
-                  <b>{d.etiket || `İşaret #${(d.kimlik >>> 0).toString(16).slice(-4)}`}</b>
+                  <b>{d.etiket || isaretKodu(d.kimlik)}</b>
                   <small>
+                    {hedefMi(hedef, d.kimlik) ? 'Aranan kişi · ' : ''}
                     {yakinlikYazi(izler.current.get(d.kimlik)?.ort ?? d.rssi)} · {sureOnce(simdi - (d.zaman ?? simdi))}
+                    {(d.yanit ?? 0) > 0 ? ` · "${YANITLAR[d.yanit!]}"` : ''}
                   </small>
                 </span>
               </button>
@@ -284,7 +487,7 @@ export default function EnkazArama() {
             {gecmis.map((d) => (
               <div key={d.kimlik} class="ea-item">
                 <span class="t">
-                  <b>{d.etiket || `İşaret #${(d.kimlik >>> 0).toString(16).slice(-4)}`}</b>
+                  <b>{d.etiket || isaretKodu(d.kimlik)}</b>
                   <small>
                     Son duyuluş {sureOnce(simdi - (d.son ?? simdi))} · {d.sayi ?? 1} kez
                     {d.duyulanYer ? ` · duyulduğu yer ${d.duyulanYer.lat.toFixed(4)}, ${d.duyulanYer.lon.toFixed(4)}` : ''}

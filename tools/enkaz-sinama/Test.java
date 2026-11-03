@@ -84,7 +84,7 @@ public class Test {
         EnkazIsareti e = new EnkazIsareti();
         e.kimlik = 0x1234ABCD; e.lat = 39.9208; e.lon = 32.8541; e.yasDk = 42; e.pil = 67; e.kat = 3; e.dogruluk = 9; e.guc = 3; e.otomatik = true;
         byte[] b = e.kodla();
-        ok(b.length == EnkazIsareti.UZUNLUK, "uzunluk 21");
+        ok(b.length == 24, "uzunluk 24 (3 bayt bayrak + 4 bayt başlıkla 31)");
         EnkazIsareti c = EnkazIsareti.coz(b);
         ok(c != null && c.kimlik == 0x1234ABCD, "kimlik");
         ok(Math.abs(c.lat - 39.9208) < 1e-6 && Math.abs(c.lon - 32.8541) < 1e-6, "konum");
@@ -110,6 +110,19 @@ public class Test {
         ok(EnkazIsareti.coz(surum) == null, "bilinmeyen sürüm null");
         ok(EnkazIsareti.coz(new byte[5]) == null, "kısa veri null");
 
+        // Mesajlaşma alanları ve eski 21 baytlık işaret
+        e.onay = 7; e.yanit = 3; e.yanitSayac = 200;
+        EnkazIsareti m = EnkazIsareti.coz(e.kodla());
+        ok(m.onay == 7 && m.yanit == 3 && m.yanitSayac == 200, "onay ve yanıt");
+        byte[] eski = java.util.Arrays.copyOf(e.kodla(), 21);
+        EnkazIsareti ec = EnkazIsareti.coz(eski);
+        ok(ec != null && ec.kimlik == e.kimlik && ec.onay == 0 && ec.yanit == 0, "eski 21 baytlık işaret okunur");
+        byte[] msj = EnkazIsareti.mesajKodla(0x1234ABCD, 255, 4);
+        int[] mc = EnkazIsareti.mesajCoz(msj);
+        ok(mc != null && mc[0] == 0x1234ABCD && mc[1] == 255 && mc[2] == 4, "kurtarıcı mesajı");
+        ok(EnkazIsareti.coz(msj) == null && EnkazIsareti.mesajCoz(e.kodla()) == null, "mesaj ve işaret karışmaz");
+        ok(EnkazIsareti.kod(0x1234ABCD).equals("AK-34ABCD") && EnkazIsareti.kod(-1).equals("AK-FFFFFF"), "işaret kodu");
+
         String uzun = "Ayşe Yılmaz · B blok 3. kat daire 12 arka cephe";
         byte[] t = EnkazIsareti.etiketKodla(uzun);
         ok(t.length <= 3 + EnkazIsareti.ETIKET_BAYT, "etiket sınırı");
@@ -129,6 +142,12 @@ public class Test {
         byte[][] ay = EnkazIsareti.hamdanAyikla(ham.toByteArray(), EnkazIsareti.SIRKET);
         ok(ay[0] != null && EnkazIsareti.coz(ay[0]).kimlik == e.kimlik, "hamdan işaret");
         ok("Ayşe · 3. kat".equals(EnkazIsareti.etiketCoz(ay[1])), "hamdan etiket");
+        java.io.ByteArrayOutputStream h2 = new java.io.ByteArrayOutputStream();
+        h2.write(new byte[] {2, 1, 6}, 0, 3);
+        byte[] ms = EnkazIsareti.mesajKodla(5, 1, 2);
+        h2.write(ms.length + 3); h2.write(0xFF); h2.write(0xFF); h2.write(0xFF); h2.write(ms, 0, ms.length);
+        byte[][] ay2 = EnkazIsareti.hamdanAyikla(h2.toByteArray(), EnkazIsareti.SIRKET);
+        ok(ay2[0] == null && ay2[2] != null && EnkazIsareti.mesajCoz(ay2[2])[0] == 5, "hamdan kurtarıcı mesajı");
         byte[] baska = {5, (byte) 0xFF, 0x4C, 0x00, 'A', 'K'};
         ok(EnkazIsareti.hamdanAyikla(baska, EnkazIsareti.SIRKET)[0] == null, "başka şirket kimliği yok sayılır");
         byte[] kesik = {30, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF, 'A', 'K', 0x11};

@@ -88,7 +88,7 @@ function kopru() {
   window.__calls = [];
   const log = (m, a) => window.__calls.push([m, a]);
   const izinler = { konum: 'tam', arkaPlanKonum: false, bluetooth: true, bluetoothVar: true, bluetoothAcik: true, bildirim: true, pilMuaf: false, sdk: 34 };
-  const st = { aktif: false, istenen: false, otomatik: false, etiket: '', kat: -128, kimlik: 77, baslangic: 0, pil: 64, sesAraligiSn: 60, bluetoothAdi: false, gorunurBitis: 0, nobet: false, sarsinti: false, konumKaydiModu: 'kapali', izinler,
+  const st = { aktif: false, istenen: false, otomatik: false, etiket: '', kat: -128, kimlik: 77, kod: 'AK-00004D', mesajlar: [], mesajDinleme: true, baslangic: 0, pil: 64, sesAraligiSn: 60, bluetoothAdi: false, gorunurBitis: 0, nobet: false, sarsinti: false, konumKaydiModu: 'kapali', izinler,
     sonKonum: { lat: 39.92085, lon: 32.85405, dogruluk: 12, zaman: Date.now() - 25 * 60000, kaynak: 'arka-plan' } };
   window.__st = st;
   const durum = () => JSON.parse(JSON.stringify(st));
@@ -110,6 +110,9 @@ function kopru() {
         async baslat(a) { log('baslat', a); Object.assign(st, { aktif: true, istenen: true, etiket: a.etiket, kat: a.kat ?? -128, baslangic: Date.now() - 65000, reklam: 'baslamadi' }); setTimeout(() => { st.reklam = 'yayiliyor'; st.sonSes = Date.now() - 20000; emit('enkazDurum', durum()); }, 300); return { izinler }; },
         async durdur() { log('durdur'); Object.assign(st, { aktif: false, istenen: false }); emit('enkazDurum', durum()); return {}; },
         async sesCal() { log('sesCal'); return {}; },
+        async yanitVer(a) { log('yanitVer', a); st.yanit = { kod: a.kod, zaman: Date.now() }; setTimeout(() => emit('enkazDurum', durum()), 10); return {}; },
+        async mesajGonder(a) { log('mesajGonder', a); window.__msjNo = (window.__msjNo || 0) + 1; return { no: window.__msjNo }; },
+        async mesajDurdur() { log('mesajDurdur'); return {}; },
         async sesDuraklat(a) { log('sesDuraklat', a); st.sesDuraklatBitis = a.dk ? Date.now() + a.dk * 60000 : 0; emit('enkazDurum', durum()); return {}; },
         async gorunurOl(a) { log('gorunurOl', a); st.gorunurBitis = Date.now() + 3600000; setTimeout(() => emit('enkazDurum', durum()), 10); return { sn: 3600, ad: 'ENKAZ · ' + a.etiket }; },
         async hazirlik(a) { log('hazirlik', a); return {}; },
@@ -174,6 +177,7 @@ function kopru() {
     assert.deepEqual(sms[0].to, ['112']);
     assert.deepEqual(sms[1].to, ['05550000000']);
     assert.match(sms[0].body, /^ENKAZ ALTINDAYIM\. Adım Ayşe Yılmaz\./);
+    assert.match(sms[0].body, /İşaret kodu: AK-00004D\.$/);
   });
   await step('Açık ekran: işaret, ses, görünürlük', async () => {
     await p.waitForFunction(() => /Yakındaki uygulamalı telefonlar sizi duyabilir/.test(document.querySelector('[data-testid="ek-live"]')?.textContent || ''));
@@ -185,6 +189,17 @@ function kopru() {
     await p.waitForFunction(() => /"ENKAZ" adıyla görünüyorsunuz/.test(document.querySelector('[data-testid="ek-live"]')?.textContent || ''));
     assert.equal((await calls('sesCal')).length, 1);
     await p.screenshot({ path: SHOTS + '/4-acik.png', fullPage: true });
+  });
+  await step('Mesajlaşma: kod görünür, gelen mesaj, hazır yanıt', async () => {
+    assert.match(await p.textContent(tid('ek-kod')), /AK-00004D/);
+    await p.evaluate(() => { window.__st.mesajlar = [{ no: 1, kod: 1, zaman: Date.now() - 30000, rssi: -70 }]; window.__emit('enkazDurum', JSON.parse(JSON.stringify(window.__st))); });
+    await p.waitForSelector(tid('ek-gelen'));
+    assert.match(await p.textContent(tid('ek-gelen')), /Sesini duyduk, geliyoruz\./);
+    await p.click(tid('ek-yanit-3'));
+    await p.waitForSelector(tid('ek-yanitim'));
+    assert.deepEqual(await calls('yanitVer'), [{ kod: 3 }]);
+    assert.equal(await p.getAttribute(tid('ek-yanit-3'), 'aria-pressed'), 'true');
+    await p.locator(tid('ek-mesajlar')).screenshot({ path: SHOTS + '/4b-mesajlar.png' });
   });
   await step('Kapatma 2 sn basılı tutmayla; kısa dokunuş kapatmaz', async () => {
     await p.click(tid('ek-kapat'));
@@ -201,18 +216,40 @@ function kopru() {
   await step('Enkaz arama: işaret yaklaşırken gösterge ve SMS', async () => {
     await p.click(tid('ek-arama-git'));
     await p.waitForSelector(tid('ea-bos'));
+    // Aranan kişi: gelen SMS yapıştırılır (kimlik 5 → AK-000005)
+    await p.click(tid('ea-hedef-ac'));
+    await p.fill(tid('ea-hedef-metin'), 'ENKAZ ALTINDAYIM. Adım Ayşe. Bina: Örnek Mah. 5. Sokak No 3, B blok, 3. kat. Son konum: 39.92085, 32.85405 (±12 m, 25 dk önce). Telefonum enkaz işareti ve SOS sesi veriyor. İşaret kodu: AK-000005.');
+    await p.click(tid('ea-hedef-ekle'));
+    await p.waitForSelector(tid('ea-hedef'));
+    assert.match(await p.textContent(tid('ea-hedef')), /AK-000005/);
+    assert.match(await p.textContent(tid('ea-hedef')), /Örnek Mah\. 5\. Sokak No 3, B blok, 3\. kat/);
     for (let i = 0; i < 16; i++) {
       await p.evaluate((r) => window.__emit('enkazDuyuldu', { kimlik: 5, rssi: r, enkaz: true, otomatik: false, lat: 39.92085, lon: 32.85405, yasDk: 25, pil: 64, kat: 3, dogruluk: 12, guc: 3, etiket: 'Ayşe · B blok 3. kat D:7' }), -88 + i * 2);
-      await p.evaluate((r) => window.__emit('enkazDuyuldu', { kimlik: 6, rssi: r, enkaz: true, otomatik: true, yasDk: -1, pil: 12, dogruluk: -1, guc: 3 }), -92);
+      await p.evaluate((r) => window.__emit('enkazDuyuldu', { kimlik: 6, rssi: r, enkaz: true, otomatik: true, yasDk: -1, pil: 12, dogruluk: -1, guc: 3 }), -60);
       await p.waitForTimeout(400);
     }
     await p.waitForSelector(tid('ea-gosterge'));
     assert.match(await p.textContent(tid('ea-egilim')), /Yaklaşıyorsunuz/);
     assert.match(await p.textContent(tid('ea-yakinlik')), /Çok yakın|Yakın/);
     assert.equal(await p.locator(tid('ea-item')).count(), 2);
+    // Aranan kişi daha zayıf duyulsa da seçili ve listede en üstte
+    assert.match(await p.textContent(tid('ea-gosterge')), /Aranan kişi/);
+    assert.match(await p.textContent(tid('ea-item') + ' >> nth=0'), /Aranan kişi/);
+    assert.match(await p.textContent(tid('ea-hedef')), /işareti duyuluyor/);
     const href = await p.getAttribute(tid('ea-sms'), 'href');
     assert.match(decodeURIComponent(href), /İşaret: Ayşe · B blok 3\. kat D:7\./);
     assert.match(await p.textContent(tid('ea-gecmis')), /Mehmet/);
+    // Mesaj gönder → işaret onaylar → ulaştı; yanıt görünür
+    await p.click(tid('ea-msj-1'));
+    await p.waitForFunction(() => /Gönderiliyor/.test(document.querySelector('[data-testid="ea-msj-durum"]')?.textContent || ''));
+    const gm = await p.evaluate(() => window.__calls.filter((c) => c[0] === 'mesajGonder').map((c) => c[1]));
+    assert.deepEqual(gm, [{ hedef: 5, kod: 1 }]);
+    await p.evaluate(() => window.__emit('enkazDuyuldu', { kimlik: 5, rssi: -58, enkaz: true, otomatik: false, lat: 39.92085, lon: 32.85405, yasDk: 25, pil: 64, kat: 3, dogruluk: 12, guc: 3, etiket: 'Ayşe · B blok 3. kat D:7', onay: 1, yanit: 3, yanitSayac: 1 }));
+    await p.waitForFunction(() => /Ulaştı/.test(document.querySelector('[data-testid="ea-msj-durum"]')?.textContent || ''));
+    assert.match(await p.textContent(tid('ea-yanit')), /Yaralıyım/);
+    const sms112 = decodeURIComponent(await p.getAttribute(tid('ea-sms'), 'href'));
+    assert.match(sms112, /Yanıtı: Yaralıyım\./);
+    assert.match(sms112, /İşaret kodu: AK-000005\./);
     await p.screenshot({ path: SHOTS + '/5-arama.png', fullPage: true });
   });
   await step('Aramadan çıkınca tarama durur', async () => {
