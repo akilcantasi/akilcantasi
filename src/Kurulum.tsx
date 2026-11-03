@@ -13,7 +13,7 @@ const GB = 1024 ** 3;
 
 const CSS = `
 .ku { position: fixed; inset: 0; z-index: 60; background: radial-gradient(130% 55% at 50% -12%, rgba(245,165,36,0.16), rgba(245,165,36,0) 62%), var(--bg); overflow-y: auto; }
-.ku-in { max-width: 640px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 18px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.ku-in { max-width: 640px; margin: 0 auto; padding: calc(24px + var(--sa-top)) 18px calc(28px + var(--sa-bottom)); display: flex; flex-direction: column; gap: 16px; }
 .ku-hero { display: flex; flex-direction: column; gap: 6px; }
 .ku-logo { border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.3); margin-bottom: 6px; }
 .ku-hero h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }

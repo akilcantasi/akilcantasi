@@ -100,7 +100,7 @@
 .map-actions .btn { padding: 0 10px; }
 
 .sheet-bg { position: fixed; inset: 0; z-index: 50; background: rgba(5, 7, 10, 0.72); display: flex; align-items: flex-end; justify-content: center; }
-.sheet { width: 100%; max-width: 720px; max-height: 92%; overflow-y: auto; background: var(--card); border: 1px solid var(--line3); border-bottom: none; border-radius: 18px 18px 0 0; padding: 16px 18px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; outline: none; }
+.sheet { width: 100%; max-width: 720px; max-height: 92%; overflow-y: auto; background: var(--card); border: 1px solid var(--line3); border-bottom: none; border-radius: 18px 18px 0 0; padding: 16px 18px calc(20px + var(--sa-bottom)); display: flex; flex-direction: column; gap: 14px; outline: none; }
 .sheet-title { font-size: 17px; }
 .sheet .col { display: flex; flex-direction: column; gap: 12px; }
 .sheet .col.center { align-items: center; text-align: center; }

@@ -1,6 +1,13 @@
 /* Akıl Çantası — "Şafak" teması: gece mavisi zemin, kehribar vurgu, umut veren sıcak tonlar.
    Kırmızı yalnızca acil çağrı (112) ve hata/silme gibi gerçek uyarılarda kullanılır. */
 :root {
+  /* Kenar boşlukları: Android 15+ uygulama ekranın kenarına kadar çizilir. Yeni WebView env()
+     değerini verir; eskilerde Capacitor --safe-area-inset-* değişkenlerini ekler (ya da
+     pencereyi kendisi daraltır, o zaman ikisi de 0'dır). Büyük olan kullanılır. */
+  --sa-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --sa-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
+  --sa-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+  --sa-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
   --bg: #0e1b2c;
   --bg2: #12233a;
   --card: #172a42;
@@ -57,7 +64,7 @@ html.hc * { scrollbar-color: #ffffff #000000; }
 
 /* Şafak ışığı: üstte hafif kehribar parıltı */
 .app { position: relative; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; background: radial-gradient(130% 55% at 50% -12%, rgba(245, 165, 36, 0.13), rgba(245, 165, 36, 0) 62%), var(--bg); }
-.app-header { min-height: 58px; background: var(--bg); flex-shrink: 0; padding: env(safe-area-inset-top) 18px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.app-header { min-height: calc(58px + var(--sa-top)); background: var(--bg); flex-shrink: 0; padding: var(--sa-top) calc(18px + var(--sa-right)) 0 calc(18px + var(--sa-left)); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-logo { border-radius: 9px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
 .brand { display: flex; flex-direction: column; min-width: 0; }
@@ -68,11 +75,11 @@ html.hc * { scrollbar-color: #ffffff #000000; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); }
 .dot.on { background: var(--ok); }
 
-.app-main { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.app-main { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-left: var(--sa-left); padding-right: var(--sa-right); }
 .pad { padding: 14px 18px 20px; display: flex; flex-direction: column; gap: 14px; }
 
 /* Yüzen gezinme çubuğu */
-.app-nav { flex-shrink: 0; margin: 2px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--nav-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 10px 30px rgba(3, 9, 18, 0.45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 6px; }
+.app-nav { flex-shrink: 0; margin: 2px calc(12px + var(--sa-right)) calc(8px + var(--sa-bottom)) calc(12px + var(--sa-left)); background: var(--nav-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 10px 30px rgba(3, 9, 18, 0.45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 6px; }
 .nav-btn { min-height: 54px; background: transparent; border: none; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); padding: 0; }
 .nav-btn[aria-current='page'] { color: var(--accent2); background: var(--accent-soft); }
 .nav-btn span { font-size: calc(10.5px * var(--nav-scale)); font-weight: 500; white-space: nowrap; }

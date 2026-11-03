@@ -317,20 +317,36 @@ public final class Guncelleyici {
         if (!c.getPackageName().equals(yeni.packageName)) return "baska-uygulama";
         long kod = Build.VERSION.SDK_INT >= 28 ? yeni.getLongVersionCode() : yeni.versionCode;
         if (kod <= kuruluKod(c)) return "eski-surum";
+        // İmza: Android bazı sürümlerde indirilen (kurulmamış) APK'nın v2 imzasını okumaz ve boş
+        // döner; bu "farklı imza" sayılmamalı. Okunabiliyorsa karşılaştırılır. Okunamasa da
+        // güvenlik açığı yok: Android, farklı anahtarla imzalanmış APK'yı güncelleme olarak kurmaz.
         try {
-            PackageInfo bu = pm.getPackageInfo(c.getPackageName(), bayrak);
-            if (!Arrays.equals(imzalar(bu), imzalar(yeni))) return "imza-farkli";
-        } catch (Exception e) {
-            return "imza-okunamadi";
-        }
+            byte[][] yeniImza = imzalar(yeni);
+            if (yeniImza.length > 0) {
+                PackageInfo bu = pm.getPackageInfo(c.getPackageName(), bayrak);
+                byte[][] buImza = imzalar(bu);
+                if (buImza.length > 0 && !ayniImza(buImza, yeniImza)) return "imza-farkli";
+            }
+        } catch (Exception ignored) {}
         return null;
+    }
+
+    /** Sıra fark etmeksizin aynı imzacılar mı */
+    static boolean ayniImza(byte[][] a, byte[][] b) {
+        if (a.length != b.length) return false;
+        outer:
+        for (byte[] x : a) {
+            for (byte[] y : b) if (Arrays.equals(x, y)) continue outer;
+            return false;
+        }
+        return true;
     }
 
     @SuppressWarnings("deprecation")
     private static byte[][] imzalar(PackageInfo pi) {
-        Signature[] s;
+        Signature[] s = null;
         if (Build.VERSION.SDK_INT >= 28 && pi.signingInfo != null) s = pi.signingInfo.getApkContentsSigners();
-        else s = pi.signatures;
+        if (s == null || s.length == 0) s = pi.signatures;
         if (s == null) return new byte[0][];
         byte[][] r = new byte[s.length][];
         for (int i = 0; i < s.length; i++) r[i] = s[i].toByteArray();

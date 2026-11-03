@@ -27,7 +27,7 @@ const CSS = `
 .sz-all-row { display: flex; flex-direction: column; gap: 2px; }
 .sz-all-row b { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 .sz-all-row span { font-size: 17px; }
-.sz-big { position: fixed; inset: 0; z-index: 1000; background: #fff; color: #000; display: flex; flex-direction: column; padding: 18px; padding-top: calc(18px + env(safe-area-inset-top)); gap: 16px; overflow-y: auto; }
+.sz-big { position: fixed; inset: 0; z-index: 1000; background: #fff; color: #000; display: flex; flex-direction: column; padding: 18px; padding-top: calc(18px + var(--sa-top)); gap: 16px; overflow-y: auto; }
 .sz-big-t { font-size: clamp(34px, 11vw, 72px); font-weight: 700; line-height: 1.2; word-break: break-word; flex: 1; display: flex; align-items: center; }
 .sz-big-t[dir='rtl'] { justify-content: flex-end; text-align: right; }
 .sz-big-p { font-size: 22px; color: #333; font-family: var(--mono); }

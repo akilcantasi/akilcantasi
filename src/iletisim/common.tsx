@@ -114,7 +114,7 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .cm-check input { width: 22px; height: 22px; accent-color: var(--accent); }
 .cm-big { min-height: 64px; font-size: 18px; font-weight: 700; border-radius: 18px; }
 .cm-big.danger { background: var(--sos); border-color: var(--sos); color: #fff; }
-.cm-flash { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 24px 24px calc(32px + env(safe-area-inset-bottom)); gap: 10px; }
+.cm-flash { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 24px 24px calc(32px + var(--sa-bottom)); gap: 10px; }
 .cm-flash .btn { min-height: 64px; min-width: 200px; font-size: 18px; font-weight: 700; background: rgba(0,0,0,0.75); color: #fff; border-color: #fff; }
 .cm-flash small { background: rgba(0,0,0,0.6); color: #fff; padding: 4px 10px; border-radius: 8px; font-size: 13px; }
 `;

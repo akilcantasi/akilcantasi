@@ -70,7 +70,7 @@ export const HATA_YAZI: Record<string, string> = {
   indirilemedi: 'İndirilemedi; bağlantı kesilmiş olabilir.',
   'eksik-indi': 'İndirme yarım kaldı; yeniden deneyin.',
   bozuk: 'İnen dosya bozuk çıktı (özet tutmuyor); silindi.',
-  'imza-farkli': 'İnen dosya bu uygulamanın imzasını taşımıyor; güvenlik için kurulmadı ve silindi.',
+  'imza-farkli': 'İnen dosya bu uygulamanın imzasını taşımıyor; güvenlik için kurulmadı ve silindi. Sürüm sayfasından elle kurabilirsiniz.',
   'baska-uygulama': 'İnen dosya başka bir uygulama; silindi.',
   'eski-surum': 'İnen dosya kurulu sürümden yeni değil.',
   'apk-okunamadi': 'İnen dosya okunamadı.',
