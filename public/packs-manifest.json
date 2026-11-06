@@ -50,7 +50,7 @@
       "file": "wikipedia_tr_all_maxi_2026-09.zim",
       "size": 8907256395,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "b8f9458b471fcb5203af4bce17c0776989a5074a7d1a9054796e676ed337d911",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_tr_all_maxi_2026-09.zim",
@@ -68,7 +68,7 @@
       "file": "wikipedia_en_medicine_nopic_2026-10.zim",
       "size": 1047708415,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "718fadad40b3491be3fa8f95181a948e4d726f97a79a14e0ef1b90c6b2b03625",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_nopic_2026-10.zim",
@@ -86,7 +86,7 @@
       "file": "wikipedia_en_medicine_maxi_2026-10.zim",
       "size": 1864210320,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "9a1570f2f346aa18694ee520e0483f19b7447f69e0970e2f727c53ccf0dcc7d6",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_medicine_maxi_2026-10.zim",
@@ -104,7 +104,7 @@
       "file": "mdwiki_en_all_maxi_2025-11.zim",
       "size": 2302838768,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "ee51df7860dbcab8c628aad32cf9972726ab708d784cdaf3e217d596920edf80",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/other/mdwiki_en_all_maxi_2025-11.zim",
@@ -258,7 +258,7 @@
       "file": "ready.gov_en_all_2026-10.zim",
       "size": 2063895408,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "c88ce03db2a6dd855c1075d87abb6dceac678718e0dd3fa7912009469b9ca225",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/zimit/ready.gov_en_all_2026-10.zim",
@@ -276,7 +276,7 @@
       "file": "solar.lowtechmagazine.com_mul_all_2025-01.zim",
       "size": 700555670,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "0a21bde8e3be3b80b8b7dea13118fb2190a60274f2341a5b72715f89fd049740",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/zimit/solar.lowtechmagazine.com_mul_all_2025-01.zim",
@@ -294,7 +294,7 @@
       "file": "appropedia_en_all_maxi_2026-02.zim",
       "size": 581641351,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "dcf200ba723c27397e1c9a2e4891ff91fa13993df1fa285315190d8525a53469",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/other/appropedia_en_all_maxi_2026-02.zim",
@@ -331,7 +331,7 @@
       "file": "ifixit_en_all_2025-12.zim",
       "size": 3570695757,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "9bb5f3408707fd0300c6ef47a425c3217187f144cd9154a928183816aa72eead",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/ifixit/ifixit_en_all_2025-12.zim",
@@ -349,7 +349,7 @@
       "file": "diy.stackexchange.com_en_all_2026-10.zim",
       "size": 2086024326,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "df795a094698282164ddee422814f88bf84841a2413c89ac23401efd71f22731",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/diy.stackexchange.com_en_all_2026-10.zim",
@@ -367,7 +367,7 @@
       "file": "gardening.stackexchange.com_en_all_2026-10.zim",
       "size": 933097375,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "8079b77ba40d830c31cdfa0e3f43a100e9d9488d856b10ffb3aca4e829594e6e",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/gardening.stackexchange.com_en_all_2026-10.zim",
@@ -385,7 +385,7 @@
       "file": "cooking.stackexchange.com_en_all_2026-10.zim",
       "size": 238098128,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "b5dc3a79b681be1afea32dd65e837c604e7dd7072f51622414a7a1d61fc52541",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/cooking.stackexchange.com_en_all_2026-10.zim",
@@ -403,7 +403,7 @@
       "file": "ham.stackexchange.com_en_all_2026-10.zim",
       "size": 77108284,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "cb8a0cd7ae0078279ace1cd2a05e60505aa2494c29e82dac1942bf4cd54fcf9c",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/ham.stackexchange.com_en_all_2026-10.zim",
@@ -421,7 +421,7 @@
       "file": "mechanics.stackexchange.com_en_all_2026-10.zim",
       "size": 341672133,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "3b8790dcde480f466d0d55fae23941cdb1f06ff464a77168f27110f98d8eb923",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/mechanics.stackexchange.com_en_all_2026-10.zim",
@@ -439,7 +439,7 @@
       "file": "outdoors.stackexchange.com_en_all_2026-10.zim",
       "size": 141820374,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "73752057bd2253af6cf80c69caf0def158bcf378188f0fbc7ab8ed07bbbe9bc5",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/outdoors.stackexchange.com_en_all_2026-10.zim",
@@ -457,7 +457,7 @@
       "file": "sustainability.stackexchange.com_en_all_2026-10.zim",
       "size": 27687333,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "1516f252827b1409b7b55c1a44671e7e59b857bf2bb3732f3af62c996e40412f",
       "tier": "temel",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/sustainability.stackexchange.com_en_all_2026-10.zim",
@@ -475,7 +475,7 @@
       "file": "medicalsciences.stackexchange.com_en_all_2026-10.zim",
       "size": 60659941,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "14542ddfa6a9b354fa3e0468b3ff49ee2544defce175270209f4014d34f2feec",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/stack_exchange/medicalsciences.stackexchange.com_en_all_2026-10.zim",
@@ -552,7 +552,7 @@
       "file": "wikivoyage_en_all_nopic_2026-09.zim",
       "size": 272495142,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "4305c50550f065d83e70f75fd1d2016a694f5d67aa1e0ef00fdf6bb74fc092ac",
       "tier": "standart",
       "urls": [
         "https://mirror.download.kiwix.org/zim/wikivoyage/wikivoyage_en_all_nopic_2026-09.zim",
@@ -570,7 +570,7 @@
       "file": "wikipedia_en_all_nopic_2026-06.zim",
       "size": 52690706555,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "441a56d9e05b2d98f8ae9acb7986a513ed47904d73852c92dc6b7d50baa122e5",
       "tier": "tam",
       "urls": [
         "https://mirror.download.kiwix.org/zim/wikipedia/wikipedia_en_all_nopic_2026-06.zim",
@@ -595,7 +595,8 @@
       ],
       "license": "CC BY-SA 4.0 (Wikipedia katkıcıları)",
       "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikipedia/",
-      "shelf": "ansiklopedi"
+      "shelf": "ansiklopedi",
+      "sha256": "350d8956ee3d7abe2839c464c3a983f93d6934a16c7f04b10715b49439dfd349"
     },
     {
       "id": "vikidia-en",
@@ -746,7 +747,8 @@
       ],
       "license": "Kamu malı (ABD Ulusal Tıp Kütüphanesi); bazı bölümlerin kendi lisansı vardır",
       "source": "Kiwix / medlineplus.gov — https://download.kiwix.org/zim/zimit/",
-      "shelf": "saglik"
+      "shelf": "saglik",
+      "sha256": "3ce8933e8b249cf685f5f108e8f10d9a7e3becb2ee4e91f3aedb5b0cf4d2e596"
     },
     {
       "id": "wikimed-en-mini",
@@ -783,7 +785,8 @@
       ],
       "license": "Kamu malı (ABD CDC)",
       "source": "Kiwix / cdc.gov — https://download.kiwix.org/zim/zimit/",
-      "shelf": "saglik"
+      "shelf": "saglik",
+      "sha256": "45c1c8d79a38a814098be41044a42d4ac7cc3dfa5cdfe398e9974e08d80591dc"
     },
     {
       "id": "libretexts-tip",
@@ -800,7 +803,8 @@
       ],
       "license": "CC BY-NC-SA (LibreTexts; kitaba göre değişir)",
       "source": "Kiwix / LibreTexts — https://download.kiwix.org/zim/libretexts/",
-      "shelf": "saglik"
+      "shelf": "saglik",
+      "sha256": "1def4fb3c76d347cfd2af9eabd8f8edefd24086cc17b476130f710214a5bbc1e"
     },
     {
       "id": "wikivet",
@@ -817,7 +821,8 @@
       ],
       "license": "CC BY-SA (WikiVet)",
       "source": "Kiwix / WikiVet — https://download.kiwix.org/zim/other/",
-      "shelf": "saglik"
+      "shelf": "saglik",
+      "sha256": "e61ac3cd607bfb85ea2256d0c75b5d741149421d8b1bf486a569c347adcab66a"
     },
     {
       "id": "gutenberg-tip",
@@ -834,7 +839,8 @@
       ],
       "license": "Kamu malı (Project Gutenberg)",
       "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
-      "shelf": "kitap"
+      "shelf": "kitap",
+      "sha256": "10c4d100157628b15613cc2db47b42ca6bc16c316da97ec1280ac98c8410a400"
     },
     {
       "id": "gutenberg-tarim",
@@ -851,7 +857,8 @@
       ],
       "license": "Kamu malı (Project Gutenberg)",
       "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
-      "shelf": "kitap"
+      "shelf": "kitap",
+      "sha256": "3012dfb7936d5bc8a5c3bdd0c9f864cd81e9514c28c40afc548415fd95272fcc"
     },
     {
       "id": "gutenberg-teknik",
@@ -868,7 +875,8 @@
       ],
       "license": "Kamu malı (Project Gutenberg)",
       "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
-      "shelf": "kitap"
+      "shelf": "kitap",
+      "sha256": "362c9f07d79363802fe2b2e5e97c1b8e717d730bbcfaff478938652dbf12a2fd"
     },
     {
       "id": "gutenberg-egitim",
@@ -885,7 +893,8 @@
       ],
       "license": "Kamu malı (Project Gutenberg)",
       "source": "Kiwix / Project Gutenberg — https://download.kiwix.org/zim/gutenberg/",
-      "shelf": "kitap"
+      "shelf": "kitap",
+      "sha256": "689bbb2afc1977e855f48bf0557548f7aba46d6526ff596aba9571aaeeb40638"
     },
     {
       "id": "wikibooks-en",
@@ -902,7 +911,8 @@
       ],
       "license": "CC BY-SA 4.0 (Wikibooks katkıcıları)",
       "source": "Kiwix / Wikimedia — https://download.kiwix.org/zim/wikibooks/",
-      "shelf": "kitap"
+      "shelf": "kitap",
+      "sha256": "bda3410005656daeb523c81774e151b750cd5a8828f081ded0848cd7fdccba7c"
     },
     {
       "id": "based-cooking",
@@ -919,7 +929,8 @@
       ],
       "license": "Kamu malı (based.cooking)",
       "source": "Kiwix / based.cooking — https://download.kiwix.org/zim/zimit/",
-      "shelf": "pratik"
+      "shelf": "pratik",
+      "sha256": "52ca9fedc61da2fc846f71b1f74cf7fb8e96193fe9f671bb4632bcaf1181ce72"
     },
     {
       "id": "fener-qwen2.5-0.5b",
