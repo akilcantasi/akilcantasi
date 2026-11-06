@@ -112,15 +112,15 @@ export function KonumArama({
     oz.adimlar[oz.adimlar.length - 1];
 
   return (
+    // Canlı bölge yalnızca başlık ve ipucu: saniyede bir değişen süre ve uydu sayısı
+    // ekran okuyucuda her saniye yeniden okunmasın
     <div
       class={"ka card" + (hata ? " hata" : "") + (kompakt ? " kompakt" : "")}
-      role="status"
-      aria-live="polite"
       data-testid={testid}
     >
       <div class="ka-ust">
         <span class={"ka-nabiz" + (hata ? " dur" : "")} aria-hidden="true" />
-        <strong class="grow">
+        <strong class="grow" role="status">
           {hata ? "Konum aranamıyor" : "Konum aranıyor"}
         </strong>
         <span class="mono ka-sure" data-testid="loc-search-time">
@@ -176,7 +176,7 @@ export function KonumArama({
         </ol>
       )}
 
-      <p class="ka-ipucu" data-testid="loc-search-hint">
+      <p class="ka-ipucu" data-testid="loc-search-hint" aria-live="polite">
         {oz.ipucu}
       </p>
       {oz.eylem && (

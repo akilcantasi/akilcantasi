@@ -46,14 +46,31 @@ let states: Record<string, DlState> = {};
 const listeners = new Set<(s: Record<string, DlState>) => void>();
 let lastPersist = 0;
 
+/** Kayıtlı (localStorage) indirme durumunu doğrular: bozuk kayıt arayüzü çökertmesin */
+export function restoreState(k: string, v: unknown): DlState | null {
+  if (!v || typeof v !== 'object' || !k || k.length > 255 || /[\/\\\u0000-\u001f]/.test(k)) return null;
+  const o = v as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0);
+  const str = (x: unknown) => (typeof x === 'string' ? x.slice(0, 300) : undefined);
+  // Sayfa kapanınca çalışan indirme durur → duraklatılmış say
+  const status: DlStatus = o.status === 'error' ? 'error' : 'paused';
+  const s: DlState = { file: k, status, received: num(o.received), total: num(o.total), mirror: Math.floor(num(o.mirror)) };
+  const error = str(o.error);
+  const code = str(o.code);
+  const label = str(o.label);
+  if (error) s.error = error;
+  if (code) s.code = code;
+  if (label) s.label = label;
+  return s;
+}
+
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(LS_KEY) ?? '{}');
-    for (const [k, v] of Object.entries(raw as Record<string, DlState>)) {
-      if (!v || typeof v !== 'object') continue;
-      // Sayfa kapanınca çalışan indirme durur → duraklatılmış say
-      const status: DlStatus = v.status === 'error' ? 'error' : 'paused';
-      states[k] = { ...v, file: k, status };
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const s = restoreState(k, v);
+      if (s) states[k] = s;
     }
   } catch {
     states = {};
@@ -488,6 +505,8 @@ if (typeof window !== 'undefined') void serverFetchInfo();
 export async function startDownload(req: DownloadRequest): Promise<void> {
   const file = req.file;
   if (isActive(states[file])) return;
+  // Yalnız http(s), göreli (bilgi noktası) ve osm: adresleri; javascript:/data:/blob: vb. atılır
+  req = { ...req, urls: req.urls.filter((u) => typeof u === 'string' && (/^https?:\/\//i.test(u) || /^\.?\//.test(u) || isBuildUrl(u))) };
   if (await tryServerDownload(req)) return;
   const httpUrls = req.urls.filter((u) => !isBuildUrl(u));
   if (req.urls.some(isBuildUrl)) {

@@ -105,7 +105,7 @@ export function applySettings(s: Settings = current) {
   el.style.setProperty('--nav-scale', String(navScale(s)));
   el.dataset.textSize = String(s.textSize);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', s.lowPower ? '#000000' : '#0e1b2c');
+  if (meta) meta.setAttribute('content', s.lowPower || s.highContrast ? '#000000' : '#0e1b2c');
 }
 
 export function setSettings(patch: Partial<Settings>) {

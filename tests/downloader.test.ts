@@ -42,6 +42,8 @@ describe('saf yardımcılar', () => {
     expect(planResponse(416, H({ 'content-range': 'bytes */100' }), 100)).toEqual({ action: 'complete', total: 100 });
     expect(planResponse(416, H({ 'content-range': 'bytes */80' }), 100)).toEqual({ action: 'retry-from-zero' });
     expect(planResponse(404, H({}), 0)).toEqual({ action: 'fail', reason: 'HTTP 404' });
+    // Range'siz istekte 416: baştan yeniden denemek sonsuz döngü olurdu
+    expect(planResponse(416, H({}), 0)).toEqual({ action: 'fail', reason: 'HTTP 416' });
   });
   it('ayna sırası', () => {
     expect(mirrorOrder(3, 0)).toEqual([0, 1, 2]);
@@ -194,5 +196,31 @@ describe('runDownload (gerçek sunucuya karşı)', () => {
     const r = await runDownload({ urls: [base + '/data/paket.zim'], store, sha256: sha, createHasher, fetch: noRange });
     expect(r.sha256).toBe(sha);
     expect(Buffer.from(store.bytes()).equals(data)).toBe(true);
+  });
+
+  it('özet varken doğrulayıcı yoksa başlamaz (sessizce doğrulamasız inmez)', async () => {
+    const store = new MemoryStore();
+    await expect(runDownload({ urls: [base + '/data/paket.zim'], store, sha256: sha })).rejects.toMatchObject({ code: 'hash' });
+    expect(store.len).toBe(0);
+  });
+
+  it('beklenen boyuttan fazla veri gönderen ayna diski dolduramaz; yarım dosya silinir', async () => {
+    const store = new MemoryStore();
+    // Boyut bilgisi vermeden sonsuz veri akıtan ayna
+    let sent = 0;
+    const flood: typeof fetch = async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(c) {
+            sent += 65536;
+            c.enqueue(new Uint8Array(65536));
+            if (sent > 64 * 1024 * 1024) c.close();
+          },
+        }),
+        { status: 200 },
+      );
+    await expect(runDownload({ urls: ['https://ayna.example/x.zim'], store, expectedSize: 1_000_000, fetch: flood, passes: 1, chunkBytes: 256 * 1024 })).rejects.toMatchObject({ code: 'size' });
+    expect(sent).toBeLessThan(4 * 1024 * 1024);
+    expect(store.removed).toBe(true);
   });
 });

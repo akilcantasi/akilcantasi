@@ -79,18 +79,25 @@ export function pct(s: DlState) {
   return s.total ? Math.min(100, Math.floor((s.received / s.total) * 100)) : 0;
 }
 
-/** Satırdaki paketi indirmeye başlar (bilgi noktasında varsa oradan, yoksa katalog adreslerinden). */
-export function startRow(row: RowModel) {
+/**
+ * Satırdaki paketi indirmeye başlar (bilgi noktasında varsa oradan, yoksa katalog adreslerinden).
+ * Katalogdaki SHA-256 ve aynalar yalnız inen dosya katalogdakiyle AYNI sürümse kullanılır: bilgi
+ * noktasında başka tarihli/boyutlu bir sürüm varsa onun özeti katalogdakine uymaz (doğrulama
+ * boşuna başarısız olup dosya silinirdi) ve aynalardaki dosyayla karışmamalıdır.
+ */
+export function downloadRequestFor(row: RowModel, here = typeof location !== 'undefined' ? location.href : 'http://localhost/') {
+  const file = row.device ? row.device.id : row.server ? row.server.id : row.file;
+  const size = row.server ? row.server.size : row.size;
+  const e = row.entry;
+  const exact = !!e && file === e.file && (!!e.sizeApprox || !e.size || !size || size === e.size);
   const urls: string[] = [];
-  if (row.server?.url) urls.push(new URL(row.server.url, location.href).href);
-  if (row.entry) urls.push(...row.entry.urls);
-  return startDownload({
-    file: row.device ? row.device.id : row.server ? row.server.id : row.file,
-    urls,
-    sha256: row.entry?.sha256,
-    size: row.server ? row.server.size : row.size,
-    sizeApprox: row.server ? false : row.sizeApprox,
-  });
+  if (row.server?.url) urls.push(new URL(row.server.url, here).href);
+  if (e && exact) urls.push(...e.urls);
+  return { file, urls, sha256: exact ? e!.sha256 || undefined : undefined, size, sizeApprox: row.server ? false : row.sizeApprox };
+}
+
+export function startRow(row: RowModel) {
+  return startDownload(downloadRequestFor(row));
 }
 
 /** Yeni sürümü katalog adreslerinden indirir; eski dosya, yenisi tamamen inene kadar yerinde kalır. */
@@ -123,10 +130,10 @@ export function PackRow({ row, dl, memGB, recommended }: { row: RowModel; dl?: D
       const txt = dl.label
         ? dl.label
         : dl.status === 'hashing'
-          ? `Önceki kısım doğrulanıyor ${p}%`
+          ? `Önceki kısım doğrulanıyor %${p}`
           : dl.status === 'verifying'
             ? 'Doğrulanıyor…'
-            : `İndiriliyor ${dl.total ? p + '%' : ''} · ${formatSize(dl.received)}${dl.total ? ' / ' + formatSize(dl.total) : ''}${speedText(dl)}`;
+            : `İndiriliyor${dl.total ? ' %' + p : ''} · ${formatSize(dl.received)}${dl.total ? ' / ' + formatSize(dl.total) : ''}${speedText(dl)}`;
       state = (
         <div class="sh-pack-state" data-testid="pack-progress">
           {txt}
@@ -146,7 +153,7 @@ export function PackRow({ row, dl, memGB, recommended }: { row: RowModel; dl?: D
     } else if (dl.status === 'paused') {
       state = (
         <div class="sh-pack-state">
-          {dl.label ? `Duraklatıldı · ${dl.label.split(' · ').slice(0, 2).join(' · ')} — kaldığı yerden sürer` : `Duraklatıldı${dl.total ? ` ${p}%` : ''} · ${formatSize(dl.received)}`}
+          {dl.label ? `Duraklatıldı · ${dl.label.split(' · ').slice(0, 2).join(' · ')} — kaldığı yerden sürer` : `Duraklatıldı${dl.total ? ` %${p}` : ''} · ${formatSize(dl.received)}`}
         </div>
       );
       actions = (
@@ -282,7 +289,8 @@ export function PackHead({ row, recommended, heavy }: { row: RowModel; recommend
         <span class="tag">{sizeLabel(size, approx)}</span>
         {row.tier && <span class={'tag' + (tierIncludes(recommended, row.tier) ? ' rec' : '')}>{TIER_LABEL[row.tier]}</span>}
         {row.entry?.minRamGB && <span class="tag">{row.entry.minRamGB}+ GB RAM</span>}
-        {heavy && <span class="tag" style="color:var(--danger)">bu cihaz için ağır</span>}
+        {/* Uyarı (tehlike değil): kehribar, kırmızı yalnız 112/SOS ve gerçek tehlike için */}
+        {heavy && <span class="tag" style="color:var(--accent2)">bu cihaz için ağır</span>}
       </div>
     </>
   );

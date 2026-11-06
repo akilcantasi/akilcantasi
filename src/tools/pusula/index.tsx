@@ -23,6 +23,8 @@ import { WpBadge, useWaypoints } from '../../lib/map/ui';
 
 const CSS = `
 .pz { display: flex; flex-direction: column; gap: 14px; }
+/* Aralığı flex gap belirler; paragrafların varsayılan kenar boşlukları düzensiz boşluk yaratıyordu */
+.pz p { margin: 0; }
 .pz-rose-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .pz-rose { width: min(84vw, 320px); height: auto; display: block; touch-action: manipulation; }
 .pz-head { font-size: 44px; font-weight: 700; line-height: 1; font-family: var(--mono); letter-spacing: -0.02em; }

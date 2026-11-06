@@ -1,7 +1,7 @@
 // Rehber sekmesi: elle hazırlanmış, yapay zekâ kullanmayan acil durum rehberleri.
 // Gezinme: ana ekran (kategori kutuları) → kategori (rehber listesi) → rehber (çizimli adımlar).
 // Kurulu rehber paketlerinin (ör. "Kendine Yetmek") kategorileri ana kategorilerden sonra ayrı bölümde.
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useAppState, go } from '../lib/store';
 import { GUIDES, type Guide } from '../content/guides';
 import { CATEGORIES, categoryOf, type GuideCategory } from '../content/categories';
@@ -21,10 +21,13 @@ const CSS = `
 
 /* ana ekran: üstte çizim sahnesi, üstüne yumuşak gece mavisi geçiş */
 .rh-home { position: relative; overflow-x: clip; }
-.rh-hero-bg { position: absolute; left: 0; right: 0; top: 0; height: 310px; overflow: hidden; pointer-events: none; }
+/* Yükseklik çizimin kendisinden gelir (en çok 310 px): geçiş, çizimin alt kenarından önce
+   zemine karışır. Sabit 310 px'te dar ekranda çizim kutudan önce bitiyor, alt kenarı
+   arama/kısayol düğmelerinin arkasında yuvarlak köşeli bir çizgi olarak görünüyordu. */
+.rh-hero-bg { position: absolute; left: 0; right: 0; top: 0; max-height: 310px; overflow: hidden; pointer-events: none; }
 .rh-hero-bg .art-box { border-radius: 0; background: none; }
 .rh-hero-bg .art { width: 100%; transform: translateY(-14%); }
-.rh-hero-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--bg) 0%, rgba(14,27,44,0.62) 24%, rgba(14,27,44,0.84) 60%, var(--bg) 88%); }
+.rh-hero-bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, var(--bg) 0%, rgba(14,27,44,0.62) 24%, rgba(14,27,44,0.84) 58%, var(--bg) 84%); }
 .rh-hero-glow { position: absolute; left: -15%; right: -15%; top: 150px; height: 240px; border-radius: 999px; background: radial-gradient(closest-side, rgba(245,165,36,0.2), rgba(245,165,36,0)); pointer-events: none; }
 .rh-home > .pad { position: relative; padding-top: 22px; }
 .rh-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 4px 0 4px; }
@@ -66,7 +69,6 @@ const CSS = `
 .rh-list { display: flex; flex-direction: column; gap: 10px; }
 .rh-row { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; background: var(--glass); border: 1px solid rgba(255,255,255,0.11); border-radius: 18px; padding: 8px; color: var(--text); }
 .rh-row:hover { border-color: rgba(255,200,97,0.45); }
-.rh-row:hover { border-color: var(--line3); }
 .rh-row .art-box { width: 112px; flex-shrink: 0; border-radius: 12px; }
 .rh-row-thumb-empty { width: 112px; aspect-ratio: 4 / 3; flex-shrink: 0; border-radius: 12px; background: #1a2b40; }
 .rh-row-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-right: 4px; }
@@ -103,6 +105,8 @@ const CSS = `
 .rh-note svg { flex-shrink: 0; color: var(--accent); margin-top: 2px; }
 .rh-pack-sub { margin-top: 18px; }
 .rh-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
+.rh-none { display: flex; flex-direction: column; gap: 10px; }
+.rh-none .empty { margin: 0; }
 `;
 
 /** Hayati durumlar için ana ekrandaki hızlı erişim */
@@ -262,7 +266,28 @@ export function RehberTab() {
   const open = getGuide(s.openGuideId);
   const cat: GuideCategory | undefined = CATEGORIES.find((c) => c.id === s.openCategoryId) ?? packCats.find((c) => c.id === s.openCategoryId);
 
-  useEffect(scrollTop, [open?.id, cat?.id]);
+  // Kaydırma konumu: ileri gidişte (ana ekran → kategori → rehber) en üstten başlar; geri
+  // dönüşte (rehber → liste, kategori → ana ekran) listede kalınan yere dönülür.
+  const view = open ? 'g:' + open.id : cat ? 'c:' + cat.id : 'h';
+  const depth = open ? 2 : cat ? 1 : 0;
+  const scrollMem = useRef(new Map<string, number>());
+  const viewRef = useRef(view);
+  const depthRef = useRef(depth);
+  useEffect(() => {
+    const main = document.getElementById('main');
+    if (!main) return;
+    const onScroll = () => scrollMem.current.set(viewRef.current, main.scrollTop);
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, []);
+  useLayoutEffect(() => {
+    if (viewRef.current === view) return;
+    const back = depth < depthRef.current;
+    viewRef.current = view;
+    depthRef.current = depth;
+    const top = back ? scrollMem.current.get(view) ?? 0 : 0;
+    document.getElementById('main')?.scrollTo({ top });
+  }, [view]);
 
   // Alt menüden Rehber'e dokununca arama da temizlenir: ana ekran açılır
   const [tap] = useState(s.homeTap);
@@ -358,7 +383,13 @@ export function RehberTab() {
               ))}
             </div>
           ) : (
-            <p class="empty">"{query}" için rehber bulunamadı. Başka bir kelime deneyin ya da Fener'e sorun.</p>
+            <div class="rh-none" data-testid="guide-search-empty">
+              <p class="empty">"{query.trim()}" için rehber bulunamadı. Başka bir kelime deneyin ya da Fener'e sorun.</p>
+              <button class="btn rh-ask" data-testid="guide-search-ask" onClick={() => go.ask(query.trim())}>
+                <IconChat size={18} />
+                Fener'e sor
+              </button>
+            </div>
           )
         ) : (
           <div class="rh-cats" role="group" aria-label="Rehber kategorileri">

@@ -10,7 +10,7 @@ export const TRANSLATE_CSS = `
 .tr-box { display: flex; flex-direction: column; gap: 10px; background: rgba(245, 165, 36, 0.07); border: 1px solid rgba(245, 165, 36, 0.35); border-radius: 18px; padding: 14px; }
 .tr-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .tr-head b { font-size: 15px; flex: 1; min-width: 160px; }
-.tr-head .btn { min-height: 40px; font-size: 13px; }
+.tr-head .btn { min-height: 44px; font-size: 13px; }
 .tr-warn { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 .tr-body p { margin: 0 0 10px; font-size: 16px; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
 .tr-body p.wait { color: var(--muted); }
@@ -90,7 +90,12 @@ export function ArticleTranslate({
     abort.current = ctl;
     try {
       setSt({ k: 'loading', progress: 0 });
-      await engine.ensureLoaded(model, (f) => setSt({ k: 'loading', progress: f }));
+      // "Durdur" yüklemenin bitmesini beklemesin (büyük model dakikalar sürebilir); yükleme arkada sürer
+      const load = engine.ensureLoaded(model, (f) => {
+        if (!ctl.signal.aborted) setSt({ k: 'loading', progress: f });
+      });
+      const onStop = new Promise<'stopped'>((res) => ctl.signal.addEventListener('abort', () => res('stopped'), { once: true }));
+      if ((await Promise.race([load, onStop])) === 'stopped') load.catch(() => {});
       for (let i = 0; i < list.length; i++) {
         if (ctl.signal.aborted) break;
         setSt({ k: 'run', i });
@@ -119,9 +124,12 @@ export function ArticleTranslate({
   runRef.current = run;
   const busy = st.k === 'loading' || st.k === 'run';
 
+  // Gizlenmiş ama tamamlanmış çeviri yeniden gösterilir; model dakikalarca baştan çevirmesin
+  const reopen = () => (st.k === 'done' && !st.stopped && paras.length ? setShown(true) : void run());
+
   if (!shown)
     return (
-      <button class="btn tr-btn" data-testid="lib-translate" onClick={run}>
+      <button class="btn tr-btn" data-testid="lib-translate" onClick={reopen}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M4 5h8M8 3v2M10 5c0 4-3 7-6 8M6 9c1 2 3 3.5 5 4" />
           <path d="M13 21l4-9 4 9M14.5 18h5" />

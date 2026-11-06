@@ -432,6 +432,8 @@ try {
     await sleep(60);
   }
   check([...seen].some((s) => s === '1|rgb(255, 26, 26)') && [...seen].some((s) => s.startsWith('0|rgb(0, 0, 0)')), 'SOS: kırmızı ekran yanıp sönüyor ' + [...seen].join(' '));
+  // Yük altında ışığın iki hali bip kaydından önce görülebilir: bip açılıp kapanana kadar bekle
+  await S.p.waitForFunction(() => window.__audio.gains.includes(0.9) && window.__audio.gains.includes(0), null, { timeout: 5000 }).catch(() => {});
   const beepG = await S.p.evaluate(() => window.__audio.gains.slice());
   check(beepG.includes(0.9) && beepG.includes(0), 'SOS bip sesi ışıkla açılıp kapanıyor');
   // SOS zamanlaması: ilk üç kısa parlama ~250 ms
@@ -561,6 +563,30 @@ try {
   await I.p.goto(app + '?comm=sms', { waitUntil: 'domcontentloaded' });
   check((await I.p.getAttribute(tid('sms-send-other'), 'href')).startsWith('sms:&body='), 'iOS: sms:&body= biçimi');
   await I.c.close();
+
+  // =========================================================================
+  // 7b) Denetim 2026-11: ok işareti boyutu, İyiyim ipucu ve yakınlar, mesh kartı, anahtar rengi
+  // =========================================================================
+  {
+    const D = await ctx('D', { init: () => { try { localStorage.setItem('ac.yakinlar', JSON.stringify([{ id: 'm1', name: 'Mehmet', phone: '05550000000' }, { id: 'a1', name: 'Ayşe', phone: '05551111111' }])); } catch {} } });
+    await D.p.goto(app + '?tab=iletisim', { waitUntil: 'domcontentloaded' });
+    await D.p.waitForSelector(tid('comm-card-pano'));
+    const chev = await D.p.$eval(tid('comm-card-pano') + ' .cm-chev', (e) => e.getBoundingClientRect().height);
+    check(chev >= 18, 'ana ekran: kart ok işareti okunur boyutta (' + chev + ' px)');
+    await D.p.goto(app + '?comm=iyiyim', { waitUntil: 'domcontentloaded' });
+    await D.p.waitForSelector(tid('checkin-send'));
+    check(await D.p.isDisabled(tid('checkin-send')) && (await D.p.textContent(tid('comm-iyiyim'))).includes('Göndermek için önce adınızı yazın'), 'İyiyim: ad yokken neden gönderilemediği yazıyor');
+    const yh = await D.p.getAttribute(tid('checkin-sms-yakinlar'), 'href').catch(() => '');
+    check(/^sms:05550000000,05551111111\?body=/.test(yh), 'İyiyim: kayıtlı yakınlara SMS düğmesi: ' + yh);
+    await D.p.goto(app + '?comm=baglan', { waitUntil: 'domcontentloaded' });
+    check(await waitSel(D.p, tid('mesh-card')) && (await D.p.getAttribute(tid('mesh-card'), 'data-state')) === 'none', 'Bağlan: yakın cihaz ağı kartı (tarayıcıda "yalnız Android")');
+    await D.p.goto(app + '?comm=sos', { waitUntil: 'domcontentloaded' });
+    await D.p.waitForSelector(tid('sos-beep'));
+    await D.p.click(tid('sos-beep'));
+    const swBg = await D.p.$eval(tid('sos-beep'), (e) => getComputedStyle(e, '::before').backgroundColor);
+    check(swBg === 'rgb(245, 165, 36)', 'SOS anahtarı açıkken uygulamanın diğer anahtarları gibi kehribar: ' + swBg);
+    await D.c.close();
+  }
 
   // =========================================================================
   // 8) Yerleşim: üç genişlikte her bölüm

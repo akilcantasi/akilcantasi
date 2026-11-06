@@ -4,14 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0E1B2C">
+  <meta name="color-scheme" content="dark">
   <meta name="description" content="Akıl Çantası — internet yokken çalışan afet bilgi uygulaması">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Akıl Çantası">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon-192.png">
   <title>Akıl Çantası</title>
+  <!-- Açılış ekranı: betik yüklenene kadar (yavaş bilgi noktası ağı, eski telefon) beyaz ya da boş
+       ekran yerine gece mavisi zemin ve logo. Uygulama çizilince #app içeriği yer değiştirir. -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #0e1b2c; color: #f4f7fb; }
+    #acilis { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; font: 500 15px system-ui, sans-serif; color: #a9b7c9; }
+    #acilis img { width: 64px; height: 64px; border-radius: 15px; }
+    #acilis p { margin: 0; }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><section id="acilis" aria-busy="true"><img src="./icon.svg" alt=""><p>Akıl Çantası açılıyor…</p></section></div>
+  <noscript><p style="padding:24px;font:16px system-ui,sans-serif;color:#f4f7fb">Akıl Çantası'nı kullanmak için tarayıcıda JavaScript açık olmalı.</p></noscript>
   <script type="module" src="./src/main.tsx"></script>
 </body>
 </html>

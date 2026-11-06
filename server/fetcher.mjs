@@ -75,6 +75,11 @@ function safeName(name) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Disk dolu / kota: yeniden denemenin anlamı yok, iş hemen durur (yarım dosya devam için kalır) */
+export function isNoSpace(e) {
+  return e?.code === 'ENOSPC' || e?.code === 'EDQUOT' || e?.code === 'EFBIG';
+}
+
 /**
  * @param {{ dataDir: string, loadManifest: () => Promise<any>, onChange?: () => void, fetch?: typeof fetch,
  *           segments?: number, minSegment?: number, stallMs?: number, probeMs?: number, mirrors?: (urls:string[]) => string[] }} o
@@ -213,14 +218,30 @@ export function createFetcher(o) {
       }, 1000);
       const saver = setInterval(() => void saveState(j), SAVE_MS);
 
+      // Kalıcı hata (disk dolu, ayna tükendi): bütün bölümler durur, sonra iş hata olarak biter.
+      // (Eskiden ilk hata Promise.all'ı düşürürken öbür bölümler kapanmış dosyaya yazmayı sürdürüyordu.)
+      let fatal = null;
+      const stopAll = new AbortController();
+      const fail = (e) => {
+        fatal ??= e;
+        stopAll.abort();
+      };
       const worker = async (seg, k) => {
         let mi = k % Math.min(good, 3);
         let fails = 0;
-        while ((seg.end < 0 || seg.pos <= seg.end) && !ctl.signal.aborted) {
+        while ((seg.end < 0 || seg.pos <= seg.end) && !ctl.signal.aborted && !fatal) {
+          if (!canRange && seg.pos > seg.start) {
+            // Aralık desteklenmiyor: kopan indirme baştan alınır. (Eskiden baştan gelen veri
+            // kalınan yere yazılıyor, dosya sessizce bozuluyordu.)
+            j.received -= seg.pos - seg.start;
+            seg.pos = seg.start;
+            await fh.truncate(0);
+          }
           const url = mirrors[mi % mirrors.length];
           const local = new AbortController();
           const onAbort = () => local.abort();
           ctl.signal.addEventListener('abort', onAbort);
+          stopAll.signal.addEventListener('abort', onAbort);
           let stallTimer = setTimeout(() => local.abort(), stallMs);
           const before = seg.pos;
           try {
@@ -247,17 +268,25 @@ export function createFetcher(o) {
             }
             if (seg.end < 0) seg.end = seg.pos - 1; // boyutu bilinmeyen tek parça bitti
           } catch (e) {
-            if (ctl.signal.aborted) break;
+            if (ctl.signal.aborted || fatal) break;
+            if (isNoSpace(e)) {
+              fail(new Error('Yer yetersiz: bilgi noktasının diskinde yer kalmadı. Yer açıp yeniden başlatın.'));
+              break;
+            }
             // ilerleme yoksa sıradaki aynaya geç
             if (seg.pos === before) {
               fails++;
               mi++;
-              if (fails > mirrors.length * 3) throw new Error('Bağlantı tekrar tekrar koptu: ' + (e?.message ?? e));
+              if (fails > mirrors.length * 3) {
+                fail(new Error('Bağlantı tekrar tekrar koptu: ' + (e?.message ?? e)));
+                break;
+              }
               await sleep(Math.min(8000, 500 * fails));
             }
           } finally {
             clearTimeout(stallTimer);
             ctl.signal.removeEventListener('abort', onAbort);
+            stopAll.signal.removeEventListener('abort', onAbort);
           }
         }
       };
@@ -270,12 +299,18 @@ export function createFetcher(o) {
         await saveState(j);
       }
       if (ctl.signal.aborted) throw Object.assign(new Error('durduruldu'), { aborted: true });
+      if (fatal) throw fatal;
 
       await fh.sync().catch(() => {});
       const size = (await fh.stat()).size;
       await fh.close();
       fh = null;
-      if (j.total && size !== j.total) throw new Error(`Boyut uyuşmuyor (${size} / ${j.total}).`);
+      if (j.total && size !== j.total) {
+        // Bozuk yarım dosya kalırsa her yeniden denemede aynı hata çıkardı: baştan indirilsin
+        await fsp.rm(j.partPath, { force: true });
+        await fsp.rm(j.statePath, { force: true });
+        throw new Error(`Boyut uyuşmuyor (${size} / ${j.total}); yarım dosya silindi, yeniden indirin.`);
+      }
       j.total = size;
       j.received = size;
       if (j.sha256) {
@@ -309,7 +344,7 @@ export function createFetcher(o) {
         } else j.status = 'paused';
       } else {
         j.status = 'error';
-        j.error = e?.message ?? String(e);
+        j.error = isNoSpace(e) ? 'Yer yetersiz: bilgi noktasının diskinde yer kalmadı. Yer açıp yeniden başlatın.' : e?.message ?? String(e);
       }
       o.onChange?.();
     } finally {

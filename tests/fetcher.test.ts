@@ -185,6 +185,89 @@ describe('indirme', { timeout: 40000 }, () => {
     await m.close();
   });
 
+  it('disk dolu (ENOSPC): yeniden denemeden hemen "Yer yetersiz" hatasıyla durur', async () => {
+    // Gövde akışı ENOSPC koduyla hata verir (disk dolu yazma hatası aynı yoldan geçer)
+    let calls = 0;
+    const fetchImpl = async (_u: string, init: any) => {
+      calls++;
+      const range = /bytes=(\d+)-(\d*)/.exec(init?.headers?.Range ?? '');
+      const start = range ? Number(range[1]) : 0;
+      const body = new ReadableStream<Uint8Array>({
+        pull(c) {
+          if (init?.headers?.Range === `bytes=0-${3 * 1024 * 1024 - 1}`) {
+            // ölçüm isteği: biraz veri ver, bitir
+            c.enqueue(new Uint8Array(64 * 1024));
+            c.close();
+            return;
+          }
+          c.error(Object.assign(new Error('no space left on device'), { code: 'ENOSPC' }));
+        },
+      });
+      return new Response(body, { status: 206, headers: { 'Content-Range': `bytes ${start}-${SIZE - 1}/${SIZE}` } });
+    };
+    const data = path.join(dir, 'nospc');
+    const fetcher = createFetcher({ dataDir: data, loadManifest: manifestWith(['https://ayna.example/zim/x/paket.zim']), mirrors: () => ['https://ayna.example/zim/x/paket.zim'], fetch: fetchImpl as any, segments: 4, minSegment: 1024 * 1024, probeMs: 3000 });
+    const t0 = Date.now();
+    await fetcher.start('paket.zim');
+    const j = await waitFor(fetcher, 'paket.zim', ['done', 'error'], 10000);
+    expect(j.status).toBe('error');
+    expect(j.error).toMatch(/Yer yetersiz/);
+    // Eskiden her bölüm ayna sayısı × 3 kez, artan beklemelerle yeniden deniyordu
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(calls).toBeLessThan(12);
+  });
+
+  it('boyut uyuşmazlığında yarım dosya silinir (her denemede aynı hataya takılmasın)', async () => {
+    // Aralık desteklemeyen ayna: ölçümde tam boyutu bildirir, indirmede eksik gövdeyle düzgün biter
+    let n = 0;
+    const short = http.createServer((req, res) => {
+      if (n++ === 0) {
+        res.writeHead(200, { 'Content-Length': SIZE });
+        res.end(DATA);
+        return;
+      }
+      res.writeHead(200); // chunked: eksik gövde düzgün biter
+      res.end(DATA.subarray(0, 1000));
+    });
+    await new Promise<void>((r) => short.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(short.address() as any).port}/paket.zim`;
+    const data = path.join(dir, 'kisa');
+    const fetcher = createFetcher({ dataDir: data, loadManifest: manifestWith([url], { size: 0, sizeApprox: true }), mirrors: () => [url], probeMs: 3000 });
+    await fetcher.start('paket.zim');
+    const j = await waitFor(fetcher, 'paket.zim', ['done', 'error'], 15000);
+    expect(j.status).toBe('error');
+    expect(j.error).toMatch(/Boyut uyuşmuyor/);
+    expect(fs.existsSync(path.join(data, PART_DIR, 'paket.zim.part'))).toBe(false);
+    expect(fs.existsSync(path.join(data, PART_DIR, 'paket.zim.durum'))).toBe(false);
+    await new Promise((r) => short.close(() => r(null)));
+  });
+
+  it('aralık desteklemeyen aynada kopan bağlantı baştan indirilir (dosya bozulmaz)', async () => {
+    let n = 0;
+    const flaky = http.createServer((req, res) => {
+      n++;
+      res.writeHead(200, { 'Content-Length': SIZE });
+      if (n === 2) {
+        // İlk gerçek indirme yarıda kopar
+        res.write(DATA.subarray(0, 400_000));
+        setTimeout(() => res.destroy(), 50);
+        return;
+      }
+      res.end(DATA);
+    });
+    await new Promise<void>((r) => flaky.listen(0, '127.0.0.1', () => r()));
+    const url = `http://127.0.0.1:${(flaky.address() as any).port}/paket.zim`;
+    const data = path.join(dir, 'aralıksız');
+    const fetcher = createFetcher({ dataDir: data, loadManifest: manifestWith([url], { sha256: SHA }), mirrors: () => [url], probeMs: 3000 });
+    await fetcher.start('paket.zim');
+    const j = await waitFor(fetcher, 'paket.zim', ['done', 'error'], 20000);
+    expect(j.error).toBeNull();
+    expect(j.status).toBe('done');
+    expect((await fsp.readFile(path.join(data, 'paket.zim'))).equals(DATA)).toBe(true);
+    flaky.closeAllConnections?.();
+    await new Promise((r) => flaky.close(() => r(null)));
+  });
+
   it('katalogda olmayan paket indirilemez', async () => {
     const fetcher = createFetcher({ dataDir: path.join(dir, 'e'), loadManifest: manifestWith(['https://x/zim/a.zim']) });
     const r = await fetcher.start('../../etc/passwd');

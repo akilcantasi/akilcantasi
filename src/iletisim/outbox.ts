@@ -2,7 +2,7 @@
 // kayıtlar burada bekler; sunucuya ulaşılınca sırayla gönderilir. Sunucu
 // kimliğe göre tekilleştirdiği için yeniden göndermek güvenlidir.
 import type { BoardDraft, BoardItem } from './board';
-import { fromServer, mergeItems } from './board';
+import { fromServer, mergeItems, validateDraft } from './board';
 
 export interface KV {
   getItem(k: string): string | null;
@@ -71,7 +71,16 @@ export class Outbox {
 
   list(): OutboxEntry[] {
     const v = readJson<OutboxEntry[]>(this.kv, KEYS.outbox, []);
-    return Array.isArray(v) ? v.filter((e) => e && e.draft && typeof e.draft.id === 'string') : [];
+    if (!Array.isArray(v)) return [];
+    // Her taslak yeniden doğrulanır: bozuk/eski bir kayıt (eksik tür, metin…) pano ekranını çökertmesin
+    const out: OutboxEntry[] = [];
+    for (const e of v) {
+      if (!e || typeof e !== 'object') continue;
+      const d = validateDraft(e.draft);
+      if (!d.ok) continue;
+      out.push({ draft: d.item, created: Number.isFinite(e.created) ? e.created : Date.now(), tries: Number(e.tries) || 0, ...(typeof e.lastError === 'string' ? { lastError: e.lastError } : {}) });
+    }
+    return out;
   }
 
   private save(list: OutboxEntry[]) {
@@ -147,7 +156,9 @@ export class BoardCache {
   constructor(private kv: KV = defaultKV()) {}
 
   load(): { items: BoardItem[]; since: number; server: string } {
-    const v = readJson<{ items: BoardItem[]; since: number; server: string }>(this.kv, KEYS.cache, { items: [], since: 0, server: '' });
+    const raw = readJson<{ items: BoardItem[]; since: number; server: string } | null>(this.kv, KEYS.cache, null);
+    // "null" ya da dizi gibi beklenmeyen bir değer de boş önbellek sayılır
+    const v = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : { items: [], since: 0, server: '' };
     // Önbellekteki her kayıt yeniden doğrulanır: eski sürümlerin ya da bozuk bir sunucunun
     // yazdığı hatalı kayıt ekranı çökertmesin
     const items = (Array.isArray(v.items) ? v.items : [])
@@ -179,7 +190,8 @@ export interface Profile {
 }
 
 export function loadProfile(kv: KV = defaultKV()): Profile {
-  const p = readJson<Partial<Profile>>(kv, KEYS.profile, {});
+  const r = readJson<Partial<Profile> | null>(kv, KEYS.profile, null);
+  const p: Partial<Profile> = r && typeof r === 'object' && !Array.isArray(r) ? r : {};
   return { name: String(p.name ?? ''), family: String(p.family ?? ''), familyName: String(p.familyName ?? ''), server: String(p.server ?? '') };
 }
 

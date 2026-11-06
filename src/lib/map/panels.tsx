@@ -8,9 +8,12 @@ import { recorder } from './recorder';
 import { setNavTarget, type NavTarget } from './nav';
 import { WAYPOINT_TYPES, WAYPOINT_TYPE_ORDER, waypointStore, type Waypoint, type WaypointType } from './waypoints';
 import { ShareBox, WpBadge } from './ui';
+import { useGeriKapat } from '../../gecmis';
 
 export function Sheet({ title, testid, onClose, children }: { title: string; testid: string; onClose: () => void; children: any }) {
   const ref = useRef<HTMLDivElement>(null);
+  // Android geri tuşu sekmeden çıkmadan önce bu pencereyi kapatsın
+  useGeriKapat(true, onClose);
   useEffect(() => {
     ref.current?.focus();
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -276,7 +279,7 @@ export function NavCard({
       ) : (
         <div class="nav-body">
           <svg class="nav-arrow" viewBox="0 0 100 100" width="64" height="64" role="img" aria-label={heading == null ? `Yön ${cardinal8Long(b)}` : turnHint(rel)} data-testid="nav-arrow" data-rot={rel.toFixed(1)}>
-            <circle cx="50" cy="50" r="46" fill="none" stroke="#2E3643" stroke-width="3" />
+            <circle cx="50" cy="50" r="46" fill="none" stroke="#34507A" stroke-width="3" />
             <g transform={`rotate(${rel} 50 50)`}>
               <path d="M50 12 L68 64 L50 54 L32 64 Z" fill="#F5A524" />
             </g>

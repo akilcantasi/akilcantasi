@@ -222,6 +222,21 @@ describe('MeshNode', () => {
     expect(out.some((f) => f.includes(m.id))).toBe(false);
   });
 
+  it('aktarma: çok iletili çerçeve üçüncü komşuya toplu gider (ileti başına çerçeve değil)', () => {
+    const out: { to: string; f: string }[] = [];
+    const a = new MeshNode({ nodeId: 'nodeA777', name: 'A', now: () => T0, transport: { send: (p, f) => (out.push({ to: p, f }), true) } });
+    a.peerUp('b');
+    out.length = 0;
+    const ms = Array.from({ length: 40 }, (_, i) => msg({ text: 'aktarma ' + i }));
+    a.receive('c', JSON.stringify({ t: 'msgs', ms }));
+    const bFrames = out.filter((o) => o.to === 'b' && o.f.includes('"msgs"'));
+    const gelen = bFrames.flatMap((o) => JSON.parse(o.f).ms.map((m: MeshMessage) => m.id));
+    expect(new Set(gelen).size).toBe(40);
+    expect(bFrames.length).toBeLessThan(10);
+    // gönderen komşuya geri itilmez
+    expect(out.some((o) => o.to === 'c' && o.f.includes('"msgs"'))).toBe(false);
+  });
+
   it('süresi dolmuş mesajı almaz, depodan siler, özetten çıkarır', () => {
     let now = T0;
     const { a, b, connect, sent } = pair(() => now);

@@ -125,6 +125,49 @@ const HEADING = /^h[1-6]$/;
 /** Bu başlıklardan sonrası (kaynakça vb.) metne alınmaz. */
 const STOP_HEADINGS = /^(kaynakça|kaynaklar|notlar|dipnotlar|dış bağlantılar|ayrıca bakınız|ilgili maddeler|konuyla ilgili yayınlar|ek okumalar|references|notes|external links|see also|further reading|bibliography)$/i;
 
+const BLOCK_OPEN = /<!--|<!\[CDATA\[|<(script|style|noscript|template|head)\b[^<>]*>/gi;
+const BLOCK_CLOSE: Record<string, RegExp> = {
+  '!--': /-->/g,
+  cdata: /\]\]>/g,
+  script: /<\/script\s*>/gi,
+  style: /<\/style\s*>/gi,
+  noscript: /<\/noscript\s*>/gi,
+  template: /<\/template\s*>/gi,
+  head: /<\/head\s*>/gi,
+};
+
+/**
+ * Yorum, CDATA, betik/stil/noscript/template ve head bloklarını doğrusal sürede atar.
+ * (Eski [\s\S]*? düzenli ifadeleri kapanmayan çok sayıda "<!--" ya da "<script" içeren
+ * bozuk bir makalede karesel sürede çalışıp sekmeyi kilitleyebiliyordu.) Kapanmayan yorum,
+ * CDATA, betik ve stil belge sonuna kadar sürer (HTML kuralı); kapanmayan head/noscript/
+ * template yalnızca açılış etiketiyle atılır (head'in kapanış etiketi isteğe bağlıdır).
+ */
+export function stripBlocks(html: string): string {
+  let out = '';
+  let pos = 0;
+  // Bir türün kapanışı bir kez bulunamadıysa sonraki konumlarda da bulunamaz: yeniden aranmaz
+  const noClose = new Set<string>();
+  for (;;) {
+    BLOCK_OPEN.lastIndex = pos;
+    const m = BLOCK_OPEN.exec(html);
+    if (!m) break;
+    const key = m[1] ? m[1].toLowerCase() : m[0] === '<!--' ? '!--' : 'cdata';
+    let c: RegExpExecArray | null = null;
+    if (!noClose.has(key)) {
+      const close = BLOCK_CLOSE[key];
+      close.lastIndex = m.index + m[0].length;
+      c = close.exec(html);
+      if (!c) noClose.add(key);
+    }
+    out += html.slice(pos, m.index) + ' ';
+    if (c) pos = c.index + c[0].length;
+    else if (key === 'head' || key === 'noscript' || key === 'template') pos = m.index + m[0].length;
+    else return out;
+  }
+  return out + html.slice(pos);
+}
+
 /**
  * HTML'i okunabilir düz metne çevirir. Betik/stil/tablo/kaynakça/gezinti kutuları
  * atılır, blok öğeler satır sonuna dönüşür, [1] tarzı dipnot işaretleri silinir.
@@ -134,11 +177,10 @@ export function htmlToText(html: string): string {
   // Betik/stil/head içeriği önce atılır: içlerindeki "<" ve tırnaklar (ör.
   // mwoffliner'ın head'deki RLCONF betiği) etiket ayrıştırıcısını şaşırtıp
   // tüm belgeyi yutabiliyordu (gerçek Vikipedi ZIM'inde metin boş çıkıyordu).
-  html = html
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
-    .replace(/<head\b[^>]*>[\s\S]*?<\/head\s*>/i, ' ');
-  const re = /<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<!(?:[^>]*)>|<(\/?)([a-zA-Z][\w:-]*)((?:[^>"']|"[^"]*"|'[^']*')*)>|([^<]+)|</g;
+  html = stripBlocks(html);
+  // Etiket içinde tırnaksız "<" olmaz: böylece kapanmayan etiketler her konumda belgenin
+  // sonuna kadar taranmaz (karesel süre)
+  const re = /<!\[CDATA\[[\s\S]*?\]\]>|<![^<>]*>|<(\/?)([a-zA-Z][\w:-]*)((?:[^<>"']|"[^"]*"|'[^']*')*)>|([^<]+)|</g;
   let out = '';
   let skipTag: string | null = null;
   let skipDepth = 0;

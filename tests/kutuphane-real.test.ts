@@ -24,7 +24,11 @@ class FileSource implements RandomAccessSource {
   }
 }
 
-describe.skipIf(!existsSync(REAL))('gerçek Vikipedi ZIM', () => {
+// Zaman aşımı: 1,2 GB'lık dosya işletim sisteminin önbelleğinde değilken (ilk koşu ya da tam
+// takımda öteki test dosyalarıyla aynı anda diskten okunurken) ilk arama testi tek başına 5 sn'yi
+// aşabiliyordu; varsayılan 5 sn'lik süre bu yüzden "başlık araması"nı ara sıra kırıyordu.
+// Hız ayrı ve açık bir bütçeyle ("süre bütçesi", ısınmış önbellek) ölçülür.
+describe.skipIf(!existsSync(REAL))('gerçek Vikipedi ZIM', { timeout: 60000 }, () => {
   let zim: ZimArchive;
   beforeAll(async () => {
     zim = await ZimArchive.open(new FileSource(REAL));

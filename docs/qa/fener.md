@@ -52,3 +52,58 @@ Kapsam: src/tabs/FenerTab.tsx, src/tabs/fener.css, src/lib/fener/*, src/lib/voic
     node e2e/qa-fener.mjs http://localhost:5199/ /tmp        # tümü (~6 dk); ONLY=guide,model,battery,nomodel,nav,voice,tts,layout
 Gerçek model: `npm run build && node server/server.mjs --data /home/claude/packs --port 8199 &` sonra
 `node e2e/fener-real-check.mjs http://localhost:8199/ /tmp`
+
+## Denetim 2026-11
+
+Kapsam: `src/tabs/FenerTab.tsx`, `src/tabs/FenerModels.tsx`, `src/tabs/fener.css`, `src/lib/fener/*`, `src/lib/voice/*`.
+360×640, 390×844, 1280×800, en büyük yazı boyutu (Ayarlar → "En büyük", zoom 1,4) ve klavye açılmış
+(görünüm yüksekliği 480 px) hâlleri denendi; ekran görüntülerine tek tek bakıldı.
+
+### Denetlenenler
+- [x] Sohbet akışı, hızlı sorular, uzun cevap, çok mesaj, Durdur (yazarken / model yüklenirken), Yeni sohbet
+- [x] Model seçici: liste, Otomatik, elle seçim + yenilemede kalıcılık, katalogdan indirme satırları, model yokken panel
+- [x] Kaynak etiketleri: Rehber → doğru rehber, WikiMed → doğru makale; büyük rehber düğmesi; 112 kutusu
+- [x] Sesli sor / sesli oku durumları (sahte mikrofon/STT/konuşma sentezi; gerçek ONNX işçi yolu)
+- [x] Gerçek wllama + küçük test modeli (`e2e/fener-check.mjs`), sahte yerel motor (`e2e/fener-yerel-check.mjs`)
+- [x] Konuşma sekme değişiminde korunur; sayfa yenilenince silinir (bilerek: modül düzeyinde tutuluyor, cihazda saklanmıyor)
+- [x] Yan boşluklar, hizalama, 44 px dokunma alanları, taşma, renkler (kırmızı yalnız 112 kutusu ve hata metni)
+
+### Bulunan ve düzeltilen hatalar
+1. **Model yüklenirken "Durdur" çalışmıyordu** (hata): yükleme (büyük modelde dakikalar) bitene kadar düğme
+   bekliyor, sonra cevap yanlış etiketle ("Model yüklü değil — rehberden yanıt") geliyordu. Artık durdurma hemen
+   etkili; rehberden yanıt "Durduruldu — rehberden yanıt" etiketiyle gelir, yükleme arkada sürer ve model bir
+   sonraki soruya hazır olur (`FenerTab.tsx` `send`, `fallback.ts` `stopped`).
+2. **Akış sırasında yukarı kaydıran kullanıcı her token'da en alta çekiliyordu** (hata): liste artık yalnız
+   kullanıcı en alttaysa takip eder; yeni soru gönderilince yine en alta iner.
+3. **Klavye açılınca son mesaj klavyenin altında kalıyordu** (hata): liste kısalınca en alttaysa en altta kalır
+   (ResizeObserver; yükseklik değişiminin ürettiği scroll olayı "kullanıcı kaydırdı" sayılmaz).
+4. **Model paneli küçük ekranda girişi ekranın dışına itiyordu** (tasarım): 70vh sabit yükseklik + sohbetten bir şerit.
+   Panel artık çubukla giriş arasındaki yeri alır, kendi içinde kayar; açıkken sohbet gizlenir, soru gönderilince
+   panel kapanır. Panel içindeki "Otomatik seç" kutusu büzülüp yazısı kenarlığa taşıyordu (`flex-shrink`).
+5. **Kopyala yoktu** (eksik): cevap altında "Kopyala" — biçim işaretleri atılır, madde işaretleri kalır, kaynaklar
+   `[1] Rehber: …` olarak eklenir; http bilgi noktasında eski yönteme düşer (`format.ts` `copyText` + birim testi).
+6. **Yan boşluklar eşit değildi** (tasarım): liste/çubuk 18 px, giriş satırı 14 px, model paneli 12 px; büyük yazıda
+   hepsi 25 px'e çıkıyordu. Hepsi `--pad-x` (her boyutta ekranda 18 px).
+7. **Dar ekranda / büyük yazıda model adı okunmuyordu** ("Etkin …"): ad iki satıra kadar kırılır, yer kalmazsa
+   "Yeni sohbet" alt satıra iner; aç/kapa oku artık kırpılmıyor.
+8. **Cevap altı düğmeleri dağınık kırılıyordu**: "Kopyala" + "Sesli oku" birlikte sağa yaslı; token/sn yapay zekâ
+   uyarısının yanına alındı.
+9. **Kırmızı yalnız tehlike için** (tasarım): kayıt düğmesi ve "Durdur" kırmızıydı → kehribar.
+10. Yazım: hızlı soru "içilebilir hale" → "hâle" (rehberlerle aynı).
+11. `e2e/fener-check.mjs` artık var olmayan `/__dev/tiny-test.gguf` adresini kullanıyordu → `/testdata/tiny-test.gguf`.
+
+### Kalan / not
+- Ortak dev sunucusunda (5199) başka ajanların düzenlemeleri HMR ile sayfayı yeniliyor; `qa-fener.mjs` bu yüzden
+  ara sıra yarıda kesiliyordu (konuşma kayboluyor). HMR'siz ayrı bir sunucuda koşun (aşağıda).
+- Kütüphane'den "Fener'e sor" ile gelen "Bağlam" etiketi tıklanamıyor: bağlamda makale yolu yok
+  (`store.ts` `pendingQuestion.context` tipine `path` eklenmeli; kapsam dışı).
+- Konuşma yenilemede siliniyor (bilinçli). Android süreci arka planda öldürülürse de silinir; istenirse sessionStorage.
+
+### E2E
+    # HMR'siz ayrı dev sunucusu (başka ajanların düzenlemeleri sayfayı yenilemesin):
+    #   vite.config'i içe aktarıp server.hmr=false, watch.ignored=['**/*'] veren bir yapılandırmayla
+    #   npx vite --config <o-dosya> --port 5431 --strictPort --host 127.0.0.1
+    node e2e/qa-fener.mjs http://localhost:5431/ /tmp     # tümü; ONLY=…,denetim (yeni bölüm)
+    node e2e/fener-check.mjs http://localhost:5431/ /tmp  # gerçek wllama + küçük test modeli
+    node e2e/fener-voice-check.mjs http://localhost:5431/ /tmp
+    node e2e/fener-yerel-check.mjs http://localhost:8099/ # derlenmiş uygulama

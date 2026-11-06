@@ -86,7 +86,9 @@ Kurtarıcı mesajı: `A` `K` `0x03` + hedef kimlik (4) + mesaj no (1, 1–255) +
 
 Tarama yanıtı: `A` `K` `0x02` + UTF-8 etiket (en çok 24 bayt). Android'in ayrıştırılmış
 kaydı aynı şirket kimliğinden yalnız birini tuttuğu için ikisi ham baytlardan okunur
-(`EnkazIsareti.hamdanAyikla`).
+(`EnkazIsareti.hamdanAyikla`). Duyulan etiket güvenilmez sayılır: denetim ve biçim karakterleri
+(yön çevirme, sıfır genişlik) atılır, en çok 40 karakter (`EnkazIsareti.etiketCoz`); bildirim
+başlığında ve listede bu temiz metin görünür.
 
 ## Sınırlar
 
@@ -96,6 +98,11 @@ kaydı aynı şirket kimliğinden yalnız birini tuttuğu için ikisi ham baytla
   uygulamasız görünürlük Bluetooth adıyla yapılır ve en çok 1 saat sürer.
 - Arka planda konum ve nöbet için "Her zaman izin ver" konum izni gerekir; bazı markalar
   arka plan işlerini durdurur (uygulama pil kısıtlamasını kaldırmayı önerir).
+- **Kimlik doğrulama yok:** işaret, etiket ve kurtarıcı mesajı imzasızdır. Yakındaki biri
+  sahte işaret yayabilir (arama ekranında ve nöbet bildiriminde görünür) ya da bir işaretin
+  kimliğine sahte "kurtarıcı mesajı" gönderebilir (enkazdaki telefon titrer ve okur). Afet
+  anında herkesin kurulumsuz duyabilmesi için bilerek böyle; arayüz kurtarıcı mesajını
+  "hazır mesaj" olarak gösterir, kesin bilgi gibi sunmamalıdır.
 - Gerçek cihazda henüz denenmedi. Deneme planı: iki telefon; biri enkaz modunda, diğeri
   arama modunda; aynı odada, kapalı kapı arkasında, beton duvar arkasında, telefon cepte/yerde.
   Nöbetin ekran kapalıyken ve uygulama kapalıyken bildirim verdiğini, sarsıntı sorusunun
@@ -103,6 +110,7 @@ kaydı aynı şirket kimliğinden yalnız birini tuttuğu için ikisi ham baytla
 
 ## Testler
 
-- `tools/enkaz-sinama/calistir.sh`: işaret kodlama/çözme, ham reklam ayrıştırma, sarsıntı ölçütü.
+- `tools/enkaz-sinama/calistir.sh`: işaret kodlama/çözme, ham reklam ayrıştırma, etiket temizliği,
+  sarsıntı ölçütü; ayrıca mesh komşu adı temizliği ve gelen çerçeve sınırı (`MeshPeer`).
 - `tests/enkaz.test.ts`: bina, SMS metni, son konum kaydı, sinyal eğilimi.
 - `e2e/enkaz-check.mjs`: arayüz, sahte Capacitor köprüsüyle.

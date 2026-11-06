@@ -62,7 +62,9 @@ if (!realMap) {
   await p.waitForSelector('[data-testid="map-get-packs"]', { timeout: 10000 });
   const txt = await p.textContent('.map-empty');
   check(txt.includes('Araçlar → Paketler') && !txt.includes('Paylaş sekmesinden'), 'paket yok: doğru yönlendirme metni');
-  check((await pageOverflow(p)) <= 0, 'paket yok: 360 px sayfa taşmıyor');
+  // Hazır paket listesiyle sayfa dikeyde kayabilir; yatay taşma olmamalı, konum düğmeleri ilk ekranda olmalı
+  check(await p.evaluate(() => { const m = document.querySelector('.app-main'); return m.scrollWidth <= m.clientWidth; }), 'paket yok: 360 px yatay taşma yok');
+  check(await p.$eval('[data-testid="map-saymyloc"]', (e) => e.getBoundingClientRect().bottom <= document.querySelector('.app-main').getBoundingClientRect().bottom), 'paket yok: "Konumumu söyle" ilk ekranda');
   await shot(p, shots + '/qa-harita-nopack-360.png');
   await p.click('[data-testid="map-get-packs"]');
   await p.waitForTimeout(800);
@@ -314,6 +316,121 @@ for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { wi
   await p.waitForTimeout(500);
   const g2 = await p.evaluate(() => window.__geo);
   check(g2.watch >= 1, 'düşük güç kapalı: sürekli konum takibi ' + JSON.stringify(g2));
+  await ctx.close();
+}
+
+// ---------- 9) Denetim 2026-11 ----------
+// 9a) Paket yokken hazır harita ve nokta paketleri doğrudan Harita sekmesinden iner
+if (!realMap) {
+  const fs = await import('fs');
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const sample = fs.readFileSync(path.join(root, 'testdata/sample_ornek.pmtiles'));
+  const crypto = await import('crypto');
+  const man = JSON.parse(fs.readFileSync(path.join(root, 'public/packs-manifest.json'), 'utf8'));
+  const genel = man.packs.find((x) => x.id === 'harita-tr-genel');
+  const realSize = genel.size;
+  // Katalogdaki genel harita yerine küçük örnek dosya (aynı ad, kendi boyutu ve özeti)
+  Object.assign(genel, { size: sample.length, sha256: crypto.createHash('sha256').update(sample).digest('hex') });
+  const { ctx, p } = await open({ viewport: { width: 390, height: 844 } });
+  const ext = [];
+  await ctx.route('**/packs-manifest.json', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(man) }));
+  await ctx.route(/huggingface\.co\/.*turkiye-genel-z10\.pmtiles/, (r) => r.fulfill({ status: 200, headers: { 'content-length': String(sample.length), 'access-control-allow-origin': '*' }, body: sample }));
+  p.on('request', (r) => { if (!/^https?:\/\/(127\.0\.0\.1|localhost)/.test(r.url()) && !/^(data|blob):/.test(r.url())) ext.push(r.url()); });
+  await p.goto(base + '?tab=harita', { waitUntil: 'networkidle' });
+  await p.waitForSelector('[data-testid="map-ready-packs"] [data-testid="pack-row"]', { timeout: 15000 });
+  const rows = await p.$$eval('[data-testid="map-ready-packs"] [data-testid="pack-row"]', (els) => els.map((e) => [e.dataset.pack, e.querySelector('.tag')?.textContent, !!e.querySelector('[data-testid="pack-download"]')]));
+  check(rows.length === 3, 'hazır paketler: 2 harita + 1 nokta paketi listelenir ' + JSON.stringify(rows));
+  check(rows.every((r) => r[2]), 'hazır paketler: her satırda "İndir"');
+  check(rows.some((r) => r[0] === 'turkiye.pmtiles' && /MB|GB/.test(r[1])) && rows.some((r) => r[0] === 'turkiye-afet-noktalari.geojson' && /MB/.test(r[1])), 'hazır paketler: boyutlar gösterilir');
+  await shot(p, shots + '/qa-harita-hazir-paketler.png');
+  await p.click('[data-testid="map-ready-packs"] [data-pack="turkiye-genel-z10.pmtiles"] [data-testid="pack-download"]');
+  await p.waitForSelector('[data-testid="map"] canvas', { timeout: 60000 });
+  check(true, 'hazır harita indirildi → harita kendiliğinden açıldı');
+  check((await p.textContent('.map-notice')).includes('Nokta paketi yüklü değil'), 'harita var, nokta yok: bildirim');
+  check(realSize > sample.length, 'katalog boyutu örnek dosyadan büyük (sahte veriyle test)');
+  // 9f) Harita kullanımında dış ağa istek yok (katalog tazeleme ve yönlendirilmiş indirme hariç)
+  await p.click('.maplibregl-ctrl-zoom-in');
+  await p.waitForTimeout(800);
+  const extMap = ext.filter((u) => !/packs-manifest\.json|turkiye-genel-z10\.pmtiles/.test(u));
+  check(extMap.length === 0, 'harita dış ağa istek yapmıyor ' + extMap.slice(0, 3).join(' '));
+  await ctx.close();
+}
+
+// 9b) Sekme değişimi: harita kaynağı ve harita tuvali birikmez; 9c) yön değişimi; 9d) seçilen nokta ortada
+{
+  const { ctx, p } = await open({ geolocation: { ...START, accuracy: 8 }, permissions: ['geolocation'] });
+  await p.goto(mapUrl(), { waitUntil: 'networkidle' });
+  await waitMap(p);
+  const count0 = await p.evaluate(async () => (await import('/src/lib/map/pmtilesSource.ts')).pmtilesSourceCount());
+  for (let i = 0; i < 4; i++) {
+    await p.click('[data-testid="nav-rehber"]');
+    await p.waitForSelector('[data-testid="guide-search"]');
+    await p.click('[data-testid="nav-harita"]');
+    await waitMap(p);
+  }
+  const count1 = await p.evaluate(async () => (await import('/src/lib/map/pmtilesSource.ts')).pmtilesSourceCount());
+  if (!realMap) check(count1 === count0 && count1 <= 1, `sekme değişimi: harita kaynağı birikmiyor (${count0} → ${count1})`);
+  check((await p.$$('.maplibregl-canvas')).length === 1, 'sekme değişimi: tek harita tuvali');
+  // Başka bir paketin indirmesi bitince (paket listesi değişti) harita yeniden kurulmaz
+  await p.evaluate(() => { window.__acMap.__qaIsaret = 1; });
+  await p.evaluate(async () => (await import('/src/lib/packs.ts')).invalidatePacks());
+  await p.waitForTimeout(1500);
+  check(await p.evaluate(() => window.__acMap?.__qaIsaret === 1), 'paket listesi değişince harita yeniden kurulmuyor');
+  // seçilen nokta, kart açılıp harita küçüldükten sonra ortada
+  await p.evaluate(() => document.querySelectorAll('[data-testid="poi-marker"][data-type="toplanma"]')[1]?.click());
+  await p.waitForSelector('[data-testid="poi-card"]');
+  await p.waitForTimeout(1200);
+  const off = await p.evaluate(() => {
+    const m = document.querySelector('[data-testid="map"]').getBoundingClientRect();
+    const s = document.querySelector('.poi-mk.sel')?.getBoundingClientRect();
+    return s ? Math.hypot(s.x + s.width / 2 - (m.x + m.width / 2), s.y + s.height / 2 - (m.y + m.height / 2)) : -1;
+  });
+  if (!realMap) check(off >= 0 && off < 12, `seçilen nokta kart açıldıktan sonra haritanın ortasında (${Math.round(off)} px)`);
+  // yatay ↔ dikey
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.waitForTimeout(800);
+  const land = await p.evaluate(() => {
+    const c = document.querySelector('[data-testid="map"] canvas');
+    const w = document.querySelector('[data-testid="map"]');
+    const m = document.querySelector('.app-main');
+    return { dw: Math.abs(c.clientWidth - w.clientWidth), dh: Math.abs(c.clientHeight - w.clientHeight), hx: m.scrollWidth - m.clientWidth };
+  });
+  check(land.dw <= 1 && land.dh <= 1 && land.hx <= 0, 'yatay ekran: harita tuvali kutuya uyuyor, yatay taşma yok ' + JSON.stringify(land));
+  const cardH = await p.$eval('[data-testid="poi-card"]', (e) => { e.scrollIntoView({ block: 'nearest' }); return Math.min(e.getBoundingClientRect().height, e.closest('.map-panels').getBoundingClientRect().height); });
+  check(cardH > 100, `yatay ekran: seçili nokta kartı görünür (${Math.round(cardH)} px)`);
+  await shot(p, shots + '/qa-harita-yatay.png');
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.waitForTimeout(600);
+  const port = await p.$eval('[data-testid="map"] canvas', (c) => Math.abs(c.clientWidth - c.parentElement.parentElement.clientWidth));
+  check(port <= 1, 'dikeye dönüş: harita tuvali yeniden boyutlandı');
+  // kayıt göstergesi kırmızı değil (Şafak: kırmızı yalnız SOS/112)
+  await p.click('[data-testid="map-track"]');
+  await p.click('[data-testid="track-start"]');
+  const recColor = await p.$eval('[data-testid="track-badge"] .rec-dot', (e) => getComputedStyle(e).backgroundColor);
+  check(recColor === 'rgb(245, 165, 36)', 'iz kaydı göstergesi kehribar: ' + recColor);
+  await p.click('[data-testid="track-stop"]');
+  await p.evaluate(() => { localStorage.removeItem('ac.map.track.v1'); localStorage.removeItem('ac.map.nav.v1'); });
+  await ctx.close();
+}
+
+// 9e) En büyük yazı 360×640: yatay taşma yok, nokta kartının düğmeleri görünür
+{
+  const { ctx, p } = await open({ viewport: { width: 360, height: 640 }, geolocation: { ...START, accuracy: 8 }, permissions: ['geolocation'] }, () => {
+    localStorage.setItem('ac.settings', JSON.stringify({ textSize: 3 }));
+  });
+  await p.goto(mapUrl(), { waitUntil: 'networkidle' });
+  await waitMap(p);
+  check(await p.evaluate(() => { const m = document.querySelector('.app-main'); return m.scrollWidth <= m.clientWidth; }), 'en büyük yazı: çip satırı yatay taşma yapmıyor');
+  await p.evaluate(() => document.querySelector('[data-testid="poi-marker"][data-type="toplanma"]')?.click());
+  await p.waitForSelector('[data-testid="poi-direction"]');
+  await p.waitForTimeout(700);
+  const vis = await p.$eval('[data-testid="poi-direction"]', (e) => {
+    const r = e.getBoundingClientRect();
+    const panel = e.closest('.map-panels').getBoundingClientRect();
+    return r.bottom <= panel.bottom + 1 && r.height >= 44;
+  });
+  check(vis, 'en büyük yazı: "Yön göster" kart alanında kırpılmıyor');
+  await shot(p, shots + '/qa-harita-buyuk-yazi.png');
   await ctx.close();
 }
 

@@ -37,7 +37,8 @@ export const CSS = `
 .cm-row-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .cm-row .cm-count { position: static; flex-shrink: 0; }
 .cm-card .cm-count { color: var(--on-accent); font-size: 12px; }
-.cm-chev { font-size: 26px; line-height: 1; color: var(--muted) !important; flex-shrink: 0; padding-left: 2px; }
+/* .cm-card span (12,5 px) bunu ezmesin: ok işareti okunur boyutta kalsın */
+.cm-card .cm-chev { font-size: 26px; line-height: 1; color: var(--muted); flex-shrink: 0; padding-left: 2px; display: flex; }
 
 /* SOS ekranı */
 .sos-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -57,8 +58,9 @@ button.sos-tile:hover { border-color: rgba(255,200,97,0.5); }
 .sw { position: relative; width: 56px; height: 44px; border: 0; padding: 0; background: transparent; flex-shrink: 0; }
 .sw::before { content: ''; position: absolute; left: 3px; top: 8px; width: 50px; height: 28px; border-radius: 999px; background: rgba(255,255,255,0.24); }
 .sw::after { content: ''; position: absolute; left: 6px; top: 11px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: left 0.15s; }
-.sw[aria-checked='true']::before { background: var(--ok); }
-.sw[aria-checked='true']::after { left: 28px; background: #0e1b2c; }
+/* Uygulamanın diğer anahtarlarıyla aynı: açıkken kehribar */
+.sw[aria-checked='true']::before { background: var(--accent); }
+.sw[aria-checked='true']::after { left: 28px; background: #0b0e13; }
 .sw:disabled { cursor: default; }
 .sos-seg { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); }
 .sos-seg button { min-height: 44px; border-radius: 999px; border: 0; background: transparent; color: var(--text2); font-size: 14px; font-weight: 500; }

@@ -8,6 +8,12 @@
   --sa-right: max(env(safe-area-inset-right, 0px), var(--safe-area-inset-right, 0px));
   --sa-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
   --sa-left: max(env(safe-area-inset-left, 0px), var(--safe-area-inset-left, 0px));
+  /* Yan boşluklar: uygulama sütunu (en çok 720 px) ekranın kenarına değmiyorsa (yatay telefon,
+     tablet) çentik ya da gezinme çubuğu zaten sütunun dışında kalır; yalnız sütuna taşan kısmı
+     eklenir. Böylece sol ve sağ boşluk eşit kalır (yatayda içerik bir yana kaymaz). */
+  --app-gut: max(0px, (100vw - 720px) / 2);
+  --in-left: max(0px, var(--sa-left) - var(--app-gut));
+  --in-right: max(0px, var(--sa-right) - var(--app-gut));
   --bg: #0e1b2c;
   --bg2: #12233a;
   --card: #172a42;
@@ -26,7 +32,8 @@
   --accent-soft: rgba(245, 165, 36, 0.14);
   --ok: #4fd1a5;
   --danger: #ff8a7a;
-  --sos: #e5484d;
+  /* SOS/112 kırmızısı: üstündeki beyaz yazı 4,78:1 (WCAG AA; eski #e5484d 3,9:1 idi) */
+  --sos: #d13a40;
   --blue: #74b6ff;
   --glass: rgba(255, 255, 255, 0.07);
   --glass-line: rgba(255, 255, 255, 0.13);
@@ -41,6 +48,9 @@
      çünkü bileşenlerin yazı boyutları px cinsinden. */
   --ui-scale: 1;
   --nav-scale: 1;
+  /* İçerik yan boşluğu: sekme içeriği --ui-scale ile yakınlaştırıldığından (zoom) 18 px de büyürdü
+     (en büyük yazıda ~25 px, üst çubuk ve Harita 18 px). Ölçeğe bölünür: her boyutta ekranda 18 px. */
+  --pad-x: calc(18px / var(--ui-scale));
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -64,28 +74,51 @@ html.hc * { scrollbar-color: #ffffff #000000; }
 
 /* Şafak ışığı: üstte hafif kehribar parıltı */
 .app { position: relative; height: 100%; display: flex; flex-direction: column; max-width: 720px; margin: 0 auto; background: radial-gradient(130% 55% at 50% -12%, rgba(245, 165, 36, 0.13), rgba(245, 165, 36, 0) 62%), var(--bg); }
-.app-header { min-height: calc(58px + var(--sa-top)); background: var(--bg); flex-shrink: 0; padding: var(--sa-top) calc(18px + var(--sa-right)) 0 calc(18px + var(--sa-left)); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Üst çubuk saydam: şafak parıltısı başlığın arkasından kesintisiz başlar (opak zeminde
+   başlığın altında sert bir çizgi oluşuyordu). */
+.app-header { min-height: calc(58px + var(--sa-top)); background: transparent; flex-shrink: 0; overflow: hidden; padding: var(--sa-top) calc(18px + var(--in-right)) 0 calc(18px + var(--in-left)); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand-logo { border-radius: 9px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); }
 .brand { display: flex; flex-direction: column; min-width: 0; }
-.brand-name { font-size: calc(20px * var(--nav-scale)); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; }
+.brand-name { font-size: calc(20px * var(--nav-scale)); font-weight: 700; letter-spacing: -0.01em; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.12em; }
 .brand-name em { font-weight: 500; font-style: italic; color: var(--accent2); }
 .brand-sub { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pill { display: flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); font-size: 12.5px; font-weight: 500; color: var(--text2); flex-shrink: 0; }
+/* Dar üst çubuk (App.tsx basligiSigdir): önce rozet sıkışır, sonra yalnız nokta kalır
+   (yazısı ekran okuyucuda kalır) */
+.app-header.sik { gap: 8px; }
+.app-header.sik .brand-row { gap: 8px; }
+.app-header.sik .pill { padding: 6px 9px; gap: 5px; }
+.app-header.dar .pill { padding: 10px; }
+.app-header.dar .pill-txt { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); }
 .dot.on { background: var(--ok); }
 
-.app-main { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-left: var(--sa-left); padding-right: var(--sa-right); }
-.pad { padding: 14px 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+/* Masaüstü tarayıcıda (bilgi noktası, Windows önizleme) kaydırma çubuğu yer kaplar ve içerik sağda
+   10 px daha içeride kalıyordu (sol 18, sağ 28). Böyle tarayıcılarda (main.tsx html.kaydirma-cubugu
+   sınıfını koyar) çubuğun yeri iki yanda da ayrılır; üst çubuk da aynı payı alır, böylece başlık ve
+   kartlar hizalı, iki yan eşit kalır. Telefonda kaydırma çubuğu içeriğin üstünde kayar, pay yoktur. */
+html.kaydirma-cubugu .app-main, html.kaydirma-cubugu .app-header, html.kaydirma-cubugu .ku { scrollbar-gutter: stable both-edges; }
+.app-main { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-left: var(--in-left); padding-right: var(--in-right); }
+.pad { padding: 14px var(--pad-x) 20px; display: flex; flex-direction: column; gap: 14px; }
+/* Güncelleme bandı (sekme içeriğinin üstünde, içerikle aynı yan boşluk) */
+.app-banner { padding: 14px var(--pad-x) 0; }
 
 /* Yüzen gezinme çubuğu */
-.app-nav { flex-shrink: 0; margin: 2px calc(12px + var(--sa-right)) calc(8px + var(--sa-bottom)) calc(12px + var(--sa-left)); background: var(--nav-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 10px 30px rgba(3, 9, 18, 0.45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 6px; }
+.app-nav { flex-shrink: 0; margin: 2px calc(12px + var(--in-right)) calc(8px + var(--sa-bottom)) calc(12px + var(--in-left)); background: var(--nav-bg); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 10px 30px rgba(3, 9, 18, 0.45); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 6px; }
 .nav-btn { min-height: 54px; background: transparent; border: none; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: var(--muted); padding: 0; }
 .nav-btn[aria-current='page'] { color: var(--accent2); background: var(--accent-soft); }
-.nav-btn span { font-size: calc(10.5px * var(--nav-scale)); font-weight: 500; white-space: nowrap; }
+/* --nav-fit: etiketler sığmazsa (dar ekran + Android'in büyük yazı ayarı) App.tsx küçültür */
+.nav-btn span { font-size: calc(10.5px * var(--nav-scale) * var(--nav-fit, 1)); font-weight: 500; white-space: nowrap; }
 .nav-btn[aria-current='page'] span { font-weight: 600; }
 /* Dar ekran: etiketlere yer açmak için çubuk kenarlara yaklaşır */
-@media (max-width: 400px) { .app-nav { margin-left: 4px; margin-right: 4px; padding: 4px 3px; gap: 0; border-radius: 20px; } }
+@media (max-width: 400px) { .app-nav { margin-left: calc(4px + var(--in-left)); margin-right: calc(4px + var(--in-right)); padding: 4px 3px; gap: 0; border-radius: 20px; } }
+/* Yatay telefon: ekran kısa; üst çubuk ve gezinme inceltilir (simge ve etiket yan yana) */
+@media (orientation: landscape) and (max-height: 500px) {
+  .app-header { min-height: calc(48px + var(--sa-top)); }
+  .app-nav { padding: 4px; margin-bottom: calc(6px + var(--sa-bottom)); border-radius: 20px; }
+  .nav-btn { min-height: 44px; flex-direction: row; gap: 8px; border-radius: 15px; }
+}
 
 .label { font-size: 12.5px; color: var(--muted); font-weight: 600; letter-spacing: 0.02em; }
 .mono { font-family: var(--mono); }
@@ -190,9 +223,15 @@ html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after 
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
 /* Depolama yok uyarısı (gizli sekme / Wi-Fi giriş penceresi) */
-.storage-warn { flex-shrink: 0; margin: 8px 12px 0; padding: 12px 14px; border-radius: 12px; background: rgba(245, 165, 36, 0.12); border: 1px solid var(--accent); display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
+.storage-warn { flex-shrink: 0; margin: 8px calc(18px + var(--in-right)) 0 calc(18px + var(--in-left)); padding: 12px 14px; border-radius: 12px; background: rgba(245, 165, 36, 0.12); border: 1px solid var(--accent); display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; }
 .storage-warn strong { font-size: 15px; color: var(--accent); }
 .storage-warn p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text); }
 .storage-warn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .storage-warn-row code { font-family: var(--code); font-size: 14px; padding: 8px 10px; border-radius: 8px; background: var(--bg2); border: 1px solid var(--line2); user-select: all; overflow-wrap: anywhere; }
 .storage-warn-row .btn, .storage-warn-row .link-btn { min-height: 44px; }
+
+/* Hata sınırı: bir bölüm çökerse yalnız o bölümün yerinde sakin bir kart (App.tsx HataSiniri) */
+.hata-kart { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.hata-kart h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.hata-kart p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2); }
+.hata-kart .row { flex-wrap: wrap; }

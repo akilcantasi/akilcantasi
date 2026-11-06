@@ -51,3 +51,42 @@ node e2e/ayarlar-check.mjs http://localhost:5199/
 node e2e/download-check.mjs --dist <dist klasörü>
 ```
 `npx tsc --noEmit` temiz, `npx vitest run` 1273/1273.
+
+## Denetim 2026-11
+
+Kapsam: Araçlar sekmesindeki tüm araçlar (enkaz ve enkaz arama İletişim raporunda), Ayarlar ve güncelleme bölümü, güncelleme bandı (src/Guncelleme.tsx), Paketler ve paylaşım. 360×640, 390×844, 1280×800, Android "büyük yazı" (×1,3) ve güvenli alanla bakıldı; Android eklentileri, pusula sensörü (iOS `requestPermission` izin/ret, sensör yok, Android `deviceorientationabsolute`), konum ve hava paketi (dosyadan içe aktarma) taklit edildi.
+
+### Denetlenenler
+- [x] Her araç: boş, hata ve başarı durumları; konsol hatası; yatay taşma; 44 px hedefler; sol/sağ boşluk eşitliği (`.pad` çocukları ölçüldü, fark yok)
+- [x] Giriş doğrulama: eksi, çok büyük, boş sayı (hesap, stok)
+- [x] Kalıcılık: tüm ayarlar (yazı boyutu, kontrast, hareket, düşük güç, pil tasarrufu), hesap, stok, çanta, radyo ili, hava ili
+- [x] Güncelleme: denetle / indir / kur; **kurulum yalnız "Kur" düğmesiyle**: Java'da `Guncelleyici.kur` yalnız `GuncellemePlugin.kur`dan, o da yalnız `GuncellemeKarti`ndaki düğmeden çağrılıyor. Açılış, görünürlük değişimi, ayar değişimi, elle denetleme ve "İndir" kurmuyor (guncelleme-check'e eklendi)
+- [x] Pusula: izin iste / reddedildi / sensör yok / çalışıyor
+- [x] Hava: paket yok, paket var (aylar, normaller, kaynaklar; `javascript:` bağlantısı bağlantı olarak çizilmiyor)
+- [x] Paylaş: bilgi noktası (tarayıcı + Android taklidi), QR, APK paylaşımı, lisanslar
+
+### Düzeltilenler
+1. **Hesap: sınır dışı sayı yazınca kutu yanlış değeri gösteriyordu.** 100 yetişkin varken 5000 yazılınca durum değişmediği için kutu "5000" kalıyor, hesap 100 ile yapılıyordu; 0 gün yazınca kutu 0, hesap 1 gündü; eksi sayı da kutuda kalıyordu. Kutu artık hesaplanan değeri gösteriyor, gün en az 1 (azalt düğmesi 1'de pasif). (hesap/index.tsx)
+2. **Stok: doğrulama eksikti.** Boş miktar 0 olarak kaydediliyordu; 99999999999 gibi değerler kabul ediliyordu; eksi kcal/litre sessizce yok sayılıp "hesaba katılamadı" görünüyordu. Hepsi açık hata mesajıyla reddediliyor (üst sınır 1.000.000). (stok/index.tsx)
+3. **Güncelleme: "Kur"a çift dokunuş iki kurulum çağrısı yapıyordu** (durum "kuruluyor"a geçene kadar). Basılınca düğme kilitleniyor. Kurulum kuralı değişmedi. (Guncelleme.tsx)
+4. **Ayarlar: sıfırlama açıklaması eksikti.** `localStorage.clear()` yakınları, adı, enkaz bina bilgisini, gönderilmemiş pano kayıtlarını ve yer işaretlerini de siliyor; metin bunu söylüyor. (ayarlar/index.tsx)
+5. **Lisanslar eksikti:** arayüz yazı tipi Poppins, harita yazı tipi Noto Sans (OFL-1.1) ve PDF.js (Apache-2.0) listede yoktu; node_modules'tan doğrulanıp eklendi. (PaylasTab.tsx)
+6. **Pusula:** paragrafların varsayılan kenar boşlukları flex boşluğuna ekleniyor, "sensör yok" kartında ve hedef bölümünde düzensiz boşluk oluşuyordu. (pusula/index.tsx)
+7. **Hava:** il seçim kutusunun kenarı düşük kontrastlı `--line3` idi; diğer giriş alanları gibi `--line-input`. (hava/index.tsx)
+8. Ortak grup başlığı (`.kn-group > h2`) yanındaki düğmeyle dikeyde hizasızdı. (_kaynak/ui.ts)
+9. Yazım: "karbonmonoksit" → "karbon monoksit" (pil, radyo).
+10. **Hesap, stok ve çanta değişiklikleri çizimden sonra (useEffect) kaydediliyordu**; değiştirip hemen başka ekrana geçince ya da uygulama kapanınca son değişiklik kaybolabiliyordu (qa-araclar'da "kalıcı: hesap çocuk" bir kez bu yüzden düştü). Artık değişiklik anında kaydediliyor. (hesap, stok, canta)
+11. Test kararlılığı: kaynak-check'teki `body.saver` denetimi, sınıf çizimden sonra eklendiği için yük altında yanlış hata veriyordu; bekleme eklendi.
+
+### Kalanlar
+- **Radyo yalnız 13 il içeriyor, 81 değil.** Diğer iller için tarama yöntemi anlatılıyor. TRT frekans sayfası (radyo.trt.net.tr/frekanslar) bu oturumda erişim izni alamadı; doğrulanmamış frekans eklenmedi.
+- Android "büyük yazı"da alt gezinme çubuğunda "Kütüphane" ve "Araçlar" etiketleri birbirine değiyor (src/styles/app.css, kapsam dışı).
+- qa-araclar'ın indirme bölümü (iptalden sonra yeniden indirme) tam çalıştırmada bir kez zaman aşımına uğradı; tek başına çalıştırınca geçiyor. İndirme kodu kapsam dışı (src/lib).
+- Pusula gülünde kuzey kırmızı (pusula geleneği); bilerek bırakıldı.
+
+### E2E
+```
+node e2e/qa-araclar.mjs http://localhost:5199/   # 239 denetim, tümü OK; "9) Denetim 2026-11": giriş doğrulama, ayar kalıcılığı
+node e2e/guncelleme-check.mjs                    # 10 adım (2'si yeni)
+node e2e/ayarlar-check.mjs ; node e2e/kaynak-check.mjs ; node e2e/eglence-check.mjs ; node e2e/sunucu-indirme-check.mjs
+```

@@ -327,6 +327,8 @@ try {
     check(await p.evaluate(() => document.documentElement.classList.contains('reduce-motion')), 'hareketi azalt: html.reduce-motion');
     await p.click(tid('set-motion'));
     await p.click(tid('set-lowpower'));
+    // body.saver, App'in etkisinde (çizimden sonra) eklenir: makine yüklüyken birkaç ms sürebilir
+    await p.waitForFunction(() => document.body.classList.contains('saver'), null, { timeout: 3000 }).catch(() => {});
     const lp = await p.evaluate(() => ({ c: document.documentElement.classList.contains('lowpower'), bg: getComputedStyle(document.body).backgroundColor, saver: document.body.classList.contains('saver') }));
     check(lp.c && lp.bg === 'rgb(0, 0, 0)' && lp.saver, 'düşük güç: siyah zemin + pil tasarrufu ' + JSON.stringify(lp));
     check((await p.getAttribute(tid('set-saver'), 'aria-checked')) === 'true', 'düşük güç → pil tasarrufu anahtarı açık');
@@ -494,6 +496,63 @@ try {
     await audit(p, 'radyo (tüm bölümler açık)');
     await tallShot(p, 'radyo-360');
     check(errors.length === 0, 'radyo: konsol hatası yok' + (errors.length ? ' — ' + errors.slice(0, 3).join(' | ') : ''));
+    await ctx.close();
+  }
+
+  // ---------- 9) Denetim 2026-11: giriş doğrulama (eksi, çok büyük, boş) ----------
+  {
+    const { ctx, p, errors } = await newPage({ viewport: { width: 360, height: 640 } });
+    await goto(p, '?tool=hesap');
+    // Sınır dışı sayı yazılınca kutu, hesaplanan değeri göstermeli (durum değişmese de)
+    await p.fill(tid('hesap-adults'), '100');
+    await p.fill(tid('hesap-adults'), '5000');
+    check((await p.inputValue(tid('hesap-adults'))) === '100', 'hesap: 5000 yetişkin → kutuda 100 (üst sınır)');
+    await p.fill(tid('hesap-adults'), '2');
+    await p.fill(tid('hesap-days'), '1');
+    await p.fill(tid('hesap-days'), '0');
+    await p.locator(tid('hesap-days')).blur();
+    check((await p.inputValue(tid('hesap-days'))) === '1', 'hesap: 0 gün → kutuda 1 (en az bir gün): ' + (await p.inputValue(tid('hesap-days'))));
+    check(await p.isDisabled(tid('hesap-days-dec')), 'hesap: 1 günde azalt düğmesi pasif');
+    check(/Su — 1 gün/.test(await p.textContent(tid('hesap-water'))), 'hesap: sonuç 1 güne göre');
+    await p.fill(tid('hesap-children'), '-3');
+    await p.locator(tid('hesap-children')).blur();
+    check((await p.inputValue(tid('hesap-children'))) === '0', 'hesap: eksi çocuk sayısı 0 olur');
+
+    await goto(p, '?tool=stok');
+    await p.click(tid('stok-add'));
+    await p.fill(tid('stok-new-name'), 'Denetim su');
+    await p.fill(tid('stok-new-qty'), '');
+    await p.click(tid('stok-new-save'));
+    check(/Miktar/.test((await p.textContent(tid('stok-new-error')).catch(() => '')) || ''), 'stok: boş miktar reddedilir');
+    await p.fill(tid('stok-new-qty'), '-2');
+    await p.click(tid('stok-new-save'));
+    check(await p.isVisible(tid('stok-new-error')), 'stok: eksi miktar reddedilir');
+    await p.fill(tid('stok-new-qty'), '99999999999');
+    await p.click(tid('stok-new-save'));
+    check(/çok büyük/.test(await p.textContent(tid('stok-new-error'))), 'stok: çok büyük miktar reddedilir');
+    await p.click(tid('stok-new-kind-su'));
+    await p.selectOption(tid('stok-new-unit'), 'adet');
+    await p.fill(tid('stok-new-qty'), '6');
+    await p.fill(tid('stok-new-litre'), '-1,5');
+    await p.click(tid('stok-new-save'));
+    check(/Litre/.test(await p.textContent(tid('stok-new-error'))), 'stok: eksi litre reddedilir (sessizce yok sayılmaz)');
+    await p.fill(tid('stok-new-litre'), '1,5');
+    await p.click(tid('stok-new-save'));
+    await p.waitForSelector(tid('stok-water-days'));
+    check(/9 L/.test(await p.textContent(tid('stok-coverage'))), 'stok: 6 × 1,5 L = 9 L hesaba katıldı');
+    await audit(p, '360 stok (doğrulama sonrası)');
+
+    // Her ayar yeniden yüklemede korunur (kontrast, hareket, düşük güç)
+    await goto(p, '?tool=ayarlar');
+    for (const id of ['set-contrast', 'set-motion', 'set-lowpower']) await p.click(tid(id));
+    await p.reload({ waitUntil: 'networkidle' });
+    await p.waitForSelector(tid('set-contrast'));
+    const kalici = await p.evaluate(() => ['set-contrast', 'set-motion', 'set-lowpower', 'set-saver'].map((t) => document.querySelector(`[data-testid="${t}"]`)?.getAttribute('aria-checked')));
+    check(kalici.every((x) => x === 'true'), 'ayarlar: kontrast, hareket, düşük güç (ve pil tasarrufu) yeniden yüklemede açık: ' + kalici.join(','));
+    // Düşük güç kapanınca pil tasarrufu da kapanır (settings.ts)
+    for (const id of ['set-contrast', 'set-motion', 'set-lowpower']) await p.click(tid(id));
+    check((await p.getAttribute(tid('set-saver'), 'aria-checked')) === 'false', 'ayarlar: düşük güç kapanınca pil tasarrufu da kapandı');
+    check(errors.length === 0, 'doğrulama: konsol hatası yok' + (errors.length ? ' — ' + errors.slice(0, 3).join(' | ') : ''));
     await ctx.close();
   }
 } catch (e) {

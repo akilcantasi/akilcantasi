@@ -35,6 +35,20 @@ export function formatLines(text: string): Span[][] {
   });
 }
 
+/**
+ * "Kopyala" için düz metin: biçim işaretleri atılır, madde işaretleri kalır; kaynaklar
+ * numaralarıyla sona eklenir (metindeki [1], [2] bunlara karşılık gelir).
+ */
+export function copyText(text: string, sources: { n: number; title: string; kind?: string; label?: string }[] = []): string {
+  const body = formatLines(text)
+    .map((l) => l.map((s) => s.text).join(''))
+    .join('\n')
+    .trim();
+  if (!sources.length) return body;
+  const kind = (s: { kind?: string; label?: string }) => (s.kind === 'rehber' ? 'Rehber' : s.kind === 'vikipedi' ? s.label || 'Vikipedi' : 'Bağlam');
+  return body + '\n\nKaynaklar:\n' + sources.map((s) => `[${s.n}] ${kind(s)}: ${s.title}`).join('\n');
+}
+
 /** Sesli okuma için işaretsiz düz metin */
 export function plainText(text: string): string {
   return formatLines(text)

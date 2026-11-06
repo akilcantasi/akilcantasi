@@ -271,6 +271,116 @@ function kopru() {
   await ctx.close();
 }
 
+// ---------------------------------------------------------------- Denetim 2026-11: durum güncellemeleri
+// Yerel taraf olay göndermese (ya da geç gönderse) de arayüz kendini yenilemeli.
+{
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await ctx.addInitScript(kopru);
+  await ctx.addInitScript(() => {
+    const st = window.__st;
+    Object.assign(st, { aktif: true, istenen: true, etiket: 'Ayşe · B blok 3. kat D:7', kat: 3, baslangic: Date.now() - 60000, reklam: 'bluetooth-kapali', sonSes: Date.now() - 60000 });
+    const E = window.Capacitor.Plugins.AkilEnkaz;
+    // Olay GÖNDERMEYEN yerel yanıtlar: yalnız durum() yeni hali verir
+    E.bluetoothAc = async () => { window.__calls.push(['bluetoothAc']); st.reklam = 'yayiliyor'; st.izinler.bluetoothAcik = true; return { izinler: st.izinler }; };
+    E.izinIste = async () => { window.__calls.push(['izinIste']); st.reklam = 'yayiliyor'; return { izinler: st.izinler }; };
+    E.sesCal = async () => { window.__calls.push(['sesCal']); return {}; };
+  });
+  await ctx.addInitScript(() => { window.__opened = []; window.__acSmsOpen = (h) => window.__opened.push(h); });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(e.message));
+  await p.goto(base + '?tool=enkaz');
+  await p.waitForSelector(tid('ek-live'));
+  await step("Bluetooth'u aç: izin/açma sonrası düğme kaybolur (yeniden başlatmadan)", async () => {
+    await p.waitForSelector(tid('ek-bt-ac'));
+    await p.click(tid('ek-bt-ac'));
+    await p.waitForSelector(tid('ek-bt-ac'), { state: 'detached', timeout: 4000 });
+    assert.match(await p.textContent(tid('ek-live')), /Yakındaki uygulamalı telefonlar sizi duyabilir/);
+  });
+  await step('Servis durunca gelen olayda eski Bluetooth durumu kalmaz', async () => {
+    // Servis yokken olayda "reklam" alanı olmaz
+    await p.evaluate(() => { const d = JSON.parse(JSON.stringify(window.__st)); delete d.reklam; delete d.sonSes; window.__emit('enkazDurum', d); });
+    await p.waitForFunction(() => /Başlatılıyor/.test(document.querySelector('[data-testid="ek-live"]')?.textContent || ''));
+    await p.evaluate(() => { const d = JSON.parse(JSON.stringify(window.__st)); d.reklam = 'izin-yok'; window.__emit('enkazDurum', d); });
+    await p.waitForSelector(tid('ek-izin'));
+  });
+  await step('İzin ver: izin sonrası düğme kaybolur', async () => {
+    await p.click(tid('ek-izin'));
+    await p.waitForSelector(tid('ek-izin'), { state: 'detached', timeout: 4000 });
+  });
+  await step('Şimdi ses çal: dokununca hemen "Çalıyor…"', async () => {
+    await p.click(tid('ek-ses'));
+    await p.waitForFunction(() => /Çalıyor/.test(document.querySelector('[data-testid="ek-ses"]')?.textContent || ''), null, { timeout: 1500 });
+    assert.equal(await p.isDisabled(tid('ek-ses')), true);
+  });
+  await step('Kapat düğmesi kırmızı değil (yalnız SOS denetimleri kırmızı)', async () => {
+    const c = await p.$eval(tid('ek-kapat'), (e) => getComputedStyle(e).color);
+    assert.notEqual(c, 'rgb(255, 138, 122)');
+    await p.screenshot({ path: SHOTS + '/6-denetim-acik.png', fullPage: true });
+  });
+  await step('Konum kayıtlarını silmek onay ister', async () => {
+    await p.click(tid('ek-kayit-sil'));
+    await p.waitForSelector(tid('ek-kayit-sil-hayir'));
+    await p.click(tid('ek-kayit-sil-hayir'));
+    assert.match(await p.textContent(tid('ek-kayitlar')), /39\.9209/);
+  });
+  await ctx.close();
+}
+{
+  // SMS izni verilmezse enkaz başlarken SMS uygulaması hazır açılır (sessizce gitmemiş olmasın)
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx.addInitScript(kopru);
+  await ctx.addInitScript(() => {
+    window.Capacitor.Plugins.AkilCantasi.smsGonder = async (a) => { window.__calls.push(['smsGonder', a]); return { queued: false, izin: false, ids: [] }; };
+    window.__opened = []; window.__acSmsOpen = (h) => window.__opened.push(h);
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(e.message));
+  await p.goto(base + '?tool=enkaz');
+  await step('SMS izni yok: başlatınca SMS uygulaması 112 ve yakınlarla açılır', async () => {
+    await p.click(tid('ek-baslat'));
+    await p.click(tid('ek-baslat-onay'));
+    await p.waitForSelector(tid('ek-live'));
+    const opened = await p.evaluate(() => window.__opened);
+    assert.equal(opened.length, 1);
+    assert.match(opened[0], /^sms:112,05550000000\?body=ENKAZ/);
+  });
+  await ctx.close();
+}
+{
+  // Kurtarıcı: düğme etiketleri ne yaptığını söyler; Bluetooth kapalıyken tarama düzelir
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await ctx.addInitScript(kopru);
+  await ctx.addInitScript(() => {
+    const E = window.Capacitor.Plugins.AkilEnkaz;
+    window.__btAcik = false;
+    E.aramaBaslat = async () => { window.__calls.push(['aramaBaslat']); return window.__btAcik ? { basladi: true } : { basladi: false, hata: 'bluetooth-kapali' }; };
+    E.bluetoothAc = async () => { window.__calls.push(['bluetoothAc']); window.__btAcik = true; return { izinler: {} }; };
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(e.message));
+  await p.goto(base + '?tool=enkaz-arama');
+  await step("Arama: Bluetooth kapalı → \"Bluetooth'u aç\" → tarama başlar", async () => {
+    await p.waitForSelector(tid('ea-hata'));
+    assert.match(await p.textContent(tid('ea-coz')), /Bluetooth'u aç/);
+    await p.click(tid('ea-coz'));
+    await p.waitForSelector(tid('ea-bos'));
+    assert.equal(await p.isVisible(tid('ea-hata')), false);
+  });
+  await step('Arama: mesaj ve 112 düğmeleri ayrı başlıklarda, etiketler farklı ve açık', async () => {
+    await p.evaluate(() => window.__emit('enkazDuyuldu', { kimlik: 5, rssi: -70, enkaz: true, otomatik: false, yasDk: -1, pil: 50, dogruluk: -1, guc: 3, kod: 'AK-000005' }));
+    await p.waitForSelector(tid('ea-gosterge'));
+    assert.match(await p.textContent(tid('ea-mesaj') + ' b'), /Enkazdaki telefona mesaj/);
+    const bildir = await p.$$eval(tid('ea-bildir') + ' .btn', (els) => els.map((e) => e.textContent.trim()));
+    assert.deepEqual(bildir, ["112'ye SMS gönder", "112'yi telefonla ara", 'Başka numaraya SMS']);
+    assert.match(await p.getAttribute(tid('ea-sms-baska'), 'href'), /^sms:\?body=Enkaz/);
+    // Gösterge kartındaki düğmelerin hiçbiri aynı yazıyı taşımaz
+    const all = await p.$$eval(tid('ea-gosterge') + ' button, ' + tid('ea-gosterge') + ' a', (els) => els.map((e) => e.textContent.trim()));
+    assert.equal(new Set(all).size, all.length, 'yinelenen etiket: ' + all.join(' | '));
+    await p.screenshot({ path: SHOTS + '/7-denetim-arama.png', fullPage: true });
+  });
+  await ctx.close();
+}
+
 await browser.close();
 if (errors.length) { console.log('Sayfa hataları:', errors); fails++; }
 console.log(fails ? `${fails} HATA` : 'Hepsi geçti');

@@ -1,8 +1,10 @@
 #!/bin/sh
-# Enkaz işaretinin (EnkazIsareti.java) Bluetooth içerik kodlamasını ve sarsıntı ölçütünü
-# (SarsintiDedektoru.java) Android SDK olmadan sınar.
+# Enkaz işaretinin (EnkazIsareti.java) Bluetooth içerik kodlamasını, sarsıntı ölçütünü
+# (SarsintiDedektoru.java) ve mesh komşusunun güvenilmez girdi kurallarını (MeshPeer.java: ad
+# temizliği, gelen çerçeve sınırı) Android SDK olmadan sınar. taklit/: Capacitor JSObject taklidi.
 set -e
 cd "$(dirname "$0")"
 OUT=$(mktemp -d)
-javac -d "$OUT" ../../android/app/src/main/java/org/akilcantasi/app/EnkazIsareti.java ../../android/app/src/main/java/org/akilcantasi/app/SarsintiDedektoru.java ../../android/app/src/main/java/org/akilcantasi/app/Mesajlar.java Test.java
+A=../../android/app/src/main/java/org/akilcantasi/app
+javac -d "$OUT" $A/EnkazIsareti.java $A/SarsintiDedektoru.java $A/Mesajlar.java $A/MeshPeer.java taklit/com/getcapacitor/JSObject.java erisim/MeshSinama.java Test.java
 java -Dstdout.encoding=UTF-8 -cp "$OUT" Test

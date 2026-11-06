@@ -68,8 +68,11 @@ public class KonumIzleyici {
         this.dinleyici = dinleyici;
     }
 
+    /** Son istenen durum (baslat/durdur ana iş parçacığında sonra işlense de hemen doğru) */
+    private volatile boolean istendi = false;
+
     public boolean calisiyorMu() {
-        return calisiyor;
+        return istendi;
     }
 
     private boolean izin(String p) {
@@ -84,10 +87,12 @@ public class KonumIzleyici {
     }
 
     public void baslat() {
+        istendi = true;
         h.post(this::baslatAna);
     }
 
     public void durdur() {
+        istendi = false;
         h.post(this::durdurAna);
     }
 

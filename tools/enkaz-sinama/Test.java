@@ -130,6 +130,14 @@ public class Test {
         ok(uzun.startsWith(g) && !g.contains("�"), "etiket UTF-8 ortadan bölünmez: " + g);
         ok("Mehmet".equals(EnkazIsareti.etiketCoz(EnkazIsareti.etiketKodla(" Mehmet "))), "kısa etiket");
         ok(EnkazIsareti.etiketCoz(e.kodla()) == null, "işaret etiket sanılmaz");
+        // Başkasının yayınladığı etiket güvenilmez: denetim/yön karakterleri atılır, uzunluk sınırlı
+        byte[] kotu = ("AK\u0002Ay‮şe\u0007​ · 3. kat").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        kotu[2] = 2;
+        ok("Ayşe · 3. kat".equals(EnkazIsareti.etiketCoz(kotu)), "sahte etiketteki yön/denetim karakterleri atılır: " + EnkazIsareti.etiketCoz(kotu));
+        byte[] cokUzun = new byte[3 + 240];
+        cokUzun[0] = 'A'; cokUzun[1] = 'K'; cokUzun[2] = 2;
+        java.util.Arrays.fill(cokUzun, 3, cokUzun.length, (byte) 'x');
+        ok(EnkazIsareti.etiketCoz(cokUzun).length() == 40, "uzun (genişletilmiş reklam) etiketi 40 karakterle sınırlı");
 
         // Ham reklam: bayraklar + işaret (0xFFFF) + tarama yanıtı etiketi (0xFFFF) + sondaki sıfırlar
         java.io.ByteArrayOutputStream ham = new java.io.ByteArrayOutputStream();
@@ -154,6 +162,7 @@ public class Test {
         ok(EnkazIsareti.hamdanAyikla(kesik, EnkazIsareti.SIRKET)[0] == null, "kesik veri taşmaz");
 
         sarsinti();
+        hata += org.akilcantasi.app.MeshSinama.calistir();
         System.out.println(hata == 0 ? "Hepsi geçti" : hata + " HATA");
         System.exit(hata == 0 ? 0 : 1);
     }

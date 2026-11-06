@@ -664,6 +664,107 @@ if (run('layout')) {
   }
 }
 
+// ---- H) Denetim 2026-11: yüklemede Durdur, kopyala, akışta kaydırma, klavye, model paneli -----
+if (run('denetim')) {
+  const { ctx, page, errors } = await open({ packs: MODEL_PACKS.slice(0, 1), mockEngine: true });
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+  // Yavaş yükleme (büyük model gibi): Durdur yüklemenin bitmesini beklememeli
+  await page.evaluate(async () => {
+    const mod = (path) => performance.getEntriesByType('resource').map((e) => e.name).filter((n) => new URL(n).pathname === path).pop() ?? path;
+    const { engine } = await import(mod('/src/lib/fener/engine.ts'));
+    const orig = engine.ensureLoaded;
+    window.__slowLoad = true;
+    engine.ensureLoaded = async (choice, onProgress) => {
+      if (!window.__slowLoad) return orig.call(engine, choice, onProgress);
+      for (let i = 1; i <= 40; i++) { await new Promise((r) => setTimeout(r, 100)); onProgress?.(i / 40); }
+      window.__slowLoad = false;
+      return orig.call(engine, choice, onProgress);
+    };
+  });
+  await page.fill('[data-testid="fener-input"]', 'Kanama nasıl durdurulur?');
+  await page.press('[data-testid="fener-input"]', 'Enter');
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="fener-msg-bot"]')].pop()?.dataset.phase === 'load', null, { timeout: 15000 });
+  await page.waitForTimeout(300);
+  const t0 = Date.now();
+  await page.click('[data-testid="fener-stop"]');
+  await waitDone(page, 1, 20000);
+  const dt = Date.now() - t0;
+  let b = await lastBot(page);
+  check(dt < 1500, `yükleme sırasında Durdur hemen etkili (${dt} ms; önceden yükleme bitene dek bekliyordu)`);
+  check(b.label === 'Durduruldu — rehberden yanıt', 'durdurulunca etiket "Durduruldu" (önceden "Model yüklü değil"): ' + b.label);
+  await page.waitForFunction(() => !window.__slowLoad, null, { timeout: 15000 });
+  b = await ask(page, 'Su nasıl arıtılır?');
+  check(!b.label && (b.text ?? '').length > 0, 'arkada süren yüklemeden sonra soru modelle cevaplandı');
+  // Kopyala: biçim işaretleri atılır, kaynaklar numaralarıyla eklenir
+  await page.evaluate(() => { window.__qaAnswer = 'Suyu **en az bir dakika** kaynatın [1].\n- Soğumaya bırakın.'; window.__qaTokenMs = 5; });
+  b = await ask(page, 'Su nasıl arıtılır?');
+  await page.click('[data-testid="fener-msg-bot"]:last-child [data-testid="fener-copy"]');
+  await page.waitForSelector('[data-testid="fener-msg-bot"]:last-child [data-testid="fener-copy"][data-state="ok"]');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  check(/^Suyu en az bir dakika kaynatın \[1\]\.\n• Soğumaya bırakın\.\n\nKaynaklar:\n\[1\] /.test(clip), 'kopyalanan metin: ' + JSON.stringify(clip.slice(0, 90)));
+  // Akış sırasında yukarı kaydıran kullanıcı her token'da en alta çekilmemeli
+  await page.evaluate(() => { window.__qaTokenMs = 60; window.__qaAnswer = Array.from({ length: 80 }, (_, i) => `Adım ${i + 1}: bu satır uzun bir cevabın parçasıdır.`).join('\n'); });
+  const n = await nBots(page);
+  await page.fill('[data-testid="fener-input"]', 'Uzun bir cevap ver');
+  await page.press('[data-testid="fener-input"]', 'Enter');
+  await page.waitForFunction(() => ([...document.querySelectorAll('[data-testid="fener-text"]')].pop()?.textContent.length ?? 0) > 600, null, { timeout: 30000 });
+  await page.evaluate(() => { document.querySelector('[data-testid="fener-list"]').scrollTop = 0; });
+  await page.waitForTimeout(1200);
+  const top = await page.evaluate(() => document.querySelector('[data-testid="fener-list"]').scrollTop);
+  check(top < 50, 'akışta yukarı kaydırılan liste yerinde kaldı: ' + top);
+  await page.evaluate(() => { const l = document.querySelector('[data-testid="fener-list"]'); l.scrollTop = l.scrollHeight; });
+  await page.waitForTimeout(1200);
+  const gap = await page.evaluate(() => { const l = document.querySelector('[data-testid="fener-list"]'); return l.scrollHeight - l.scrollTop - l.clientHeight; });
+  check(gap < 60, 'en alta inince akış yeniden takip ediliyor: ' + gap);
+  await page.click('[data-testid="fener-stop"]');
+  await waitDone(page, n + 1, 15000);
+  await page.evaluate(() => { window.__qaTokenMs = 25; });
+  // Klavye açılınca (görünüm kısalır) giriş görünür, liste en altta kalır
+  await page.evaluate(() => { const l = document.querySelector('[data-testid="fener-list"]'); l.scrollTop = l.scrollHeight; });
+  await page.waitForTimeout(200);
+  await page.focus('[data-testid="fener-input"]');
+  await page.setViewportSize({ width: 390, height: 480 });
+  await page.waitForTimeout(500);
+  const kb = await page.evaluate(() => { const i = document.querySelector('[data-testid="fener-input"]').getBoundingClientRect(); const l = document.querySelector('[data-testid="fener-list"]'); return { inputBottom: Math.round(i.bottom), vh: innerHeight, gap: Math.round(l.scrollHeight - l.scrollTop - l.clientHeight) }; });
+  check(kb.inputBottom <= kb.vh && kb.gap < 60, 'klavye açılınca giriş görünür, liste en altta: ' + JSON.stringify(kb));
+  await page.screenshot({ path: shots + '/qaf-keyboard.png' });
+  check(errors.length === 0, 'konsol hatası yok' + (errors.length ? ': ' + errors.join(' | ') : ''));
+  await ctx.close();
+  // Model paneli küçük ekranda girişi dışarı itmez; panel açıkken gönderince panel kapanır
+  for (const vp of [{ width: 360, height: 640 }, { width: 1280, height: 800 }]) {
+    const tag = `${vp.width}x${vp.height}`;
+    const o = await open({ viewport: vp });
+    await o.page.click('[data-testid="fener-model-btn"]');
+    await o.page.waitForSelector('[data-testid="fener-model-active"]');
+    await o.page.waitForTimeout(300);
+    const g = await o.page.evaluate(() => {
+      const i = document.querySelector('[data-testid="fener-input"]').getBoundingClientRect();
+      const nav = document.querySelector('.app-nav').getBoundingClientRect();
+      const m = document.getElementById('main');
+      const auto = document.querySelector('[data-testid="fener-model-panel"]');
+      // Panel içindeki düğmelerin yazısı kutudan taşmasın (esnek sütunda büzülme)
+      const squeezed = [...auto.children].filter((c) => c.scrollHeight > c.clientHeight + 1 && getComputedStyle(c).overflowY === 'visible').length;
+      return { inputBottom: i.bottom, navTop: nav.top, overflow: m.scrollHeight - m.clientHeight, squeezed };
+    });
+    check(g.inputBottom <= g.navTop + 1 && g.overflow <= 1, `${tag}: model paneli açıkken giriş görünür, taşma yok ` + JSON.stringify(g));
+    check(g.squeezed === 0, `${tag}: panel öğeleri büzülüp taşmıyor`);
+    await o.page.screenshot({ path: `${shots}/qaf-panel-${tag}.png` });
+    check((await smallTargets(o.page)).length === 0, `${tag}: panelde dokunma alanları ≥44px ` + (await smallTargets(o.page)).join(', '));
+    await o.page.fill('[data-testid="fener-input"]', 'Kanama nasıl durdurulur?');
+    await o.page.press('[data-testid="fener-input"]', 'Enter');
+    await o.page.waitForSelector('[data-testid="fener-msg-bot"]');
+    check(!(await o.page.$('[data-testid="fener-model-panel"]')), `${tag}: panel açıkken gönderince panel kapandı`);
+    // Kenar boşlukları: liste, giriş ve panel aynı (18px) iç boşlukla hizalı
+    const pads = await o.page.evaluate(() => {
+      const L = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); const app = document.querySelector('.app').getBoundingClientRect(); return [Math.round(r.left - app.left), Math.round(app.right - r.right)]; };
+      return { msg: L('[data-testid="fener-msg-user"]'), mic: L('[data-testid="fener-mic"]'), send: L('[data-testid="fener-send"]') };
+    });
+    check(pads.msg?.[1] === pads.send?.[1] && pads.mic?.[0] === 18, `${tag}: giriş satırı içerikle hizalı (18px) ` + JSON.stringify(pads));
+    check(o.errors.length === 0, `${tag}: konsol hatası yok` + (o.errors.length ? ': ' + o.errors.join(' | ') : ''));
+    await o.ctx.close();
+  }
+}
+
 await browser.close();
 console.log(fails.length ? `\n${fails.length} kontrol başarısız` : '\nTüm kontroller geçti');
 process.exit(fails.length ? 1 : 0);

@@ -25,13 +25,14 @@ import { initTts, speak, stopSpeaking, tts, type TtsState } from '../lib/voice/t
 import { Art } from '../art';
 import { guideThumb } from '../content/guide-art';
 import { ModelPanel } from './FenerModels';
-import { formatLines, plainText } from '../lib/fener/format';
+import { copyText, formatLines, plainText } from '../lib/fener/format';
 import './fener.css';
+import { useGeriKapat } from '../gecmis';
 
 export const QUICK_QUESTIONS = [
   'Enkaz altındaysam ne yapmalıyım?',
   'Kanaması olan birine nasıl ilk yardım yaparım?',
-  'Suyu nasıl içilebilir hale getiririm?',
+  'Suyu nasıl içilebilir hâle getiririm?',
   'Artçı depremde ne yapmalıyım?',
 ];
 
@@ -152,7 +153,7 @@ async function send(text: string, context?: PendingContext | null, opts: { free?
       patchBot(bot.id, { text: fb.text, label: fb.label, sources: fb.sources, phase: 'done', error });
     };
 
-    if (ctl.signal.aborted) return useFallback('no-model');
+    if (ctl.signal.aborted) return useFallback('stopped');
     if (getState().batterySaver) return useFallback('battery');
     if (!model) return useFallback('no-model');
     // Yerel motorla açılacak modelde WebAssembly desteği aranmaz
@@ -172,11 +173,23 @@ async function send(text: string, context?: PendingContext | null, opts: { free?
       progress: null,
     });
     try {
-      await engine.ensureLoaded(model, (f) => patchBot(bot.id, { progress: f }));
+      // Yükleme (büyük modelde dakikalar sürebilir) "Durdur"u beklemesin: durdurulunca hemen
+      // rehberden yanıt verilir; yükleme arkada sürer, model bir sonraki soruya hazır olur.
+      const load = engine.ensureLoaded(model, (f) => {
+        if (!ctl.signal.aborted) patchBot(bot.id, { progress: f });
+      });
+      const stopped = new Promise<'stopped'>((res) => {
+        if (ctl.signal.aborted) res('stopped');
+        else ctl.signal.addEventListener('abort', () => res('stopped'), { once: true });
+      });
+      if ((await Promise.race([load, stopped])) === 'stopped') {
+        load.catch(() => {});
+        return useFallback('stopped');
+      }
     } catch (e: any) {
       return useFallback(e?.unsupported ? 'unsupported' : 'error', e?.unsupported ? undefined : describeError(e));
     }
-    if (ctl.signal.aborted) return useFallback('no-model');
+    if (ctl.signal.aborted) return useFallback('stopped');
     patchBot(bot.id, { phase: 'write' });
 
     let out = '';
@@ -375,12 +388,19 @@ function BotBubbleView({ m, eng, canFree, busyNow, ttsState }: { m: BotMsg; eng:
                 Rehberlere göz at
               </button>
             ) : null}
-            <span class="grow" />
-            {m.tps ? <span class="mono muted fener-small">{m.tps.toFixed(1).replace('.', ',')} token/sn</span> : null}
-            {m.text && ttsState.supported ? <SpeakButton id={m.id} text={plainText(m.text)} speaking={ttsState.speakingId === m.id} /> : null}
+            {/* Sağdaki grup birlikte kalır; satır kırılınca da sağa yaslı */}
+            <span class="fener-foot-r">
+              {m.text ? <CopyButton text={copyText(m.text, m.sources)} /> : null}
+              {m.text && ttsState.supported ? <SpeakButton id={m.id} text={plainText(m.text)} speaking={ttsState.speakingId === m.id} /> : null}
+            </span>
           </div>
         )}
-        {m.phase === 'done' && m.fromModel && <div class="fener-disclaimer">Yapay zekâ hata yapabilir. Hayati durumda rehberdeki adımlara uyun.</div>}
+        {m.phase === 'done' && m.fromModel && (
+          <div class="fener-disclaimer">
+            <span>Yapay zekâ hata yapabilir. Hayati durumda rehberdeki adımlara uyun.</span>
+            {m.tps ? <span class="mono fener-small fener-tps">{m.tps.toFixed(1).replace('.', ',')} token/sn</span> : null}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -423,6 +443,12 @@ const IconSpeaker = ({ size = 16 }: { size?: number }) => (
     <path d="M18.5 6.5a8 8 0 0 1 0 11" />
   </svg>
 );
+const IconCopy = ({ size = 16 }: { size?: number }) => (
+  <svg {...svgBase(size)}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V6a2 2 0 0 1 2-2h8" />
+  </svg>
+);
 const IconCaret = ({ size = 14, open }: { size?: number; open?: boolean }) => (
   <svg {...svgBase(size)} style={{ transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>
     <path d="M6 9l6 6 6-6" />
@@ -442,6 +468,52 @@ function useTtsState() {
     return tts.subscribe(set);
   }, []);
   return s;
+}
+
+/** Panoya yazar; güvenli olmayan bağlantıda (http bilgi noktası) eski yönteme düşer */
+async function writeClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [st, setSt] = useState<'idle' | 'ok' | 'fail'>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  return (
+    <button
+      type="button"
+      class={'btn fener-speak' + (st === 'ok' ? ' on' : '')}
+      data-testid="fener-copy"
+      data-state={st}
+      aria-label={st === 'ok' ? 'Cevap kopyalandı' : st === 'fail' ? 'Kopyalanamadı' : 'Cevabı kopyala'}
+      onClick={async () => {
+        const ok = await writeClipboard(text);
+        setSt(ok ? 'ok' : 'fail');
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setSt('idle'), 2000);
+      }}
+    >
+      <IconCopy />
+      <span aria-live="polite">{st === 'ok' ? 'Kopyalandı' : st === 'fail' ? 'Kopyalanamadı' : 'Kopyala'}</span>
+    </button>
+  );
 }
 
 function SpeakButton({ id, text, speaking }: { id: number; text: string; speaking: boolean }) {
@@ -541,6 +613,8 @@ export function FenerTab() {
   const [input, setInput] = useState('');
   const [mode, setMode] = useState<Mode>({ kind: 'checking' });
   const [panel, setPanel] = useState(false);
+  // Model paneli açıkken geri tuşu önce paneli kapatır
+  useGeriKapat(panel, () => setPanel(false));
   const [modelEpoch, setModelEpoch] = useState(0);
   const [voiceInfo, setVoiceInfo] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -584,12 +658,40 @@ export function FenerTab() {
     void send(pq.text, pq.context ?? null);
   }, [app.pendingQuestion, isBusy]);
 
+  // Kullanıcı en alttaysa (ya da yakınındaysa) yeni içerik onu aşağıda tutar; uzun bir cevabı
+  // okumak için yukarı kaydırdıysa akan her token onu en alta geri çekmesin.
+  const stick = useRef(true);
+  const lastTop = useRef(0);
+  const prevCount = useRef(msgs.length);
+  const onListScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+    // Liste kısalınca (klavye) da scroll olayı gelir; konum değişmediyse kullanıcı kaydırmamıştır
+    if (atBottom || el.scrollTop !== lastTop.current) stick.current = atBottom;
+    lastTop.current = el.scrollTop;
+    el.dataset.stick = String(stick.current);
+  };
+  // Liste kısalınca (ör. telefonda klavye açılınca) en alttaysa en altta kalsın
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   // Yeni içerikte en alta kaydır
   const last = msgs[msgs.length - 1];
   const lastLen = last ? (last.role === 'bot' ? last.text.length + last.phase : last.text.length) : 0;
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
+    const added = msgs.length !== prevCount.current;
+    prevCount.current = msgs.length;
+    if (!added && !stick.current) return;
     // Rehberden (akışsız) gelen ya da hayati durum içeren uzun cevapta en alta değil
     // sorunun başına kaydır: 112 kutusu ve ilk adımlar görünsün.
     if (last?.role === 'bot' && last.phase === 'done' && (!last.fromModel || last.critical)) {
@@ -613,6 +715,8 @@ export function FenerTab() {
     const t = input;
     setInput('');
     stopSpeaking();
+    // Panel açıkken liste gizli: cevap görünsün diye panel kapanır
+    setPanel(false);
     void send(t);
   };
 
@@ -635,7 +739,7 @@ export function FenerTab() {
   const showNote = vs.phase !== 'idle' && (vs.phase !== 'unavailable' || voiceInfo);
 
   return (
-    <div class="fener">
+    <div class={'fener' + (panel ? ' panel-open' : '')}>
       <div
         class="fener-bar"
         data-testid="fener-status"
@@ -703,7 +807,7 @@ export function FenerTab() {
         />
       )}
 
-      <div class="fener-list" ref={listRef} aria-live="polite">
+      <div class="fener-list" ref={listRef} aria-live="polite" onScroll={onListScroll} data-testid="fener-list">
         {msgs.length === 0 && (
           <div class="fener-empty">
             <div class="fener-hero">

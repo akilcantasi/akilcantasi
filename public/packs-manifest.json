@@ -31,7 +31,7 @@
       "file": "wikipedia_tr_all_nopic_2026-09.zim",
       "size": 3746434106,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "136930794c46a9f7283a4903881d06721a872b6550a4f352492999a33b61069b",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_all_nopic_2026-09.zim",
@@ -122,7 +122,7 @@
       "file": "nhs.uk_en_medicines_2026-09b.zim",
       "size": 15322705,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "349f7bc833aa1cfedd1cdd10fbb9ae575aac63b22e17639bfaee6568b6668b62",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/nhs.uk_en_medicines_2026-09b.zim",
@@ -142,7 +142,7 @@
       "file": "fas-military-medicine_en_2025-06.zim",
       "size": 81455189,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "d33d6fa16b809f7d2bb91c00cb8e8d8bb31c674ff5a5eea574ba430f4245b785",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/fas-military-medicine_en_2025-06.zim",
@@ -161,7 +161,7 @@
       "file": "zimgit-medicine_en_2024-08.zim",
       "size": 70179585,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "a86c31b93e9800aae2cd812ef18cbf9c087a7537784c62fbc259db7f9f9d18c0",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-medicine_en_2024-08.zim",
@@ -180,7 +180,7 @@
       "file": "zimgit-water_en_2024-08.zim",
       "size": 20924451,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "392c7bc970a44fddd61dd17f6eabf1f4e21936f2d5c27c83093e1dc475cb56b6",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-water_en_2024-08.zim",
@@ -200,7 +200,7 @@
       "file": "zimgit-knots_en_2024-08.zim",
       "size": 27945133,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "7c3120b19fc2dc190b5ebfee01af54150136643d7b9d29d7fa9a6ba29787a57b",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-knots_en_2024-08.zim",
@@ -219,7 +219,7 @@
       "file": "zimgit-food-preparation_en_2025-04.zim",
       "size": 97822565,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "db92c6c9dac14ff30f1cbc15aa834a7c012c6e87d4ff0519f33a0902ab6e732b",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-food-preparation_en_2025-04.zim",
@@ -239,7 +239,7 @@
       "file": "zimgit-post-disaster_en_2024-05.zim",
       "size": 644665513,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "0ba9bb358b768b94eb0d7920752fe356bf097de514ee61843f3a4da6cce174f8",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/zimgit-post-disaster_en_2024-05.zim",
@@ -312,7 +312,7 @@
       "file": "ifixit_tr_all_2026-03.zim",
       "size": 3633665919,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "fbe4c2e842b72c19e2ada7bab8355e58a84de6d689847efc2ad318edf88536b4",
       "tier": "tam",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/ifixit_tr_all_2026-03.zim",
@@ -493,7 +493,7 @@
       "file": "wiktionary_tr_all_nopic_2026-10.zim",
       "size": 812544663,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "a3b710826c24c38cfe0f357a827721b070c8256b0f7ae0c82bcac6624274ff49",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wiktionary_tr_all_nopic_2026-10.zim",
@@ -512,7 +512,7 @@
       "file": "wikibooks_tr_all_maxi_2026-09.zim",
       "size": 26888953,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "8a7b54984abb171aace56514bd4a0338e301e5143d011a3666f1170f45893764",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikibooks_tr_all_maxi_2026-09.zim",
@@ -532,7 +532,7 @@
       "file": "wikisource_tr_all_nopic_2026-10.zim",
       "size": 46015182,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "368666854aec0c62a08eb221a396b78b405d2f4e86fcfcac632f0ac3b35bc2a5",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikisource_tr_all_nopic_2026-10.zim",
@@ -605,6 +605,7 @@
       "file": "vikidia_en_all_maxi_2026-09.zim",
       "size": 77565163,
       "sizeApprox": false,
+      "sha256": "16728e6be34081f6c627b3cbf2c36ff31823defb0f30b68fab146b5ca68e591e",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/vikidia_en_all_maxi_2026-09.zim",
@@ -624,6 +625,7 @@
       "file": "wikipedia_tr_history_maxi_2026-10.zim",
       "size": 226242489,
       "sizeApprox": false,
+      "sha256": "ad3ae9cca0fab8e7d887761a26a69a02f23ca4b7cb84b1d83b5de12b4401cdb8",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_history_maxi_2026-10.zim",
@@ -642,6 +644,7 @@
       "file": "wikipedia_tr_geography_maxi_2026-10.zim",
       "size": 106822010,
       "sizeApprox": false,
+      "sha256": "d4667e7d51bfa10b2de86794c111d7ab5d33db76099a6fe9b475b6658a9d0359",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_geography_maxi_2026-10.zim",
@@ -660,6 +663,7 @@
       "file": "wikipedia_tr_physics_maxi_2026-10.zim",
       "size": 161962756,
       "sizeApprox": false,
+      "sha256": "47cc88f0d5a5a70573e4a91a75bdfdb76a3373a9109980f8c190acb9b69f0b71",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_physics_maxi_2026-10.zim",
@@ -678,6 +682,7 @@
       "file": "wikipedia_tr_chemistry_maxi_2026-10.zim",
       "size": 58297242,
       "sizeApprox": false,
+      "sha256": "c8583cdd5c3b90825ee5b1bf19f9ea2965dc29baf633d67162c6148222f325bf",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_chemistry_maxi_2026-10.zim",
@@ -696,6 +701,7 @@
       "file": "wikipedia_tr_mathematics_maxi_2026-10.zim",
       "size": 86780672,
       "sizeApprox": false,
+      "sha256": "51334be9a64c2f0b3a6f13cf705b3a560408389baec5dba276694c6ee4bacba1",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_tr_mathematics_maxi_2026-10.zim",
@@ -714,6 +720,7 @@
       "file": "wikiquote_tr_all_2026-08.zim",
       "size": 70457805,
       "sizeApprox": false,
+      "sha256": "1d76b231a35ea6c230c6a7f2c799c1a9a73dd738b325785f8422c996351601cd",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikiquote_tr_all_2026-08.zim",
@@ -749,6 +756,7 @@
       "file": "wikipedia_en_medicine_mini_2026-10.zim",
       "size": 174350854,
       "sizeApprox": false,
+      "sha256": "c66f27274775870cec7e0c230c7e7626d367633b1f26c4a74499c249ddac0822",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/zim/wikipedia_en_medicine_mini_2026-10.zim",
@@ -938,7 +946,7 @@
       "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
       "size": 532517120,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517",
       "tier": "temel",
       "minRamGB": 3,
       "urls": [
@@ -972,7 +980,7 @@
       "file": "Qwen3.5-4B-Q4_K_M.gguf",
       "size": 2740937888,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
       "tier": "tam",
       "minRamGB": 8,
       "urls": [
@@ -1007,7 +1015,7 @@
       "file": "gemma-4-E2B-it-Q4_K_M.gguf",
       "size": 3106738272,
       "sizeApprox": false,
-      "sha256": "",
+      "sha256": "740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8",
       "tier": "tam",
       "minRamGB": 8,
       "urls": [

@@ -254,7 +254,10 @@ function Reset() {
       <h2 class="st-h" id="st-reset">
         Verileri sıfırla
       </h2>
-      <p class="st-p">Ayarlar, kontrol listeleri, stok listesi ve sohbet geçmişi silinir. İndirilen paketler isterseniz kalır.</p>
+      <p class="st-p">
+        Bu cihazdaki uygulama verisi silinir: ayarlar, yakınlarınız ve adınız, enkaz için bina bilgisi, kontrol ve stok listeleri, gönderilmemiş pano kayıtları, yer işaretleri ve sohbet
+        geçmişi. İndirilen paketler isterseniz kalır.
+      </p>
       {step === 'idle' && (
         <button class="btn st-danger" data-testid="set-reset" onClick={() => setStep('confirm')}>
           Verileri sıfırla

@@ -14,7 +14,7 @@ export const KAYNAK_CSS = `
 .kn-amber { color: var(--accent); font-weight: 600; }
 .kn-ok { color: var(--ok); font-weight: 600; }
 .kn-group { display: flex; flex-direction: column; gap: 6px; }
-.kn-group > h2, .kn-group > h3 { font-size: 15px; color: var(--text); margin: 6px 0 0; font-weight: 600; display: flex; justify-content: space-between; }
+.kn-group > h2, .kn-group > h3 { font-size: 15px; color: var(--text); margin: 6px 0 0; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .kn-item { background: var(--card); border: 1px solid var(--line2); border-radius: 12px; display: flex; flex-direction: column; }
 .kn-item.exp-expired { border-color: var(--danger); }
 .kn-item.exp-soon { border-color: var(--accent); }

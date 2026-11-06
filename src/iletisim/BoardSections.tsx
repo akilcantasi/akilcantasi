@@ -4,9 +4,12 @@ import { go } from '../lib/store';
 import { native } from '../lib/native';
 import { KIND_LABEL, LIMITS, missingToText, newId, type BoardDraft, type BoardKind, type CheckinStatus } from './board';
 import { board, useBoard } from './client';
+import { mesh } from '../lib/mesh';
 import { ConnCard, Empty, GeoButton, ItemCard, NameField, Section, useGeo, useNow, useProfile } from './common';
 import { cleanPhone, normalizeServer } from './outbox';
 import { buildTemplate, isIOS, smsHref } from './sms';
+import { useYakinlar } from './HizliSms';
+import { multiSmsHref } from './yakinlar';
 
 type SendState = { kind: 'idle' } | { kind: 'busy' } | { kind: 'ok'; queued: boolean; reason?: string } | { kind: 'error'; msg: string };
 
@@ -113,6 +116,7 @@ export function Iyiyim() {
     return buildTemplate('yardim', { name: p.name, place: '', note: (status === 'yarali' ? 'Yaralıyım. ' : '') + note, people: '', pos: geo.pos });
   })();
   const fam = cleanPhone(p.family);
+  const [yakinlar] = useYakinlar();
   return (
     <Section id="iyiyim" title="İyiyim bildirimi" sub="Durumunuzu panoya bırakın; yakınlarınız ve ekipler görsün. Aile numaranıza hazır SMS de gönderebilirsiniz.">
       <ConnCard s={s} />
@@ -148,6 +152,7 @@ export function Iyiyim() {
         >
           “{statusText}” olarak panoya gönder
         </button>
+        {!p.name.trim() && <p class="cm-note">Göndermek için önce adınızı yazın.</p>}
         <SendResult st={st} />
       </div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px">
@@ -167,12 +172,21 @@ export function Iyiyim() {
         <p class="cm-item-text" data-testid="checkin-sms-text" style="font-size:14px;color:var(--text2)">
           {smsBody}
         </p>
-        {fam ? (
-          <a class="btn primary" data-testid="checkin-sms" href={smsHref(fam, smsBody, isIOS())}>
-            SMS uygulamasında aç
-          </a>
+        {fam || yakinlar.length ? (
+          <div class="cm-btns">
+            {yakinlar.length > 0 && (
+              <a class="btn primary" data-testid="checkin-sms-yakinlar" href={multiSmsHref(yakinlar.map((y) => y.phone), smsBody, isIOS())}>
+                Yakınlarıma SMS ({yakinlar.length})
+              </a>
+            )}
+            {fam && (
+              <a class={'btn' + (yakinlar.length ? '' : ' primary')} data-testid="checkin-sms" href={smsHref(fam, smsBody, isIOS())}>
+                {yakinlar.length ? 'Bu numaraya SMS' : 'SMS uygulamasında aç'}
+              </a>
+            )}
+          </div>
         ) : (
-          <p class="cm-note">SMS göndermek için numara girin.</p>
+          <p class="cm-note">SMS göndermek için numara girin ya da İletişim › Yakınlarım'a kişi ekleyin.</p>
         )}
         <p class="cm-note">AFAD önerisi: afet sonrası hayati durumlar dışında arama yerine SMS kullanın; şebeke rahatlar, mesaj sırayla iletilir.</p>
       </div>
@@ -317,6 +331,30 @@ export function Duyurular() {
   );
 }
 
+/** Yakın cihaz ağı (mesh): ayarı yok, Android uygulamasında kendiliğinden açılır; burada durumu anlatılır */
+function MeshKart({ s }: { s: ReturnType<typeof useBoard> }) {
+  let uygun = false;
+  try {
+    uygun = mesh.available();
+  } catch {}
+  const state = s.meshOn ? 'on' : uygun ? 'starting' : 'none';
+  return (
+    <div class="card cm-conn" data-testid="mesh-card" data-state={state}>
+      <span class={'dot' + (s.meshOn ? ' on' : ' warn')} />
+      <div>
+        <b>Yakın cihaz ağı</b>
+        <p>
+          {s.meshOn
+            ? `Açık · yakında ${s.meshPeers} cihaz. Bilgi noktası olmasa da mesajlar yakındaki Akıl Çantası uygulamalı telefonlara Bluetooth ve Wi-Fi ile sıçrar.`
+            : uygun
+              ? 'Açılıyor… Bilgi noktası olmasa da mesajlar yakındaki Akıl Çantası uygulamalı telefonlara sıçrar.'
+              : 'Yalnız Android uygulamasında (Google Play Hizmetleri gerekir) kendiliğinden açılır. Burada haberleşme bilgi noktası üzerinden olur.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function Baglan() {
   const s = useBoard();
   const [p, update] = useProfile();
@@ -394,6 +432,7 @@ export function Baglan() {
           <input class="input" data-testid="family-input-settings" type="tel" inputMode="tel" value={p.family} placeholder="05xx xxx xx xx" onInput={(e) => update({ family: (e.target as HTMLInputElement).value })} />
         </label>
       </div>
+      <MeshKart s={s} />
       <p class="cm-note">Bağlı değilken de el feneri, düdük, Mors ve hazır SMS araçları çalışır.</p>
     </Section>
   );

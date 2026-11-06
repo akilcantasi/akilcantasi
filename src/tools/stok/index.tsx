@@ -36,6 +36,8 @@ const toDraft = (i: StokItem): Draft => ({
 });
 
 const num = (s: string) => Number(s.replace(',', '.'));
+/** Elle girilen sayıların üst sınırı (yanlışlıkla fazladan sıfır, 1e9 gibi) */
+const MAX_MIKTAR = 1_000_000;
 
 function ItemForm({ initial, onSave, onCancel }: { initial: Draft; onSave: (i: StokItem) => void; onCancel: () => void }) {
   const [d, setD] = useState<Draft>(initial);
@@ -50,8 +52,13 @@ function ItemForm({ initial, onSave, onCancel }: { initial: Draft; onSave: (i: S
   const submit = (e: Event) => {
     e.preventDefault();
     if (!d.name.trim()) return setErr('Ad girin.');
-    const q = num(d.qty);
-    if (!Number.isFinite(q) || q < 0) return setErr('Miktar geçerli bir sayı olmalı.');
+    const q = num(d.qty.trim());
+    if (!d.qty.trim() || !Number.isFinite(q) || q < 0) return setErr('Miktar 0 ya da daha büyük bir sayı olmalı.');
+    if (q > MAX_MIKTAR) return setErr('Miktar çok büyük. Doğru birimi seçtiğinizden emin olun.');
+    // İsteğe bağlı alanlar: yazıldıysa geçerli olmalı (yoksa sessizce yok sayılıp "hesaba katılamadı" görünürdü)
+    const ek = (s: string) => s.trim() !== '' && !(num(s.trim()) > 0 && num(s.trim()) <= MAX_MIKTAR);
+    if (d.kind === 'gida' && ek(d.kcal)) return setErr('Enerji 0\'dan büyük bir sayı olmalı (etiketteki kcal).');
+    if (d.kind === 'su' && pieces && ek(d.litrePer)) return setErr('Litre 0\'dan büyük bir sayı olmalı (ör. 1,5).');
     const it = normalizeItem({ id: d.id ?? newId('s'), name: d.name, qty: q, unit: d.unit, kind: d.kind, location: d.location, expiry: d.expiry, kcal: d.kind === 'gida' ? num(d.kcal) : undefined, litrePer: d.kind === 'su' && pieces ? num(d.litrePer) : undefined });
     if (!it) return setErr('Kaydedilemedi.');
     onSave(it);
@@ -134,7 +141,7 @@ function Days({ v, testid }: { v: number | null; testid: string }) {
 }
 
 export default function Stok() {
-  const [items, setItems] = useState<StokItem[]>(loadStok);
+  const [items, setItems0] = useState<StokItem[]>(loadStok);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<SortKey>('expiry');
   const [editing, setEditing] = useState<Draft | null>(null);
@@ -144,9 +151,11 @@ export default function Stok() {
   const [saveErr, setSaveErr] = useState(false);
   const hh = useMemo(loadHousehold, []);
 
-  useEffect(() => {
-    setSaveErr(!saveStok(items));
-  }, [items]);
+  // Değişiklik hemen kaydedilir (çizimden sonra değil): hemen çıkılırsa kaybolmasın
+  const setItems = (n: StokItem[]) => {
+    setSaveErr(!saveStok(n));
+    setItems0(n);
+  };
 
   const shown = sortItems(search(items, q), sort);
   const cov = coverage(items, hh.input);

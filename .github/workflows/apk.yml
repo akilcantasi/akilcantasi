@@ -3,8 +3,10 @@
 # Elle çalıştırmak için: Actions → "APK derle" → Run workflow.
 # İmza: APK_KEYSTORE_B64 (anahtar dosyasının base64'ü) ve APK_KEYSTORE_PAROLA gizli değişkenleri
 # varsa APK bu kalıcı anahtarla imzalanır; her yeni sürüm eskisinin üzerine kurulur.
-# Yoksa geçici (hata ayıklama) anahtarı kullanılır: deneme için uygundur, ama sonraki sürümü
-# kurmadan önce eskisini kaldırmak gerekir.
+# Yayınlanacak derlemede (etiket ya da yayinla ≠ hayir) anahtar yoksa iş DURUR: geçici anahtarla
+# imzalı bir APK asla sürüm sayfasına konmaz (uygulama içi güncelleme onu kuramaz, kullanıcıyı
+# eskisini kaldırmaya zorlar). Yalnız derle (yayinla=hayir) çalıştırmasında anahtar yoksa geçici
+# (hata ayıklama) anahtarı kullanılır; APK yalnız iş çıktısı olarak saklanır.
 name: APK derle
 
 on:
@@ -81,13 +83,22 @@ jobs:
       - name: İmza anahtarı
         env:
           KS: ${{ secrets.APK_KEYSTORE_B64 }}
+          KS_PAROLA: ${{ secrets.APK_KEYSTORE_PAROLA }}
+          # Sürüm sayfasındaki koşulla aynı: "true" ise bu çalıştırma yayınlayacak
+          YAYINLANACAK: ${{ !contains(fromJSON('["hayir","hayır","false","no","0"]'), github.event.inputs.yayinla) }}
         run: |
+          set -e
           if [ -n "$KS" ]; then
+            if [ -z "$KS_PAROLA" ]; then echo "::error::APK_KEYSTORE_PAROLA yok"; exit 1; fi
             echo "$KS" | base64 -d > "$RUNNER_TEMP/akil.jks"
+            if [ ! -s "$RUNNER_TEMP/akil.jks" ]; then echo "::error::APK_KEYSTORE_B64 çözülemedi"; exit 1; fi
             echo "AKIL_KEYSTORE=$RUNNER_TEMP/akil.jks" >> "$GITHUB_ENV"
             echo "Kalıcı anahtarla imzalanacak"
+          elif [ "$YAYINLANACAK" = "true" ]; then
+            echo "::error::APK_KEYSTORE_B64 yok: geçici anahtarla imzalı APK yayınlanmaz. Yalnız derlemek için yayinla=hayir seçin."
+            exit 1
           else
-            echo "::warning::APK_KEYSTORE_B64 yok: geçici anahtarla imzalanıyor (yalnız deneme)"
+            echo "::warning::APK_KEYSTORE_B64 yok: geçici anahtarla imzalanıyor (yalnız deneme, yayınlanmaz)"
           fi
 
       - name: APK
@@ -111,7 +122,10 @@ jobs:
           ./gradlew assembleRelease --no-daemon --console=plain
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/akil-cantasi.apk"
           ls -la "$RUNNER_TEMP/akil-cantasi.apk"
-          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$RUNNER_TEMP/akil-cantasi.apk" | head -3 || true
+          # Birden çok build-tools sürümü kurulu olabilir: en yenisinin apksigner'ı
+          APKSIGNER="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          echo "APKSIGNER=$APKSIGNER" >> "$GITHUB_ENV"
+          "$APKSIGNER" verify --print-certs "$RUNNER_TEMP/akil-cantasi.apk" | head -3 || true
           echo "Yerel kütüphaneler:"; unzip -l "$RUNNER_TEMP/akil-cantasi.apk" | grep "lib/" || echo "(yok)"
 
       # Her yerel kütüphanenin bağımlılığı APK'da ya da Android'in herkese açık kütüphanelerinde olmalı;
@@ -154,11 +168,13 @@ jobs:
         run: |
           set -e
           tag="v$AKIL_SURUM"
-          imza="kalıcı anahtar"
-          [ -n "$AKIL_KEYSTORE" ] || imza="geçici deneme anahtarı (sonraki sürümden önce eskisini kaldırın)"
+          # İkinci güvence: kalıcı anahtar yoksa ya da APK hata ayıklama anahtarıyla imzalıysa yayınlama
+          if [ -z "$AKIL_KEYSTORE" ]; then echo "::error::Kalıcı imza anahtarı yok; yayınlanmadı"; exit 1; fi
+          sertifika="$("$APKSIGNER" verify --print-certs "$RUNNER_TEMP/akil-cantasi.apk")"
+          case "$sertifika" in
+            *"CN=Android Debug"*) echo "::error::APK hata ayıklama anahtarıyla imzalı; yayınlanmadı"; exit 1;;
+          esac
           notes="Android 7.0 ve üstü. Kurmak için APK'yı telefona indirip açın; \"bilinmeyen kaynaklardan yüklemeye\" izin verin.
-
-          İmza: $imza
 
           Paketler (Vikipedi, harita, Fener modeli…) uygulamanın içinden indirilir."
           if gh release view "$tag" >/dev/null 2>&1; then

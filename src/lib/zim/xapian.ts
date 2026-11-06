@@ -143,11 +143,38 @@ function startsWith(a: Uint8Array, p: Uint8Array) {
   return true;
 }
 
-async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
+/**
+ * Tek bir etiketin (çok parçalı ya da sıkıştırılmış) üst sınırı. Gerçek dizinlerde etiketler
+ * birkaç KB'tır; bozuk bir ağaçta "son parça" hiç gelmezse ya da sıkıştırma bombası varsa
+ * bellek sınırsız büyümesin.
+ */
+export const MAX_TAG_BYTES = 32 * 1024 * 1024;
+
+async function inflateRaw(data: Uint8Array, max = MAX_TAG_BYTES): Promise<Uint8Array> {
   const DS = (globalThis as any).DecompressionStream;
   if (!DS) throw new Error('xapian: DecompressionStream yok');
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DS('deflate-raw'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const stream: ReadableStream<Uint8Array> = new Blob([data as BlobPart]).stream().pipeThrough(new DS('deflate-raw'));
+  const reader = stream.getReader();
+  const parts: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      reader.cancel().catch(() => {});
+      throw new Error('xapian: etiket çok büyük');
+    }
+    parts.push(value);
+  }
+  if (parts.length === 1) return parts[0];
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const x of parts) {
+    out.set(x, o);
+    o += x.length;
+  }
+  return out;
 }
 
 interface Leaf {
@@ -291,12 +318,22 @@ class Cursor {
     let it = this.item();
     if (!it) return null;
     const compressed = it.compressed;
-    let tag = it.tag.slice();
+    // Parçalar önce toplanır, sonra bir kez birleştirilir (her adımda kopyalamak karesel olurdu)
+    const parts: Uint8Array[] = [it.tag];
+    let total = it.tag.length;
     while (!it.last) {
       if (!(await this.next())) break;
       it = this.item();
       if (!it) break;
-      tag = concat(tag, it.tag);
+      total += it.tag.length;
+      if (total > MAX_TAG_BYTES) throw new Error('xapian: etiket çok büyük');
+      parts.push(it.tag);
+    }
+    const tag = new Uint8Array(total);
+    let o = 0;
+    for (const x of parts) {
+      tag.set(x, o);
+      o += x.length;
     }
     return compressed ? inflateRaw(tag) : tag;
   }

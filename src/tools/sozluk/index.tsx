@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { CATS, LANGS, searchPhrases, type Cat, type Lang, type Phrase } from './phrases';
 import { findVoice, speak, stopSpeaking, useVoices } from './speech';
+import { useGeriKapat } from '../../gecmis';
 
 const CSS = `
 .sz-note { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 0; }
@@ -55,6 +56,8 @@ export default function Sozluk() {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [big, setBig] = useState<Phrase | null>(null);
+  // Büyük gösterim açıkken geri tuşu önce onu kapatır
+  useGeriKapat(!!big, () => setBig(null));
   const voices = useVoices();
   const L = LANGS.find((l) => l.id === lang)!;
   const voice = findVoice(L.speech, voices);

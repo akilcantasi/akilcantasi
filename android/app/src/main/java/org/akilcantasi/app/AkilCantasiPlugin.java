@@ -260,11 +260,29 @@ public class AkilCantasiPlugin extends Plugin {
         return torchCameraId = any;
     }
 
+    /** Uygulama arka plana geçtiği için duraklatılan konum araması (öne gelince sürer) */
+    private volatile boolean konumDuraklatildi;
+
     @Override
     protected void handleOnPause() {
         // Uygulama arka plana geçince fener açık kalmasın (SOS ekranı da kapanır)
         turnOffTorch();
+        // Uydu durumlu konum araması yalnız ekrandaki harita içindir: arka planda (özellikle
+        // "her zaman" konum izni varsa ya da Android 7'de) saniyede bir GPS pili bitirmesin
+        if (konumIzleyici != null && konumIzleyici.calisiyorMu()) {
+            konumIzleyici.durdur();
+            konumDuraklatildi = true;
+        }
         super.handleOnPause();
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        if (konumDuraklatildi && konumIzleyici != null) {
+            konumDuraklatildi = false;
+            if (!konumIzleyici.izinDurumu().equals("yok")) konumIzleyici.baslat();
+        }
     }
 
     private void turnOffTorch() {
@@ -300,6 +318,8 @@ public class AkilCantasiPlugin extends Plugin {
     private String fenerDosya = null;
     private String fenerBilgi = "{}";
     private boolean fenerGpu = false;
+    /** GPU bu yüklemede en az bir cevabı çökmeden yazdı (yalnız fenerIs iş parçacığında) */
+    private boolean fenerGpuOnayli = false;
     /** Durdurulması istenen sohbetin kimliği (üretim başlamadan gelen durdurma kaybolmasın) */
     private volatile String fenerDurdurId = null;
 
@@ -418,10 +438,12 @@ public class AkilCantasiPlugin extends Plugin {
                 boolean gpu = gpuIste && !p.getBoolean("gpuKapali", false) && jsonObj(FenerMotoru.arkaUclar()).optBoolean("gpu", false);
                 long h = 0;
                 if (gpu) {
-                    // İlk cevap başarıyla yazılana kadar işaret kalır (GPU çökmeleri çoğu zaman ilk hesapta olur)
+                    // İşaret yalnız GPU kodu çalışırken durur (yükleme ve ilk cevap, bkz. fenerSohbet).
+                    // Yükleme ile ilk soru arasında Android süreci arka planda kapatırsa bu çökme sayılmasın
+                    // (sayılırsa GPU kalıcı kapanırdı)
                     p.edit().putBoolean("gpuDeneniyor", true).commit();
                     h = FenerMotoru.yukle(f.getAbsolutePath(), nCtx, fenerThreads(), 99);
-                    if (h == 0) p.edit().putBoolean("gpuDeneniyor", false).commit();
+                    p.edit().putBoolean("gpuDeneniyor", false).commit();
                 }
                 if (h == 0) {
                     gpu = false;
@@ -431,6 +453,7 @@ public class AkilCantasiPlugin extends Plugin {
                 fenerH = h;
                 fenerDosya = dosya;
                 fenerGpu = gpu;
+                fenerGpuOnayli = false;
                 fenerBilgi = FenerMotoru.bilgi(h);
                 ret.put("ok", true);
                 ret.put("bilgi", jsonObj(fenerBilgi));
@@ -478,6 +501,9 @@ public class AkilCantasiPlugin extends Plugin {
                 call.resolve(r);
                 return;
             }
+            // GPU'nun ilk hesabı: çökme olursa bir sonraki açılışta GPU kapatılır (fenerVar)
+            boolean gpuIlk = fenerGpu && !fenerGpuOnayli;
+            if (gpuIlk) fenerPrefs().edit().putBoolean("gpuDeneniyor", true).commit();
             String res = FenerMotoru.sohbet(h, roles, contents, maxTokens, temp, topK, topP, repeat, (bytes) -> {
                 if (id.equals(fenerDurdurId)) return false;
                 JSObject ev = new JSObject();
@@ -487,9 +513,10 @@ public class AkilCantasiPlugin extends Plugin {
                 return true;
             });
             JSObject out = jsonObj(res);
-            if (fenerGpu && out.optString("error", "").isEmpty() && out.optInt("tokens", 0) > 0) {
-                android.content.SharedPreferences p = fenerPrefs();
-                if (p.getBoolean("gpuDeneniyor", false)) p.edit().putBoolean("gpuDeneniyor", false).commit();
+            if (gpuIlk) {
+                // Yerel kod döndü: süreç çökmedi. Cevap da yazıldıysa GPU bu oturum için sağlam
+                fenerPrefs().edit().putBoolean("gpuDeneniyor", false).commit();
+                if (out.optString("error", "").isEmpty() && out.optInt("tokens", 0) > 0) fenerGpuOnayli = true;
             }
             call.resolve(out);
         });
@@ -686,6 +713,7 @@ public class AkilCantasiPlugin extends Plugin {
 
     @PluginMethod
     public void konumIzleDurdur(PluginCall call) {
+        konumDuraklatildi = false;
         if (konumIzleyici != null) konumIzleyici.durdur();
         call.resolve(new JSObject());
     }

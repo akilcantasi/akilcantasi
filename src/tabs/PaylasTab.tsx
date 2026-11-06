@@ -86,9 +86,12 @@ function useServerStatus() {
   useEffect(() => {
     let alive = true;
     let timer: any;
+    // Yenileme sorgu sürerken gelirse eski sorgu ikinci bir zamanlayıcı zinciri başlatmasın
+    let gen = 0;
     const tick = async () => {
+      const my = ++gen;
       const s = await fetchStatus();
-      if (!alive) return;
+      if (!alive || my !== gen) return;
       setSt(s);
       // Sunucu yoksa seyrek dene (bilgi noktası sonradan açılabilir)
       timer = setTimeout(tick, s ? 5000 : 20000);
@@ -158,6 +161,8 @@ async function copyText(t: string) {
 function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) {
   const [copied, setCopied] = useState(false);
   const [nativeMsg, setNativeMsg] = useState('');
+  // Başlatma/durdurma sürerken ikinci dokunuş ikinci kez başlatmasın
+  const [busy, setBusy] = useState(false);
   const isAndroid = native.isAndroid();
 
   if (status) {
@@ -239,12 +244,19 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
             <button
               class="btn"
               data-testid="infopoint-stop"
+              disabled={busy}
               onClick={async () => {
-                await native.stopInfoPoint();
-                refreshStatus();
+                setBusy(true);
+                try {
+                  await native.stopInfoPoint();
+                } finally {
+                  setBusy(false);
+                  setNativeMsg('');
+                  refreshStatus();
+                }
               }}
             >
-              Yayını durdur
+              {busy ? 'Durduruluyor…' : 'Yayını durdur'}
             </button>
           </div>
         ) : (
@@ -282,18 +294,26 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
           role="switch"
           aria-checked="false"
           aria-label="Bilgi noktasını başlat"
-          disabled={!isAndroid}
+          disabled={!isAndroid || busy}
+          aria-busy={busy}
           data-testid="infopoint-switch"
           onClick={async () => {
-            const r = await native.startInfoPoint();
-            if (r?.running) {
-              setNativeMsg('Bilgi noktası başlatıldı.');
-              refreshStatus();
-              if (!r.addresses?.length) await native.openHotspotSettings();
-              return;
+            if (busy) return;
+            setBusy(true);
+            setNativeMsg('Başlatılıyor…');
+            try {
+              const r = await native.startInfoPoint();
+              if (r?.running) {
+                setNativeMsg('Bilgi noktası başlatıldı.');
+                refreshStatus();
+                if (!r.addresses?.length) await native.openHotspotSettings();
+                return;
+              }
+              const opened = await native.openHotspotSettings();
+              setNativeMsg(opened ? 'Erişim noktasını açın, sonra uygulamaya dönün.' : 'Bu sürümde desteklenmiyor.');
+            } finally {
+              setBusy(false);
             }
-            const opened = await native.openHotspotSettings();
-            setNativeMsg(opened ? 'Erişim noktasını açın, sonra uygulamaya dönün.' : 'Bu sürümde desteklenmiyor.');
           }}
         />
         <div class="grow">
@@ -561,7 +581,8 @@ const LICENSES: { name: string; lic: string; note: string }[] = [
   { name: 'Preact', lic: 'MIT', note: 'Arayüz' },
   { name: 'hash-wasm', lic: 'MIT', note: 'İndirme doğrulaması (SHA-256)' },
   { name: 'node-qrcode', lic: 'MIT', note: 'QR kodlar' },
-  { name: 'IBM Plex', lic: 'OFL-1.1', note: 'Yazı tipi' },
+  { name: 'Poppins, IBM Plex, Noto Sans', lic: 'OFL-1.1', note: 'Yazı tipleri (arayüz, kod, harita yazıları)' },
+  { name: 'PDF.js (Mozilla)', lic: 'Apache-2.0', note: 'Kütüphanedeki PDF okuyucu' },
   { name: 'Akıl Çantası', lic: 'GPL-3.0-or-later', note: 'Bu uygulama özgür yazılımdır; kaynak kodu paylaşılabilir ve değiştirilebilir.' },
 ];
 

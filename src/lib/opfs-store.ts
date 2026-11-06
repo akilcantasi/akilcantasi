@@ -67,7 +67,12 @@ export async function openSyncPartStore(file: string): Promise<PartStore | null>
     },
     async write(offset, data) {
       let w = 0;
-      while (w < data.length) w += ah.write(data.subarray(w), { at: offset + w });
+      while (w < data.length) {
+        const n = ah.write(data.subarray(w), { at: offset + w });
+        // Hiç yazılamadıysa (yer yok) sonsuz döngüye girme: kota hatası olarak bildir
+        if (!(n > 0)) throw new DOMException('dosyaya yazılamadı: yer yok', 'QuotaExceededError');
+        w += n;
+      }
     },
     async truncate(n) {
       ah.truncate(n);

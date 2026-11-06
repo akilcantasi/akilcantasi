@@ -60,7 +60,9 @@ function Home() {
         </span>
       ) : null}
       <span class="cm-chev" aria-hidden="true">
-        ›
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 6l6 6-6 6" />
+        </svg>
       </span>
     </button>
   );
@@ -94,7 +96,7 @@ function Home() {
 export function IletisimTab() {
   const st = useAppState();
   const id = st.openComm as SectionId | null;
-  const C = id && id in SECTIONS ? SECTIONS[id] : null;
+  const C = id && Object.prototype.hasOwnProperty.call(SECTIONS, id) ? SECTIONS[id] : null;
   return (
     <>
       <style>{CSS}</style>

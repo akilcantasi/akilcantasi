@@ -123,6 +123,14 @@ Ayrıntılar:
   düğüm kimliği **küçük** olan `requestConnection` yapar, diğeri 8 sn içinde
   bağlantı kurulmazsa kendisi ister.
 - Bağlantılar her iki tarafta otomatik kabul edilir; en fazla 6 bağlı komşu.
+- Gelen yük sınırı (komşu başına jeton kovası, `MeshPeer.jetonAl`): bir anda en çok 120 çerçeve,
+  sonra saniyede 20. 500 mesajlık tam eşitleme ~30 çerçevedir; aşan çerçeveler JS'e iletilmeden
+  atılır (kimlik doğrulama olmadığından yakındaki biri sel gibi çerçeve yollayıp arayüzü
+  kilitleyemesin). Atılan çerçevedeki mesajlar kaybolmaz: yeniden bağlanınca özet değişimi
+  (`have`/`want`) eksikleri tamamlar.
+- Karşı tarafın reklam adı güvenilmez: düğüm kimliği `[A-Za-z0-9_-]{4,32}` değilse boş sayılır,
+  görünen addan denetim/biçim karakterleri atılır ve 40 karakterle sınırlanır.
+- Listede olmayan (durdurulduktan sonra gelen) uç noktanın yükü atılır.
 - Hiç komşu yokken keşif 45 sn'de bir yeniden başlatılır.
 - Uygulama kapanınca (`handleOnDestroy`) her şey durur. **Arka planda çalışma
   garanti değil** (ön plan hizmeti yok); ekran kapalıyken / uygulama arka

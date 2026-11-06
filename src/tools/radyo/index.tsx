@@ -223,7 +223,7 @@ export default function Radyo() {
           </li>
           <li>
             Aküyü şarj etmek için motoru çalıştıracaksanız <b>yalnızca açık havada</b> çalıştırın. Kapalı garajda, çadır yanında
-            ya da egzozu kar/enkazla tıkalıyken motor çalıştırmak <b>karbonmonoksit zehirlenmesine</b> yol açar.
+            ya da egzozu kar/enkazla tıkalıyken motor çalıştırmak <b>karbon monoksit zehirlenmesine</b> yol açar.
           </li>
           <li>Yakıtınızı tahliye ve ısınma için saklayın; radyo için motoru boşta uzun süre çalıştırmayın.</li>
         </ul>

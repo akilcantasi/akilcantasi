@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import { parseRange, safeJoin, startServer, type RunningServer } from '../server/server.mjs';
+import { parseRange, safeJoin, startServer, unsafeSegment, type RunningServer } from '../server/server.mjs';
+import net from 'node:net';
 
 let srv: RunningServer;
 let tmp: string;
@@ -69,6 +70,37 @@ describe('parseRange / safeJoin', () => {
     expect(safeJoin('/srv/data', '../x')).toBeNull();
     expect(safeJoin('/srv/data', '..%2F..%2Fetc%2Fpasswd')).toBeNull();
     expect(safeJoin('/srv/data', 'a%00.zim')).toBeNull();
+  });
+
+  it('Windows yolları: ters bölü, sürücü, UNC, aygıt adları, akış ve sondaki nokta/boşluk', () => {
+    const W = path.win32;
+    const root = 'D:\\paketler\\data';
+    expect(safeJoin(root, 'zim/a.zim', W)).toBe('D:\\paketler\\data\\zim\\a.zim');
+    for (const bad of [
+      '..\\..\\gizli.zim',
+      '..%5C..%5Cgizli.zim',
+      'zim%5C..%5C..%5Cgizli.zim',
+      'C:%5CWindows%5Cwin.ini',
+      'C:gizli.zim',
+      '\\\\?\\C:\\gizli.zim',
+      'CON',
+      'nul.zim',
+      'Com1.json',
+      'LPT9.zim',
+      'aux.tar',
+      'zim/con.zim',
+      'board.json.',
+      'board.json%20',
+      'board.json%2E',
+      'x.zim::$DATA',
+      'x.zim:gizli.zim',
+      'a%00.zim',
+    ])
+      expect(safeJoin(root, bad, W), bad).toBeNull();
+    // UNC biçimi kökün altına iner (dışarı çıkamaz)
+    expect(safeJoin(root, '%5C%5Csunucu%5Cpay%5Cx.zim', W)).toBe('D:\\paketler\\data\\sunucu\\pay\\x.zim');
+    expect(unsafeSegment('normal.zim')).toBe(false);
+    expect(unsafeSegment('console.zim')).toBe(false);
   });
 });
 
@@ -351,6 +383,10 @@ describe('güvenlik sertleştirmesi', () => {
     fs.writeFileSync(path.join(dir, '.gizli.json'), '{}');
     fs.mkdirSync(path.join(dir, 'a', 'b'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'a', 'b', 'derin.zim'), 'x');
+    fs.mkdirSync(path.join(dir, '.gizlidizin'));
+    fs.writeFileSync(path.join(dir, '.gizlidizin', 'x.zim'), 'x');
+    fs.mkdirSync(path.join(dir, '_ozel'));
+    fs.writeFileSync(path.join(dir, '_ozel', 'y.zim'), 'x');
     s = await startServer({ port: 0, host: '127.0.0.1', data: dir, dist: dir, apkDirs: [dir], board: { maxItems: 3, ratePerMin: 100 } });
     b = `http://127.0.0.1:${s.port}`;
   });
@@ -383,6 +419,70 @@ describe('güvenlik sertleştirmesi', () => {
   it('gizli dosya ve derin klasör sunulmaz', async () => {
     expect((await fetch(b + '/data/.gizli.json')).status).not.toBe(200);
     expect((await fetch(b + '/data/a/b/derin.zim')).status).not.toBe(200);
+  });
+
+  it('kodlanmış yol parçalarıyla gizli/_ klasör ve derinlik denetimi atlatılamaz', async () => {
+    for (const p of [
+      '/data/%2Egizlidizin/x.zim',
+      '/data/%2egizlidizin/x.zim',
+      '/data/%5Fozel/y.zim',
+      '/data/a%2Fb%2Fderin.zim',
+      '/data/a%2Fb/derin.zim',
+      '/data/board%2Ejson',
+      '/data/CON.json',
+      '/data/x.zim%3A%3A%24DATA',
+    ]) {
+      const r = await istek(p, { Host: `127.0.0.1:${s.port}` });
+      expect(r.status, p).not.toBe(200);
+    }
+  });
+
+  /** Ham soket: gövde sınırını aşan istek 413 alır ve sunucu bağlantıyı kapatır */
+  const hamIstek = (head: string, chunks: string[]): Promise<{ text: string; closed: boolean }> =>
+    new Promise((res, rej) => {
+      const so = net.connect(s.port, '127.0.0.1');
+      let text = '';
+      const t = setTimeout(() => {
+        so.destroy();
+        res({ text, closed: false });
+      }, 4000);
+      so.on('data', (d) => (text += d));
+      so.on('error', () => {});
+      so.on('close', () => {
+        clearTimeout(t);
+        res({ text, closed: true });
+      });
+      so.on('connect', () => {
+        so.write(head);
+        for (const c of chunks) so.write(c);
+      });
+      so.on('timeout', rej);
+    });
+
+  it('büyük gövde: Content-Length sınırı aşıyorsa okunmadan 413 ve bağlantı kapanır', async () => {
+    const r = await hamIstek(
+      `POST /api/board HTTP/1.1\r\nHost: 127.0.0.1:${s.port}\r\nContent-Type: application/json\r\nContent-Length: 100000000\r\n\r\n`,
+      ['{"id":'],
+    );
+    expect(r.text).toMatch(/^HTTP\/1\.1 413/);
+    expect(r.text.toLowerCase()).toContain('connection: close');
+    expect(r.closed).toBe(true);
+  });
+
+  it('büyük gövde: parça parça (chunked) gönderilen fazla veri 413 ve bağlantı kapanır', async () => {
+    const parca = 'x'.repeat(3000);
+    const chunk = `${parca.length.toString(16)}\r\n${parca}\r\n`;
+    const r = await hamIstek(
+      `POST /api/board HTTP/1.1\r\nHost: 127.0.0.1:${s.port}\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n`,
+      [chunk, chunk, chunk],
+    );
+    expect(r.text).toMatch(/^HTTP\/1\.1 413/);
+    expect(r.closed).toBe(true);
+  });
+
+  it('indirme ucu: büyük gövde 400 değil 413', async () => {
+    const r = await istek('/api/fetch', { 'Content-Type': 'application/json', Host: `127.0.0.1:${s.port}` }, 'POST', JSON.stringify({ action: 'cancel', file: 'x'.repeat(5000) }));
+    expect(r.status).toBe(413);
   });
 
   it('pano dolunca önce sıradan kayıtlar silinir; kayıp ilanı kalır', async () => {

@@ -25,7 +25,7 @@ import {
   walkMinutes,
   type LatLon,
 } from '../lib/map/geo';
-import { POI_TYPES, POI_TYPE_ORDER, loadPoiPack, loadPoiUrl, poiBounds, type Poi, type PoiType } from '../lib/map/poi';
+import { POI_TYPES, loadPoiPackCached, loadPoiUrl, poiBounds, type Poi, type PoiType } from '../lib/map/poi';
 import { POI_DOM_LIMIT, addPoiLayers, type PoiLayerController } from '../lib/map/poi-layer';
 import { backgroundOnlyStyle, darkProtomapsStyle, registerGlyphProtocol } from '../lib/map/style';
 import { devMapUrl, devPoiUrl } from '../lib/map/dev';
@@ -49,6 +49,7 @@ import {
 import { copyText, useWaypoints } from '../lib/map/ui';
 import { IzCard, NavCard, Sheet, WaypointSheet, useTicker, type AddPreset } from '../lib/map/panels';
 import { KonumArama } from '../lib/map/KonumArama';
+import { HaritaPaketleri } from '../lib/map/HaritaPaketleri';
 import { nativeKonum, type KonumDurum } from '../lib/native';
 import { sonKonumKaydet } from '../lib/enkaz/enkaz';
 import './harita.css';
@@ -87,6 +88,10 @@ const LOC_MSG: Record<LocState, string> = {
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** Sekme değişince harita kaldırılır (bellek: cihaz içi model de çalışabilir); geri gelince
+ *  aynı paketlerle son görünümden açılır (App.tsx denetimi, 2026-11). */
+let sonKamera: { key: string; center: [number, number]; zoom: number } | null = null;
+
 function fmtTime(ts: number) {
   const d = new Date(ts);
   const t = d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -114,6 +119,7 @@ export function HaritaTab() {
   const [konumDurum, setKonumDurum] = useState<KonumDurum | null>(null);
   const [aramaBas, setAramaBas] = useState(0);
   const yerelAktif = useRef(false);
+  const sonYazilan = useRef<(LatLon & { t: number }) | null>(null);
   const locRef = useRef<UserLoc | null>(null);
   locRef.current = loc;
   const [panel, setPanel] = useState<null | 'yon' | 'konum'>(null);
@@ -162,20 +168,29 @@ export function HaritaTab() {
   const saver = () => lowPower() || getState().batterySaver;
 
   // ---- Paketleri yükle ----
+  // Paket listesi her değiştiğinde (başka bir paketin indirmesi bitti, Kütüphane'ye kitap
+  // eklendi…) yeniden bakılır; harita ve nokta paketi aynıysa harita yeniden kurulmaz
+  // (yoksa kullanıcı haritayı kullanırken konum, seçim ve yakınlaştırma sıfırlanıyordu).
+  const packsKey = useRef('');
   useEffect(() => {
     let alive = true;
-    setPacks((p) => ({ ...p, status: 'loading' }));
     (async () => {
       const errors: string[] = [];
       let mapSrc: RandomAccessSource | null = null;
       let pois: Poi[] = [];
       let poiLoaded = false;
+      const keys: string[] = [];
       try {
         const dm = devMapUrl();
-        if (dm) mapSrc = await HttpRangeSource.open(dm);
-        else {
+        if (dm) {
+          mapSrc = await HttpRangeSource.open(dm);
+          keys.push(dm);
+        } else {
           const p = await findPack('map');
-          if (p) mapSrc = await openSource(p);
+          if (p) {
+            mapSrc = await openSource(p);
+            keys.push(`${p.origin}:${p.id}:${p.size}`);
+          }
         }
       } catch (e) {
         errors.push('Harita paketi açılamadı: ' + errMsg(e));
@@ -185,17 +200,22 @@ export function HaritaTab() {
         if (dp) {
           pois = await loadPoiUrl(dp);
           poiLoaded = true;
+          keys.push(dp);
         } else {
           const p = await findPack('poi');
           if (p) {
-            pois = await loadPoiPack(p);
+            pois = await loadPoiPackCached(p);
             poiLoaded = true;
+            keys.push(`${p.origin}:${p.id}:${p.size}`);
           }
         }
       } catch (e) {
         errors.push('Nokta paketi okunamadı: ' + errMsg(e));
       }
-      if (alive) setPacks({ status: 'ready', mapSrc, pois, poiLoaded, errors });
+      if (!alive) return;
+      const key = [...keys, ...errors].join('\n');
+      setPacks((prev) => (prev.status === 'ready' && packsKey.current === key ? prev : { status: 'ready', mapSrc, pois, poiLoaded, errors }));
+      packsKey.current = key;
     })();
     return () => {
       alive = false;
@@ -209,6 +229,8 @@ export function HaritaTab() {
     if (packs.status !== 'ready' || !hasAnything || !mapEl.current) return;
     let cancelled = false;
     let map: MlMap | null = null;
+    let offLongPress: (() => void) | null = null;
+    const kameraKey = packsKey.current;
     setMapError(null);
     setMapReady(false);
     (async () => {
@@ -230,9 +252,11 @@ export function HaritaTab() {
       let zoom = 5;
       let minZoom = 2;
       if (packs.mapSrc) {
+        let pmUrl = '';
         try {
           const { addPmtilesSource } = await import('../lib/map/pmtilesSource');
           const { url, pmtiles } = addPmtilesSource(ml, packs.mapSrc);
+          pmUrl = url;
           const h = await pmtiles.getHeader();
           style = darkProtomapsStyle(url);
           center = [h.centerLon, h.centerLat];
@@ -242,6 +266,7 @@ export function HaritaTab() {
           if (!bounds) bounds = [[h.minLon, h.minLat], [h.maxLon, h.maxLat]];
         } catch (e) {
           console.warn('[harita] PMTiles okunamadı', e);
+          if (pmUrl) (await import('../lib/map/pmtilesSource')).dropPmtilesSource(pmUrl);
           if (!cancelled) setToast('Harita paketi okunamadı; yalnızca noktalar gösteriliyor.');
         }
       }
@@ -277,8 +302,10 @@ export function HaritaTab() {
       if (bounds) {
         const same = bounds[0][0] === bounds[1][0] && bounds[0][1] === bounds[1][1];
         if (same) map.jumpTo({ center: bounds[0], zoom: 15 });
-        else map.fitBounds(bounds, { padding: 40, animate: false, maxZoom: 15 });
+        else map.fitBounds(bounds, { padding: fitPad(map, 40), animate: false, maxZoom: 15 });
       }
+      // Sekmeye geri dönüldü: kaldığı yerden
+      if (sonKamera && sonKamera.key === kameraKey) map.jumpTo({ center: sonKamera.center, zoom: sonKamera.zoom });
       mapRef.current = map;
       if (import.meta.env.DEV) (window as any).__acMap = map;
       const addOverlays = () => {
@@ -295,11 +322,12 @@ export function HaritaTab() {
         if (cancelled) return;
         openAddAt({ lat: ev.lngLat.lat, lon: ev.lngLat.lng });
       });
-      installLongPress(map, (ll) => !cancelled && openAddAt(ll));
+      offLongPress = installLongPress(map, (ll) => !cancelled && openAddAt(ll));
       setMapReady(true);
     })();
     return () => {
       cancelled = true;
+      offLongPress?.();
       markers.current.forEach((m) => m.marker.remove());
       markers.current.clear();
       poiLayer.current = null;
@@ -307,6 +335,12 @@ export function HaritaTab() {
       wpMarkers.current.clear();
       userMarker.current?.remove();
       userMarker.current = null;
+      if (map) {
+        try {
+          const c = map.getCenter();
+          sonKamera = { key: kameraKey, center: [c.lng, c.lat], zoom: map.getZoom() };
+        } catch {}
+      }
       map?.remove();
       mapRef.current = null;
       setOverlayReady(0);
@@ -518,6 +552,13 @@ export function HaritaTab() {
         const o = locRef.current;
         if (!o || o.lat !== k.lat || o.lon !== k.lon || o.accuracy !== k.dogruluk) {
           setLoc({ lat: k.lat, lon: k.lon, accuracy: k.dogruluk, timestamp: k.zaman });
+          // Tarayıcı yolundaki gibi son konumlar listesine (enkaz işareti bunu kullanır);
+          // saniyede bir gelen güncellemeler 30 sn / 50 m'de bir yazılır
+          const s = sonYazilan.current;
+          if (!s || Date.now() - s.t > 30_000 || distanceM(s, { lat: k.lat, lon: k.lon }) > 50) {
+            sonYazilan.current = { lat: k.lat, lon: k.lon, t: Date.now() };
+            sonKonumKaydet({ lat: k.lat, lon: k.lon, acc: k.dogruluk });
+          }
         }
         setLocState('ok');
         if (lowPower()) {
@@ -553,12 +594,33 @@ export function HaritaTab() {
   const poiById = useMemo(() => new Map(packs.pois.map((p) => [p.id, p])), [packs.pois]);
   const selected = selectedId ? poiById.get(selectedId) ?? null : null;
 
+  /**
+   * Kamera hareketi bir sonraki karede ve haritanın güncel boyutuyla. Nokta/hedef kartı açılınca
+   * harita alttan küçülür; kayma eski boyuta göre hesaplanırsa seçilen nokta ortada değil
+   * haritanın alt kenarında (ya da dışında) kalıyordu.
+   */
+  function camera(fn: (map: MlMap) => void) {
+    requestAnimationFrame(() => {
+      const map = mapRef.current;
+      if (!map) return;
+      map.resize();
+      fn(map);
+    });
+  }
+
+  /** Sığdırma payı: küçük haritada (büyük yazı, açık kartlar) sabit 60–70 px pay haritadan büyük
+   *  kalıyor, maplibre sığdıramayıp hiç kıpırdamıyordu. */
+  function fitPad(map: MlMap, want: number) {
+    const c = map.getContainer();
+    return Math.max(8, Math.min(want, Math.floor(Math.min(c.clientWidth, c.clientHeight) / 4)));
+  }
+
   function moveTo(center: [number, number], zoom?: number) {
-    const map = mapRef.current;
-    if (!map) return;
-    const opts = { center, zoom: zoom ?? map.getZoom() };
-    if (saver()) map.jumpTo(opts);
-    else map.easeTo({ ...opts, duration: 450 });
+    camera((map) => {
+      const opts = { center, zoom: zoom ?? map.getZoom() };
+      if (saver()) map.jumpTo(opts);
+      else map.easeTo({ ...opts, duration: 450 });
+    });
   }
 
   function openAddAt(ll: LatLon) {
@@ -581,7 +643,7 @@ export function HaritaTab() {
       n = Math.max(n, p.lat);
     }
     if (w === e && s2 === n) moveTo([w, s2], Math.max(map.getZoom(), 16));
-    else map.fitBounds([[w, s2], [e, n]], { padding: 60, maxZoom: 17, animate: !saver(), duration: 450 });
+    else camera((m) => m.fitBounds([[w, s2], [e, n]], { padding: fitPad(m, 60), maxZoom: 17, animate: !saver(), duration: 450 }));
   }
 
   function selectPoi(id: string | null) {
@@ -656,12 +718,14 @@ export function HaritaTab() {
     if (map && fromUser && from) {
       // Kullanıcıyı ve hedefi birlikte göster
       const p = n.item;
-      map.fitBounds(
-        [
-          [Math.min(p.lon, from.lon), Math.min(p.lat, from.lat)],
-          [Math.max(p.lon, from.lon), Math.max(p.lat, from.lat)],
-        ],
-        { padding: 70, maxZoom: 16, animate: !saver(), duration: 450 },
+      camera((m) =>
+        m.fitBounds(
+          [
+            [Math.min(p.lon, from.lon), Math.min(p.lat, from.lat)],
+            [Math.max(p.lon, from.lon), Math.max(p.lat, from.lat)],
+          ],
+          { padding: fitPad(m, 70), maxZoom: 16, animate: !saver(), duration: 450 },
+        ),
       );
     } else moveTo([n.item.lon, n.item.lat]);
     setToast(fromUser ? null : 'Konumun henüz bilinmiyor: harita merkezine en yakın toplanma alanı seçildi. Konum aranıyor…');
@@ -696,6 +760,41 @@ export function HaritaTab() {
   const rel = selected && loc ? { d: distanceM(loc, selected), b: bearingDeg(loc, selected) } : null;
   const locMsg = LOC_MSG[locState];
   const visiblePois = packs.pois.filter((p) => filter === 'hepsi' || p.type === filter);
+
+  // Konum, iz ve yer işareti düğmeleri. Paket yokken en üstte: haritasız da kullanılır,
+  // küçük ekranda paket listesinin altında kaybolmasın.
+  const actions = (
+    <>
+      <div class="row map-actions">
+        {hasAnything && (
+          <button type="button" class="btn primary grow" data-testid="map-nearest" onClick={onNearest} disabled={!packs.pois.some((p) => p.type === 'toplanma')}>
+            En yakın toplanma alanı
+          </button>
+        )}
+        <button type="button" class="btn grow" data-testid="map-saymyloc" onClick={() => setPanel('konum')}>
+          Konumumu söyle
+        </button>
+      </div>
+      <div class="row map-actions">
+        <button
+          type="button"
+          class={'btn grow' + (track.recording ? ' rec' : '')}
+          data-testid="map-track"
+          aria-expanded={izOpen ? 'true' : 'false'}
+          onClick={() => setIzOpen(!izOpen)}
+        >
+          {track.recording && <span class="rec-dot on" aria-hidden="true" />}
+          İz kaydı
+        </button>
+        <button type="button" class="btn grow" data-testid="map-waypoints" onClick={() => setWpSheet({ adding: false, preset: {} })}>
+          Yer işaretleri{wps.length ? ` (${wps.length})` : ''}
+        </button>
+      </div>
+      {!hasAnything && (
+        <p class="warn">Harita paketi olmadan da konumunuzu paylaşabilir, iz kaydı ve yer işaretlerini kullanabilirsiniz; yön ve mesafe Pusula aracında görünür.</p>
+      )}
+    </>
+  );
 
   // ---- Görünüm ----
   if (packs.status === 'loading') {
@@ -733,22 +832,9 @@ export function HaritaTab() {
         </p>
       ))}
 
-      {!hasAnything ? (
-        <div class="card map-empty">
-          <div class="row">
-            <IconMap size={22} />
-            <strong>Harita ve nokta paketi yüklü değil</strong>
-          </div>
-          <p class="empty">
-            Çevrimdışı harita (.pmtiles) ve toplanma alanı / sağlık / eczane / su / barınma noktaları (.geojson) paketlerini
-            Araçlar → Paketler ve paylaşım bölümünden indirebilir ya da dosyadan içe aktarabilirsiniz. Konumunuzu paketsiz de görebilir
-            ve paylaşabilirsiniz.
-          </p>
-          <button type="button" class="btn primary" data-testid="map-get-packs" onClick={() => go.tool('paylas')}>
-            Paket ekle
-          </button>
-        </div>
-      ) : (
+      {!hasAnything && actions}
+
+      {hasAnything && (
         <div class="map-wrap">
           <div class="map-canvas" ref={mapEl} data-testid="map" aria-label="Harita" role="region" />
           {!packs.mapSrc && (
@@ -861,33 +947,23 @@ export function HaritaTab() {
       </div>
       )}
 
-      <div class="row map-actions">
-        {hasAnything && (
-          <button type="button" class="btn primary grow" data-testid="map-nearest" onClick={onNearest} disabled={!packs.pois.some((p) => p.type === 'toplanma')}>
-            En yakın toplanma alanı
-          </button>
-        )}
-        <button type="button" class="btn grow" data-testid="map-saymyloc" onClick={() => setPanel('konum')}>
-          Konumumu söyle
-        </button>
-      </div>
-      <div class="row map-actions">
-        <button
-          type="button"
-          class={'btn grow' + (track.recording ? ' rec' : '')}
-          data-testid="map-track"
-          aria-expanded={izOpen ? 'true' : 'false'}
-          onClick={() => setIzOpen(!izOpen)}
-        >
-          {track.recording && <span class="rec-dot on" aria-hidden="true" />}
-          İz kaydı
-        </button>
-        <button type="button" class="btn grow" data-testid="map-waypoints" onClick={() => setWpSheet({ adding: false, preset: {} })}>
-          Yer işaretleri{wps.length ? ` (${wps.length})` : ''}
-        </button>
-      </div>
+      {hasAnything && actions}
       {!hasAnything && (
-        <p class="warn">Harita paketi olmadan da iz kaydı ve yer işaretleri çalışır; yön ve mesafe Pusula aracında görünür.</p>
+        <div class="card map-empty">
+          <div class="row">
+            <IconMap size={22} />
+            <strong>Harita ve nokta paketi yüklü değil</strong>
+          </div>
+          <p class="empty">
+            Hazır Türkiye haritasını ve afet noktalarını (toplanma alanı, sağlık, eczane, su, barınma) buradan bir kez indirin;
+            sonra internetsiz çalışır.
+          </p>
+          <HaritaPaketleri />
+          <p class="warn map-empty-more">Dosyadan içe aktarmak ya da bilgi noktasından almak için: Araçlar → Paketler ve paylaşım.</p>
+          <button type="button" class="btn" data-testid="map-get-packs" onClick={() => go.tool('paylas')}>
+            Tüm paketler
+          </button>
+        </div>
       )}
 
       {wpSheet && (
@@ -1014,8 +1090,8 @@ function YonPanel({ poi, loc, locState, onLocate, onClose, durum, baslangic }: {
                 <TypeBadge type={poi.type} /> <span class="label">{t.label}</span>
               </div>
               <svg class="dir-arrow" viewBox="0 0 100 100" width="180" height="180" role="img" aria-label={`Yön ${compassLong(b)}`}>
-                <circle cx="50" cy="50" r="46" fill="none" stroke="#2E3643" stroke-width="2" />
-                <text x="50" y="13" text-anchor="middle" fill="#9AA4B2" font-size="9" font-family="IBM Plex Mono, monospace">
+                <circle cx="50" cy="50" r="46" fill="none" stroke="#34507A" stroke-width="2" />
+                <text x="50" y="13" text-anchor="middle" fill="#A9B7C9" font-size="9" font-family="IBM Plex Mono, monospace">
                   {heading === null ? 'K' : ''}
                 </text>
                 <g transform={`rotate(${rot} 50 50)`}>
@@ -1059,8 +1135,8 @@ function RecBadge({ track, onClick }: { track: ReturnType<typeof useTrack>; onCl
   );
 }
 
-/** Dokunmatik uzun basma (600 ms, 10 px'ten az kayma) → harita koordinatı. */
-function installLongPress(map: MlMap, cb: (ll: LatLon) => void) {
+/** Dokunmatik uzun basma (600 ms, 10 px'ten az kayma) → harita koordinatı. Kaldırma işlevi döndürür. */
+function installLongPress(map: MlMap, cb: (ll: LatLon) => void): () => void {
   const el = map.getCanvasContainer();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let start: { x: number; y: number } | null = null;
@@ -1069,7 +1145,7 @@ function installLongPress(map: MlMap, cb: (ll: LatLon) => void) {
     timer = null;
     start = null;
   };
-  el.addEventListener('touchstart', (e: TouchEvent) => {
+  const onStart = (e: TouchEvent) => {
     if (e.touches.length !== 1) return cancel();
     const t = e.touches[0];
     const r = el.getBoundingClientRect();
@@ -1081,13 +1157,23 @@ function installLongPress(map: MlMap, cb: (ll: LatLon) => void) {
       cancel();
       cb({ lat: ll.lat, lon: ll.lng });
     }, 600);
-  }, { passive: true });
-  el.addEventListener('touchmove', (e: TouchEvent) => {
+  };
+  const onMove = (e: TouchEvent) => {
     if (!start || !timer) return;
     const t = e.touches[0];
     const r = el.getBoundingClientRect();
     if (Math.hypot(t.clientX - r.left - start.x, t.clientY - r.top - start.y) > 10) cancel();
-  }, { passive: true });
+  };
+  el.addEventListener('touchstart', onStart, { passive: true });
+  el.addEventListener('touchmove', onMove, { passive: true });
   el.addEventListener('touchend', cancel);
   el.addEventListener('touchcancel', cancel);
+  // Harita kapanırken bekleyen uzun basma, kaldırılmış haritada unproject çağırmasın
+  return () => {
+    cancel();
+    el.removeEventListener('touchstart', onStart);
+    el.removeEventListener('touchmove', onMove);
+    el.removeEventListener('touchend', cancel);
+    el.removeEventListener('touchcancel', cancel);
+  };
 }

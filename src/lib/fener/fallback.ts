@@ -3,13 +3,15 @@
 // varsa Vikipedi'den kısa bir parça. Böylece Fener her durumda yardım eder.
 import { clip, stepToText, type FenerSource, type Retrieval } from './rag';
 
-export type FallbackReason = 'no-model' | 'battery' | 'unsupported' | 'error';
+export type FallbackReason = 'no-model' | 'battery' | 'unsupported' | 'error' | 'stopped';
 
 export const FALLBACK_LABELS: Record<FallbackReason, string> = {
   'no-model': 'Model yüklü değil — rehberden yanıt',
   battery: 'Pil tasarrufu açık — rehberden yanıt',
   unsupported: 'Bu cihaz modeli çalıştıramıyor — rehberden yanıt',
   error: 'Model çalışmadı — rehberden yanıt',
+  // Kullanıcı model yazmaya başlamadan "Durdur"a bastı (arama ya da yükleme sırasında)
+  stopped: 'Durduruldu — rehberden yanıt',
 };
 
 export interface FallbackAnswer {

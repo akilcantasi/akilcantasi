@@ -36,3 +36,52 @@ Anahtar kelime eklenen dosyalar (yalnızca `keywords`): nukleer.ts, ilk-yardim.t
 - Birim: `npx vitest run tests/arama-kalitesi.test.ts tests/guides.test.ts tests/fener.test.ts`
 - E2E: `node e2e/qa-rehber.mjs http://localhost:5199/ /tmp/qa-rehber` → `1924 OK, 0 HATA`
   - Daha kararlı çalıştırma için HMR kapalı sunucu: `npx vite --config <hmr:false, watch.ignored:['**/*'] olan yapılandırma> --port 5461 --strictPort` ve ardından `node e2e/qa-rehber.mjs http://localhost:5461/`
+
+## Denetim 2026-11
+
+Kapsam: src/tabs/RehberTab.tsx, src/tabs/KendineYetmek.tsx, src/content/**, src/art/**, src/lib/guides-search.ts.
+360×640, 390×844, 1280×800 ve en büyük yazı boyutunda (Ayarlar → "En büyük") ekran görüntüleri incelendi;
+168 rehberin 868 çizimli adımı `all-guides-shot.mjs` ile 390 px'te çekildi, ~60'ına (çizimi yoğun olanlar dahil) tek tek bakıldı.
+
+### Denetlenenler
+- [x] Ana ekran, kategoriler, rehber sayfaları, geri dönüşler, `?guide= ?cat=` bağlantıları (mevcut e2e)
+- [x] Arama: Türkçe harfler (ı/i, İ/I, ş, ğ, ç), harfsiz ve büyük harfli yazım, sonuçsuz arama
+- [x] "henüz incelenmedi" uyarısı (yerleşik: sağlık profesyoneli, paket: uzman)
+- [x] Kendine Yetmek: kurulu değil / indiriliyor / indirme hatası / bozuk paket / kurulu durumları, paket rehberi ve çizimleri
+- [x] Rehberler arası metin göndermeleri ("Ezilme yaralanması" rehberine bakın…): 6 göndermenin hepsi var olan rehbere çıkıyor
+- [x] Çizimler: üst üste binen yazı, kırpılan etiket, tema dışı renk bulunmadı
+- [x] Kenar boşlukları eşit (sol = sağ = 18 px; en büyük yazıda 25 px), yatay taşma yok, dokunma hedefleri ≥ 44 px
+
+### Düzeltilenler
+1. **Ana ekran sahnesinin alt kenarı görünüyordu.** Sahne kutusu sabit 310 px'ti; dar ekranda çizim daha önce
+   bittiği için arama ve kısayol düğmelerinin arkasında yuvarlak köşeli bir çizgi kalıyordu. Kutu yüksekliği
+   çizimden geliyor (en çok 310 px), geçiş çizimin kenarından önce zemine karışıyor.
+2. **Kendine Yetmek paketi açılamazsa kart "rehberler açılıyor…" yazısında takılı kalıyordu.** Hata kaydediliyor
+   ama arayüze haber verilmiyordu (`pack-guides.ts`); "Yeniden dene" de geri bildirim vermiyordu. Artık hata
+   görünüyor, deneme sırasında düğme "Açılıyor…" diyor ve bozuk dosya için "Silip yeniden indir" var.
+3. **Kendine Yetmek kartındaki not ve hata yazısı biçimsizdi** (`.ky-card p` kuralı `.ky-note`/`.ky-err`'i
+   eziyordu). Eski indirme hatası, paket cihazdayken de görünüyordu; düzeltildi. İndirme sonrası "doğrulanıyor"
+   aşaması ayrı yazılıyor, hata sonrası düğme "Yeniden dene".
+4. **Geri dönünce liste en başa atıyordu.** 21 rehberli kategoride aşağıdan bir rehber açıp dönünce kullanıcı
+   yerini kaybediyordu. Rehberden kategoriye ve kategoriden ana ekrana dönüşte kaydırma konumu korunuyor; ileri
+   gidişte en üstten başlıyor.
+5. **Arama: 3 harflik kelime başka kelimenin başı sayılıyordu** ("sığınak" → omurga yaralanması, "sığ" yüzünden;
+   "buz" → "buzdolabı"). 3 harflik kök yalnızca ek almış hâlini buluyor ("kan" → "kanı", "sel" → "selde").
+   466 arama kalitesi testi ve rehber testleri geçiyor.
+6. Sonuçsuz aramada sorgu tek dokunuşla Fener'e soruluyor ("Fener'e sor" düğmesi).
+7. Tasarım: Kendine Yetmek kartı ve düğmesi yeşilden Şafak kehribarına (diğer birincil düğmelerle aynı);
+   yinelenen `.rh-row:hover` kuralı kaldırıldı.
+
+### Kalan / öneri
+- Rehber metnindeki göndermeler ("…" rehberine bakın) düz yazı; dokununca o rehberi açan bağlantı olabilir.
+- Arama ünsüz yumuşamasını bilmiyor ("ısırık" ↔ "ısırığı", "kalp" ↔ "kalbi"). Denendi; iki eğri sorguyu
+  ("işyerinde deprem hazırlığı", "otizmli çocuk deprem") bozduğu için geri alındı, ağırlıkla yeniden denenebilir.
+- Kendine Yetmek kurulunca 57 kategori ana ekranda tek tek kutu olarak çıkıyor (uzun sayfa); 12 üst başlığa katlanabilir.
+- `all-guides-shot.mjs` yüklü makinede bir kez "Target crashed" verdi; kalan rehberlerle yeniden çalıştırınca tamamlandı.
+
+### Komutlar
+- Birim: `npx vitest run tests/rehber-harita-denetim.test.ts tests/arama-kalitesi.test.ts tests/guides.test.ts tests/guides-*.test.ts tests/fener.test.ts tests/rehber-paket.test.ts`
+- E2E: `node e2e/qa-rehber.mjs http://127.0.0.1:5461/ /tmp/qa-rehber` → `1942 OK, 0 HATA`. Yeni bölüm: sahne geçişi,
+  kaydırma konumu, sonuçsuz aramada Fener'e sor, Kendine Yetmek indirme (indirme adresi yerel `data/rehber/kendine-yetmek.rehber.json`
+  dosyasına yönlendirilir) ve bozuk paket → silip yeniden indir.
+- Çizimler: `node e2e/all-guides-shot.mjs http://127.0.0.1:5461/ /tmp/ag/out` (önce `/tmp/ag/ids.json`).

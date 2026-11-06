@@ -1,6 +1,7 @@
 package org.akilcantasi.app;
 
 import android.os.Build;
+import android.os.SystemClock;
 import android.util.Log;
 
 import com.getcapacitor.JSArray;
@@ -476,7 +477,14 @@ public class AkilMeshPlugin extends Plugin {
             if (b == null || b.length == 0 || b.length > ConnectionsClient.MAX_BYTES_DATA_SIZE) return;
             synchronized (lock) {
                 MeshPeer p = peers.get(endpointId);
-                if (p != null) p.lastSeen = System.currentTimeMillis();
+                // Durdurulduktan sonra (liste boşalır) gelen ya da tanınmayan uç noktadan yük JS'e gitmez
+                if (p == null) return;
+                p.lastSeen = System.currentTimeMillis();
+                // Kimlik doğrulama yok: yakındaki biri çerçeve yağdırıp arayüzü kilitleyemesin
+                if (!p.jetonAl(SystemClock.elapsedRealtime())) {
+                    if (p.atilan % 200 == 1) Log.w(TAG, "çok sık çerçeve, atılıyor: " + endpointId + " (" + p.atilan + ")");
+                    return;
+                }
             }
             JSObject ev = new JSObject();
             ev.put("from", endpointId);

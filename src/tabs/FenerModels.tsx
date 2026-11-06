@@ -256,7 +256,7 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
                         {!s.active && !s.error && s.started && s.pct > 0 && <span class="fener-model-meta">Duraklatıldı · %{s.pct}</span>}
                       </div>
                       {s.active ? (
-                        <button type="button" class="btn fener-cat-btn" onClick={() => c.parts.forEach((p) => pauseDownload(p.file))}>
+                        <button type="button" class="btn fener-cat-btn" data-testid="fener-model-pause" onClick={() => c.parts.forEach((p) => pauseDownload(p.file))}>
                           Duraklat
                         </button>
                       ) : (

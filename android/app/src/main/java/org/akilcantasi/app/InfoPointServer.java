@@ -338,7 +338,10 @@ public class InfoPointServer {
             send(out, 200, "application/json; charset=utf-8", sb.toString().getBytes(StandardCharsets.UTF_8), null, head);
         } else if (path.startsWith("/data/")) {
             String name = path.substring(6);
-            if (packsDir == null || name.isEmpty() || name.contains("/") || name.contains("\\") || name.contains("..") || !isPack(name)) {
+            // Yol çözülmüş haliyle denetlenir (%2F, %2E… percentDecode'dan geçti): gizli dosya, NUL ve
+            // klasör ayırıcı yasak; yalnız listede de görünen paket dosyaları sunulur.
+            if (packsDir == null || name.isEmpty() || name.startsWith(".") || name.indexOf('\0') >= 0
+                    || name.contains("/") || name.contains("\\") || name.contains("..") || !isPack(name)) {
                 notFound(out, head);
             } else {
                 sendFile(out, new File(packsDir, name), headers.get("range"), head);

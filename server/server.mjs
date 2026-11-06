@@ -106,8 +106,21 @@ export function parseRange(header, size) {
   return { start, end };
 }
 
-/** Kök dizin altında güvenli yol; dışarı çıkıyorsa null. */
-export function safeJoin(root, rel) {
+/**
+ * Windows'ta özel anlamı olan yol parçası: aygıt adları (CON, NUL, COM1, LPT1… uzantılı da),
+ * sonda nokta ya da boşluk (Windows siler: "board.json." → "board.json") ve ":" (NTFS veri
+ * akışı "x.zim::$DATA", sürücü "C:"). Sunucu Windows'ta da çalıştığı için her platformda reddedilir.
+ */
+const WIN_DEVICE = /^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³]|conin\$|conout\$|clock\$)(\..*)?$/i;
+export function unsafeSegment(seg) {
+  return WIN_DEVICE.test(seg.trim()) || /[. ]$/.test(seg) || seg.includes(':');
+}
+
+/**
+ * Kök dizin altında güvenli yol; dışarı çıkıyorsa ya da Windows'ta tehlikeli bir parça
+ * içeriyorsa null. `p`: yol modülü (testlerde path.win32 ile Windows davranışı sınanır).
+ */
+export function safeJoin(root, rel, p = path) {
   let dec;
   try {
     dec = decodeURIComponent(rel);
@@ -115,10 +128,13 @@ export function safeJoin(root, rel) {
     return null;
   }
   if (dec.includes('\0')) return null;
-  const p = path.resolve(root, '.' + path.sep + dec.replace(/^[/\\]+/, ''));
-  const r = path.resolve(root);
-  if (p !== r && !p.startsWith(r + path.sep)) return null;
-  return p;
+  // Hem / hem \ ayırıcıdır (Windows); %2F, %5C kodlamaları da çözülmüş hâliyle denetlenir
+  const parts = dec.split(/[\\/]+/).filter(Boolean);
+  if (parts.some(unsafeSegment)) return null;
+  const out = p.resolve(root, '.' + p.sep + dec.replace(/^[/\\]+/, ''));
+  const r = p.resolve(root);
+  if (out !== r && !out.startsWith(r.endsWith(p.sep) ? r : r + p.sep)) return null;
+  return out;
 }
 
 function parseArgs(argv) {
@@ -336,24 +352,34 @@ async function openBoard(dataDir, o = {}) {
   };
 }
 
-/** İstek gövdesini sınırlı okur; aşarsa null */
+/**
+ * İstek gövdesini sınırlı okur; aşarsa null (çağıran 413 verir ve bağlantıyı kapatır:
+ * tooLarge). Content-Length sınırı aşıyorsa gövde hiç okunmaz.
+ */
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > limit) {
+      req.pause();
+      resolve(null);
+      return;
+    }
     const chunks = [];
     let n = 0;
-    let over = false;
-    req.on('data', (c) => {
-      if (over) return;
+    const onData = (c) => {
       n += c.length;
       if (n > limit) {
-        over = true;
+        // Okumayı bırak: gönderen sınırsız veri yollasa da bellekte biriktirilmez
+        req.off('data', onData);
+        req.pause();
         resolve(null);
         return;
       }
       chunks.push(c);
-    });
+    };
+    req.on('data', onData);
     req.on('end', () => {
-      if (!over) resolve(Buffer.concat(chunks));
+      if (n <= limit) resolve(Buffer.concat(chunks));
     });
     req.on('error', reject);
   });
@@ -429,6 +455,13 @@ export async function startServer(opts = {}) {
     const body = Buffer.from(JSON.stringify(obj));
     res.writeHead(status, baseHeaders({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': body.length, 'Cache-Control': 'no-store' }));
     res.end(req.method === 'HEAD' ? undefined : body);
+  }
+
+  /** Gövde sınırı aşıldı: 413 ve bağlantı kapatılır (kalan gövde okunmaz) */
+  function tooLarge(req, res, error) {
+    res.setHeader('Connection', 'close');
+    res.once('finish', () => req.socket?.destroy());
+    sendJson(req, res, 413, { error });
   }
 
   function sendText(req, res, status, text, extra = {}) {
@@ -555,7 +588,7 @@ export async function startServer(opts = {}) {
     }
     const body = await readBody(req, BOARD_LIMITS.body);
     if (!body) {
-      sendJson(req, res, 413, { error: 'Kayıt çok büyük' });
+      tooLarge(req, res, 'Kayıt çok büyük');
       return;
     }
     let raw;
@@ -630,9 +663,13 @@ export async function startServer(opts = {}) {
       return;
     }
     const body = await readBody(req, 2048);
+    if (!body) {
+      tooLarge(req, res, 'İstek çok büyük');
+      return;
+    }
     let raw;
     try {
-      raw = JSON.parse(body?.toString('utf8') ?? '');
+      raw = JSON.parse(body.toString('utf8'));
     } catch {
       sendJson(req, res, 400, { error: 'Geçersiz JSON' });
       return;
@@ -696,8 +733,9 @@ export async function startServer(opts = {}) {
       const rel = pathname.slice('/data/'.length);
       const p = safeJoin(dataDir, rel);
       // Gizli (. ile başlayan), _ ile başlayan klasörler ve pano dosyası (büyük/küçük harf
-      // duyarsız dosya sistemlerinde de) sunulmaz
-      const parcalar = rel.split('/');
+      // duyarsız dosya sistemlerinde de) sunulmaz. Parçalar ÇÖZÜLMÜŞ yoldan alınır: ham yolda
+      // %2E/%5F (gizli klasör), %2F/%5C (derinlik) denetimi atlatabiliyordu.
+      const parcalar = p ? path.relative(dataDir, p).split(/[\\/]/) : [];
       const gizli = parcalar.some((x) => x.startsWith('.') || x.startsWith('_')) || parcalar.length > 2;
       const pano = p && path.basename(p).toLowerCase().startsWith('board.json');
       if (!p || gizli || pano || !PACK_EXTS.includes(path.extname(p).toLowerCase())) {

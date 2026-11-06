@@ -59,6 +59,7 @@ export function parsePoiGeoJSON(input: string | unknown): Poi[] {
     throw new Error('Nokta paketi geçerli bir GeoJSON FeatureCollection değil');
   }
   const out: Poi[] = [];
+  const ids = new Set<string>();
   data.features.forEach((f: any, i: number) => {
     const g = f?.geometry;
     const p = f?.properties ?? {};
@@ -69,8 +70,12 @@ export function parsePoiGeoJSON(input: string | unknown): Poi[] {
     if (!type) return;
     const nm = typeof p.name === 'string' ? p.name : typeof p['name:tr'] === 'string' ? p['name:tr'] : p.tags?.name;
     const name = typeof nm === 'string' && nm.trim() ? nm.trim() : POI_TYPES[type].label;
+    // Kimlik benzersiz olmalı: harita işaretçileri ve seçim kimlikle tutulur
+    let id = String(f.id ?? p.id ?? i);
+    if (ids.has(id)) id = `${id}#${i}`;
+    ids.add(id);
     out.push({
-      id: String(f.id ?? p.id ?? i),
+      id,
       name,
       type,
       note: typeof p.note === 'string' && p.note.trim() ? p.note.trim() : undefined,
@@ -84,6 +89,20 @@ export function parsePoiGeoJSON(input: string | unknown): Poi[] {
 export async function loadPoiPack(pack: InstalledPack): Promise<Poi[]> {
   const blob = await openBlob(pack);
   return parsePoiGeoJSON(await blob.text());
+}
+
+let packCache: { key: string; pois: Poi[] } | null = null;
+
+/**
+ * Harita sekmesi her girişte yeniden kurulur; Türkiye geneli nokta paketi (~10 MB GeoJSON)
+ * her seferinde yeniden okunup ayrıştırılmasın. Paket (ad, boyut, köken) değişince yenilenir.
+ */
+export async function loadPoiPackCached(pack: InstalledPack): Promise<Poi[]> {
+  const key = `${pack.origin}:${pack.id}:${pack.size}`;
+  if (packCache?.key === key) return packCache.pois;
+  const pois = await loadPoiPack(pack);
+  packCache = { key, pois };
+  return pois;
 }
 
 export async function loadPoiUrl(url: string): Promise<Poi[]> {

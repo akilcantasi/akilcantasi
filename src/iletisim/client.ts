@@ -31,13 +31,46 @@ const POLL_MS = 5000;
 const PROBE_MS = 15000;
 const TIMEOUT_MS = 5000;
 
+/**
+ * Bilgi noktası yanıtı için üst sınır. Gerçek sunucu en çok 500 kayıtlık sayfa verir (~400 KB);
+ * elle girilen bozuk/kötü niyetli bir adres dev bir yanıtla telefonu belleksiz bırakmasın.
+ */
+export const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+
+/** Gövdeyi sınırlı okuyup JSON olarak çözer; sınır aşılırsa ya da JSON değilse null */
+export async function readJsonCapped(res: Response, max = MAX_RESPONSE_BYTES): Promise<any> {
+  if (Number(res.headers.get('content-length') ?? 0) > max) {
+    res.body?.cancel().catch(() => {});
+    return null;
+  }
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const parts: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    if (n > max) {
+      reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(await new Blob(parts as BlobPart[]).arrayBuffer()));
+  } catch {
+    return null;
+  }
+}
+
 async function fetchJson(url: string, init?: RequestInit): Promise<{ status: number; data: any; headers: Headers }> {
   const ac = new AbortController();
   const t = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
     const res = await fetch(url, { cache: 'no-store', ...init, signal: ac.signal });
     const ct = res.headers.get('content-type') ?? '';
-    const data = ct.includes('json') ? await res.json().catch(() => null) : null;
+    const data = ct.includes('json') ? await readJsonCapped(res).catch(() => null) : null;
     return { status: res.status, data, headers: res.headers };
   } finally {
     clearTimeout(t);

@@ -1,7 +1,7 @@
 // İlk açılış: "Hazırlanalım" ekranı. Cihazın boş yerine ve belleğine göre önerilen paketleri
 // seçili getirir; tek dokunuşla hepsi indirilmeye başlar (indirmeler arka planda sürer).
 // Hiç paket yoksa ilk açılışta kendiliğinden, sonra Araçlar → Paketler'den açılır.
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { AppLogo } from './Logo';
 import { listPacks, formatSize } from './lib/packs';
 import { PackRow, startRow, usePackRows, type RowModel } from './lib/packs-ui';
@@ -13,10 +13,10 @@ const GB = 1024 ** 3;
 
 const CSS = `
 .ku { position: fixed; inset: 0; z-index: 60; background: radial-gradient(130% 55% at 50% -12%, rgba(245,165,36,0.16), rgba(245,165,36,0) 62%), var(--bg); overflow-y: auto; }
-.ku-in { max-width: 640px; margin: 0 auto; padding: calc(24px + var(--sa-top)) 18px calc(28px + var(--sa-bottom)); display: flex; flex-direction: column; gap: 16px; }
+.ku-in { max-width: 640px; margin: 0 auto; padding: calc(24px + var(--sa-top)) calc(18px + var(--sa-right)) calc(28px + var(--sa-bottom)) calc(18px + var(--sa-left)); display: flex; flex-direction: column; gap: 16px; }
 .ku-hero { display: flex; flex-direction: column; gap: 6px; }
 .ku-logo { border-radius: 15px; box-shadow: 0 6px 18px rgba(0,0,0,0.3); margin-bottom: 6px; }
-.ku-hero h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.ku-hero h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; outline: none; }
 .ku-hero p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text2); }
 .ku-space { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .ku-bar { height: 8px; border-radius: 999px; background: var(--line2); overflow: hidden; display: flex; }
@@ -95,6 +95,9 @@ function close() {
   setState({ kurulum: false });
 }
 
+/** Kurulum ekranı çökerse: kapat ve "tamamlandı" say (yoksa açılışta yeniden açılıp döngüye girer) */
+export const kurulumuKapat = close;
+
 function Kurulum() {
   const { manifest, rows, dlFor, rec, storage, memGB } = usePackRows();
   const free = storage && storage.quota ? storage.quota - storage.usage : null;
@@ -110,6 +113,21 @@ function Kurulum() {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', k);
     return () => window.removeEventListener('keydown', k);
+  }, []);
+
+  // Açılınca odak pencerenin başlığına gelir (arkadaki uygulama App.tsx'te `inert`);
+  // kapanınca önceki öğeye döner. Geri tuşuyla kapansa da (src/gecmis.ts) bir daha
+  // kendiliğinden açılmaz.
+  const baslik = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const onceki = document.activeElement as HTMLElement | null;
+    baslik.current?.focus({ preventScroll: true });
+    return () => {
+      try {
+        localStorage.setItem(LS_DONE, '1');
+      } catch {}
+      if (onceki && onceki !== document.body && onceki.isConnected) onceki.focus({ preventScroll: true });
+    };
   }, []);
 
   const rowOf = (id: string): RowModel | undefined => rows.find((r) => r.entry?.id === id);
@@ -138,7 +156,9 @@ function Kurulum() {
       <div class="ku-in">
         <div class="ku-hero">
           <AppLogo size={64} class="ku-logo" />
-          <h1 id="ku-title">Hazırlanalım</h1>
+          <h1 id="ku-title" tabIndex={-1} ref={baslik}>
+            Hazırlanalım
+          </h1>
           <p>
             {started
               ? 'İndirmeler arka planda sürüyor. Uygulamayı şimdiden kullanabilirsiniz; ilerlemeyi Araçlar → Paketler\'den de izleyebilirsiniz.'
@@ -207,7 +227,7 @@ function Kurulum() {
                 </div>
               );
             })}
-            {tooBig && <p class="ku-note" style="color:var(--danger)">Seçilenler cihazdaki boş yerden büyük; birkaçını kaldırın.</p>}
+            {tooBig && <p class="ku-note" role="status" style="color:var(--accent2)">Seçilenler cihazdaki boş yerden büyük; birkaçını kaldırın.</p>}
             {!saveable && <p class="ku-note">Bu bağlantıda paketler cihaza kaydedilemiyor (güvenli bağlantı gerekli). Bilgi noktasındaki paketler yine de kullanılabilir.</p>}
             {!getState().online && <p class="ku-note">Şu an internet yok. İnternet ya da bir bilgi noktası bulunca bu ekrana Araçlar → Paketler'den dönebilirsiniz.</p>}
           </>
@@ -228,8 +248,9 @@ function Kurulum() {
               </button>
             </>
           )}
-          <p class="ku-note">Paketler Hugging Face ve Kiwix'ten indirilir; açık lisanslıdır. Daha fazlası: Kütüphane ve Araçlar → Paketler.</p>
         </div>
+        {/* Bilgi notu kayan içerikte: küçük ekranda yapışkan düğme alanı listeyi kapatmasın */}
+        <p class="ku-note">Paketler Hugging Face ve Kiwix'ten indirilir; açık lisanslıdır. Daha fazlası: Kütüphane ve Araçlar → Paketler.</p>
       </div>
     </div>
   );

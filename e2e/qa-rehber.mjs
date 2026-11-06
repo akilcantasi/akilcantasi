@@ -176,6 +176,130 @@ check((await p.$$(T('guide-category'))).length === 18, '?cat=geçersiz → ana e
 await deep('?tab=rehber');
 check((await p.$$(T('guide-category'))).length === 18, '?tab=rehber → ana ekran');
 
+// --- Denetim 2026-11 ----------------------------------------------------------------------------
+// Ana ekran sahnesi: geçiş, çizimin alt kenarından önce zemine karışmalı (kenar çizgisi görünmesin)
+for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+  const q = await newPage(vp);
+  await q.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+  await q.waitForSelector('.rh-hero-bg .art-box svg', { timeout: 15000 });
+  const r = await q.evaluate(() => {
+    const bg = document.querySelector('.rh-hero-bg').getBoundingClientRect();
+    const svg = document.querySelector('.rh-hero-bg .art-box svg').getBoundingClientRect();
+    // ::after geçişi --bg'ye %84'te ulaşır (RehberTab CSS)
+    return { fadeEnd: bg.top + bg.height * 0.84, artBottom: svg.bottom };
+  });
+  check(r.fadeEnd <= r.artBottom + 1, `${vp.width}: sahne çizimi geçişten önce bitmiyor (${Math.round(r.fadeEnd)} ≤ ${Math.round(r.artBottom)})`);
+  await q.close();
+}
+// Geri dönüşte liste kaydırma konumu korunur
+{
+  const q = await newPage({ width: 360, height: 640 });
+  await q.goto(base + '?cat=yaralanma', { waitUntil: 'networkidle' });
+  await q.waitForSelector(T('guide-card'));
+  await q.evaluate(() => document.getElementById('main').scrollTo({ top: 900 }));
+  await q.waitForTimeout(200);
+  const y0 = await q.evaluate(() => document.getElementById('main').scrollTop);
+  const id = await q.evaluate(() => {
+    const m = document.getElementById('main').getBoundingClientRect();
+    const c = [...document.querySelectorAll('[data-testid="guide-card"]')].find((e) => { const r = e.getBoundingClientRect(); return r.top > m.top && r.bottom < m.bottom; });
+    return c?.dataset.guideId;
+  });
+  await q.click(`${T('guide-card')}[data-guide-id="${id}"]`);
+  await q.waitForSelector(T('guide-detail'));
+  check((await q.evaluate(() => document.getElementById('main').scrollTop)) === 0, 'rehber en üstten açılır');
+  await q.click(T('guide-back'));
+  await q.waitForSelector(T('category-detail'));
+  await q.waitForTimeout(150);
+  const y1 = await q.evaluate(() => document.getElementById('main').scrollTop);
+  check(y0 > 300 && Math.abs(y1 - y0) <= 4, `rehberden kategoriye dönünce kaydırma konumu korunur (${y0} → ${y1})`);
+  await q.click(T('category-back'));
+  await q.waitForSelector(T('guide-category'));
+  await q.evaluate(() => document.getElementById('main').scrollTo({ top: 700 }));
+  await q.waitForTimeout(200);
+  const h0 = await q.evaluate(() => document.getElementById('main').scrollTop);
+  await q.click(`${T('guide-category')}[data-category-id="yangin"]`);
+  await q.waitForSelector(T('category-detail'));
+  check((await q.evaluate(() => document.getElementById('main').scrollTop)) === 0, 'kategori en üstten açılır');
+  await q.click(T('category-back'));
+  await q.waitForTimeout(150);
+  const h1 = await q.evaluate(() => document.getElementById('main').scrollTop);
+  check(Math.abs(h1 - h0) <= 4, `kategoriden ana ekrana dönünce kaydırma konumu korunur (${h0} → ${h1})`);
+  // Sonuçsuz aramada sorgu tek dokunuşla Fener'e sorulur
+  await q.fill(T('guide-search'), 'qwerty asdf');
+  await q.waitForSelector(T('guide-search-ask'));
+  await q.click(T('guide-search-ask'));
+  await q.waitForSelector(T('fener-msg-user'), { timeout: 5000 }).catch(() => {});
+  check((await q.getAttribute(T('nav-fener'), 'aria-current')) === 'page', 'sonuçsuz arama: "Fener\'e sor" Fener sekmesini açar');
+  const asked = await q.$$eval(T('fener-msg-user'), (els) => els.map((e) => e.textContent));
+  check(asked.some((t) => t.includes('qwerty asdf')), 'sonuçsuz arama: sorgu Fener\'e gönderilir');
+  await q.close();
+}
+// Kendine Yetmek paketi: kurulu değil → indir → kategoriler → paket rehberi; bozuk paket → silip yeniden indir
+{
+  const fs = await import('fs');
+  const path = await import('path');
+  const { fileURLToPath } = await import('url');
+  const packFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'rehber', 'kendine-yetmek.rehber.json');
+  if (!fs.existsSync(packFile)) console.log('  (data/rehber/kendine-yetmek.rehber.json yok: paket testi atlandı)');
+  else {
+    const body = fs.readFileSync(packFile);
+    for (const broken of [false, true]) {
+      const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+      let hits = 0;
+      await ctx.route(/huggingface\.co\/.*kendine-yetmek\.rehber\.json/, (r) => {
+        hits++;
+        r.fulfill({ status: 200, headers: { 'content-length': String(body.length), 'access-control-allow-origin': '*' }, body });
+      });
+      const q = await ctx.newPage();
+      q.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+      q.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+      await q.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+      await q.waitForSelector(T('ky-download'), { timeout: 15000 });
+      if (!broken) {
+        check(/^Hepsini indir \(\d+ MB\)$/.test((await q.textContent(T('ky-download'))).trim()), 'Kendine Yetmek: indirme düğmesi boyutu gösterir');
+        const bg = await q.$eval(T('ky-download'), (e) => getComputedStyle(e).backgroundColor);
+        check(bg === 'rgb(245, 165, 36)', 'Kendine Yetmek: düğme Şafak kehribarı ' + bg);
+        await q.click(T('ky-download'));
+      } else {
+        // Bozuk dosya cihazda: açılamadı uyarısı görünmeli ("açılıyor…" yazısında kalmamalı)
+        await q.evaluate(async () => {
+          const root = await navigator.storage.getDirectory();
+          const dir = await root.getDirectoryHandle('packs', { create: true });
+          const w = await (await dir.getFileHandle('kendine-yetmek.rehber.json', { create: true })).createWritable();
+          await w.write('{bozuk');
+          await w.close();
+          (await import('/src/lib/packs.ts')).invalidatePacks();
+        });
+        await q.waitForSelector(T('ky-open-error'), { timeout: 15000 }).catch(() => {});
+        check(!!(await q.$(T('ky-open-error'))), 'bozuk paket: "açılamadı" uyarısı görünür');
+        await q.screenshot({ path: shots + '/ky-bozuk.png' });
+        await q.click(T('ky-redownload'));
+      }
+      await q.waitForSelector(T('guide-pack-section'), { timeout: 60000 }).catch(() => {});
+      const packCats = await q.$$eval(`${T('guide-category')}[data-pack-id]`, (els) => els.map((e) => e.dataset.categoryId));
+      check(hits >= 1 && packCats.length > 10, `Kendine Yetmek${broken ? ' (silip yeniden indir)' : ''}: indi, ${packCats.length} kategori`);
+      if (!broken && packCats.length) {
+        await q.screenshot({ path: shots + '/ky-kurulu.png', fullPage: false });
+        await q.click(`${T('guide-category')}[data-category-id="${packCats[0]}"]`);
+        await q.waitForSelector(T('guide-card'));
+        const gid = await q.$eval(T('guide-card'), (e) => e.dataset.guideId);
+        await q.click(T('guide-card'));
+        await q.waitForSelector(T('guide-detail'));
+        check(((await q.textContent(T('guide-review'))) ?? '').includes('uzman'), 'paket rehberi: "henüz incelenmedi" uyarısı (uzman)');
+        check((await q.$$('[data-testid="guide-step"] img[data-pack-art]')).length > 0, 'paket rehberi: çizimler görünür');
+        await q.screenshot({ path: shots + '/ky-rehber.png', fullPage: true });
+        await q.click(T('guide-back'));
+        check(!!(await q.$(`${T('guide-card')}[data-guide-id="${gid}"]`)), 'paket rehberinden geri: paket kategorisine döner');
+        // aramada paket rehberleri de çıkar
+        await q.click(T('category-back'));
+        await q.fill(T('guide-search'), 'kav');
+        check((await q.$$(T('guide-card'))).length > 0, 'arama paket rehberlerini de bulur');
+      }
+      await ctx.close();
+    }
+  }
+}
+
 // --- Yerleşim: taşma ve dokunma hedefleri -----------------------------------------------------
 const longest = ids.reduce((a, x) => (data.guides[x].title.length > data.guides[a].title.length ? x : a), ids[0]);
 const VIEWS = [['390', { width: 390, height: 844 }], ['360', { width: 360, height: 640 }], ['1280', { width: 1280, height: 800 }]];

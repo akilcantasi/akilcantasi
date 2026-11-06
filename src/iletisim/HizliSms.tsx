@@ -18,7 +18,7 @@ import { MAX_YAKIN, initials, loadYakinlar, multiSmsHref, newId, saveYakinlar, t
 export const QUICK_CSS = `
 .qs { display: flex; flex-direction: column; gap: 10px; }
 .qs-112 { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
-.qs-112-btn { flex: 1 1 220px; min-width: 0; min-height: 76px; border: 0; border-radius: 20px; padding: 12px 16px; text-align: left; color: #fff; background: linear-gradient(160deg, #f0565b, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; align-items: center; gap: 14px; }
+.qs-112-btn { flex: 1 1 220px; min-width: 0; min-height: 76px; border: 0; border-radius: 20px; padding: 12px 16px; text-align: left; color: #fff; background: linear-gradient(160deg, #d44046, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; align-items: center; gap: 14px; }
 .qs-112-btn:active { transform: scale(0.985); }
 .qs-112-btn:disabled { opacity: 0.85; }
 .qs-112-ic { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -426,7 +426,12 @@ export function Yakinlar() {
           </div>
         </form>
       )}
-      <p class="cm-note">Mesajlar SMS uygulamanızda hazır açılır; göndermek için Gönder'e basmanız yeterli. İnternet gerekmez, şebeke zayıfken de SMS çoğu zaman ulaşır.</p>
+      <p class="cm-note">
+        {nativeSms.available()
+          ? 'Mesajı uygulama kendisi gönderir (3 saniye içinde vazgeçebilirsiniz); şebeke yoksa gidene kadar yeniden dener.'
+          : "Mesajlar SMS uygulamanızda hazır açılır; göndermek için Gönder'e basmanız yeterli."}{' '}
+        İnternet gerekmez, şebeke zayıfken de SMS çoğu zaman ulaşır.
+      </p>
     </Section>
   );
 }

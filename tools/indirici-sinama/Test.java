@@ -5,6 +5,7 @@ import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
 import org.akilcantasi.app.PaketIndirici;
+import org.akilcantasi.app.SinamaErisim;
 
 public class Test {
   static byte[] data;
@@ -19,7 +20,15 @@ public class Test {
   public static void main(String[] a) throws Exception {
     data = new byte[70 * 1024 * 1024]; new Random(1).nextBytes(data);
     String sha = hex(MessageDigest.getInstance("SHA-256").digest(data));
-    HttpServer srv = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    // HTTPS: indirici yalnız https + izinli alan adına gider (calistir.sh: hosts dosyası, sertifika)
+    HttpsServer srv = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    java.security.KeyStore ks = java.security.KeyStore.getInstance("PKCS12");
+    try (InputStream ki = new FileInputStream(System.getProperty("sinama.anahtar"))) { ks.load(ki, "sinama".toCharArray()); }
+    javax.net.ssl.KeyManagerFactory kmf = javax.net.ssl.KeyManagerFactory.getInstance(javax.net.ssl.KeyManagerFactory.getDefaultAlgorithm());
+    kmf.init(ks, "sinama".toCharArray());
+    javax.net.ssl.SSLContext ssl = javax.net.ssl.SSLContext.getInstance("TLS");
+    ssl.init(kmf.getKeyManagers(), null, null);
+    srv.setHttpsConfigurator(new HttpsConfigurator(ssl));
     srv.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
     srv.createContext("/", ex -> {
       synchronized (Test.class) { hits++; }
@@ -38,11 +47,33 @@ public class Test {
       ex.close();
     });
     srv.start();
-    String base = "http://127.0.0.1:" + srv.getAddress().getPort();
+    String base = "https://akilcantasi.com:" + srv.getAddress().getPort();
     File root = Files.createTempDirectory("ind").toFile();
     android.content.Context.root = root;
     android.content.Context ctx = new android.content.Context();
     PaketIndirici d = PaketIndirici.get(ctx);
+
+    // 0) Adres ve ad denetimleri (sayfaya sızan betik rastgele kaynak / yol veremesin)
+    check(SinamaErisim.izinliAdres("https://download.kiwix.org/zim/a.zim") && SinamaErisim.izinliAdres("https://cdn-lfs.huggingface.co/x"), "izinli alanlar ve alt alan adları");
+    check(!SinamaErisim.izinliAdres("http://download.kiwix.org/zim/a.zim"), "düz http reddedilir");
+    check(!SinamaErisim.izinliAdres("https://evil-huggingface.co/x") && !SinamaErisim.izinliAdres("https://huggingface.co.evil.example/x"), "benzer ama başka alan reddedilir");
+    check(!SinamaErisim.izinliAdres("https://127.0.0.1/x") && !SinamaErisim.izinliAdres("file:///sdcard/x.zim") && !SinamaErisim.izinliAdres(null), "IP, file: ve boş reddedilir");
+    check(SinamaErisim.expandMirrors(Arrays.asList("http://a.example/x.zim", "https://a.example/y.zim")).isEmpty(), "izinsiz adresler ayna listesine girmez");
+    check(!PaketIndirici.isPackName("../x.zim") && !PaketIndirici.isPackName("a/b.zim") && !PaketIndirici.isPackName(".gizli.zim")
+        && !PaketIndirici.isPackName("x.exe") && PaketIndirici.isPackName("wikipedia_tr_all_mini_2026-09.zim"), "paket adı denetimi");
+    File disari = new File(root, "packs/disari.part");
+    disari.getParentFile().mkdirs();
+    Files.write(disari.toPath(), new byte[] {1});
+    d.cancel("../disari");
+    check(disari.exists(), "iptal: '../' ile paket klasörü dışındaki dosya silinmez");
+    boolean reddedildi = false;
+    try { d.start("../kacak.zim", Collections.singletonList(base + "/a/x.zim"), 0, null); } catch (IOException e) { reddedildi = true; }
+    check(reddedildi, "geçersiz adla indirme başlamaz");
+    d.start("duz.zim", Collections.singletonList("http://127.0.0.1:" + srv.getAddress().getPort() + "/a/duz.zim"), data.length, null);
+    long t00 = System.currentTimeMillis();
+    while (!status(d, "duz.zim").equals("error") && System.currentTimeMillis() - t00 < 20000) Thread.sleep(100);
+    check(status(d, "duz.zim").equals("error") && !new File(root, "packs/duz.zim").exists(), "http adresinden indirme yapılmaz");
+    d.cancel("duz.zim");
 
     // 1) Uçtan uca: bir ayna 404, diğeri çalışıyor; 4 bölüm; SHA doğrulama
     d.start("deneme.zim", Arrays.asList(base + "/yok/deneme.zim", base + "/a/deneme.zim"), data.length, sha);
@@ -92,6 +123,19 @@ public class Test {
     t0 = System.currentTimeMillis();
     while (!status(d, "boyut.zim").equals("error") && System.currentTimeMillis() - t0 < 30000) Thread.sleep(200);
     check(status(d, "boyut.zim").equals("error"), "boyutu tutmayan kaynak kabul edilmedi");
+
+    // 5) Yer denetimi: boyut bilinmese de (katalogda yaklaşık) telefon belleği doldurulmaz
+    android.os.StatFs.bos = 100L * 1024 * 1024; // 70 MB dosya + 64 MB yedek sığmaz
+    d.start("yer.zim", Collections.singletonList(base + "/f/yer.zim"), 0, null);
+    t0 = System.currentTimeMillis();
+    while (!status(d, "yer.zim").equals("error") && System.currentTimeMillis() - t0 < 30000) Thread.sleep(100);
+    String yerJs = d.jobsJson().toString();
+    check(status(d, "yer.zim").equals("error") && yerJs.contains("Yer yetersiz") && !new File(root, "packs/_indiriliyor/yer.zim.part").exists(),
+        "boyut bilinmeyen indirmede yer yetmiyorsa başlamaz, .part ayrılmaz");
+    boolean yerYok = false;
+    try { d.start("yer2.zim", Collections.singletonList(base + "/f/yer2.zim"), data.length, null); } catch (IOException e) { yerYok = e.getMessage().startsWith("Yer yetersiz"); }
+    check(yerYok, "boyut biliniyorsa hemen reddedilir");
+    android.os.StatFs.bos = 10_000_000_000L;
 
     srv.stop(0);
     System.out.println("TÜMÜ OK");

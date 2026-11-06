@@ -303,7 +303,7 @@ export function Sms() {
     }
   };
   return (
-    <Section id="sms" title="Hazır SMS" sub="İnternet yokken de kısa mesaj çoğu zaman gider. Konumunuz eklenmiş hazır metinler.">
+    <Section id="sms" title="Ayrıntılı SMS" sub="İnternet yokken de kısa mesaj çoğu zaman gider. Hazır metne adres, not ve konumunuzu ekleyin.">
       <div class="cm-chips" role="group" aria-label="Şablon">
         {TEMPLATES.map((t) => (
           <button key={t} class="cm-chip" data-testid={'sms-template-' + t} aria-pressed={tpl === t} onClick={() => setTpl(t)}>

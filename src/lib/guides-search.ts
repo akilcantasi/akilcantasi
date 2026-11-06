@@ -61,7 +61,11 @@ function tokenMatch(q: string, t: string): number {
   const long = short === q ? t : q;
   if (short.length >= 3 && long.startsWith(short)) {
     // "pusulasız", "susuz" gibi -sız/-suz ekleri anlamı tersine çevirir
-    return /^s[iu]z/.test(long.slice(short.length)) ? 0 : 0.75;
+    if (/^s[iu]z/.test(long.slice(short.length))) return 0;
+    // 3 harflik kök yalnızca ek almış hâlini bulsun ("kan" → "kanı", "sel" → "selde");
+    // başka bir kelimenin başı olmasın ("sığ" → "sığınak", "yan" → "yangın")
+    if (short.length === 3 && long.length - short.length >= 3) return 0;
+    return 0.75;
   }
   return 0;
 }
@@ -204,14 +208,27 @@ export function searchGuides(query: string, limit = 5): { guide: Guide; score: n
   return out.slice(0, limit);
 }
 
+let trusted: { v: number; list: Guide[] } | null = null;
+
+/**
+ * Kurulu paketlerin rehberleri. İndirilen bir paket kendini "incelendi" (reviewed: true) diye
+ * bildirse de bu kabul edilmez: güven uygulamanın kendisinden gelir, paketten değil. Böylece
+ * paket rehberleri her zaman "henüz incelenmedi" uyarısıyla gösterilir (CLAUDE.md §3).
+ */
+export function packGuidesTrusted(): Guide[] {
+  const v = packGuidesVersion();
+  if (!trusted || trusted.v !== v) trusted = { v, list: getPackGuides().map((g) => (g.reviewed !== false ? { ...g, reviewed: false } : g)) };
+  return trusted.list;
+}
+
 export function getGuide(id: string | null | undefined): Guide | undefined {
   if (!id) return undefined;
-  return GUIDES.find((g) => g.id === id) ?? getPackGuides().find((g) => g.id === id);
+  return GUIDES.find((g) => g.id === id) ?? packGuidesTrusted().find((g) => g.id === id);
 }
 
 /** Yerleşik rehberler + kurulu rehber paketlerindekiler (paketler sonda) */
 export function getAllGuides(): Guide[] {
-  const extra = getPackGuides();
+  const extra = packGuidesTrusted();
   return extra.length ? [...GUIDES, ...extra] : GUIDES;
 }
 

@@ -114,6 +114,8 @@ export function planResponse(
     const cr = /\/(\d+)$/.exec(headers.get('content-range') ?? '');
     const total = cr ? Number(cr[1]) : knownTotal;
     if (total && offset === total) return { action: 'complete', total };
+    // Baştan (Range'siz) istekte 416 anlamsız: yeniden denemek sonsuz döngü olurdu
+    if (offset === 0) return { action: 'fail', reason: 'HTTP 416' };
     return { action: 'retry-from-zero' };
   }
   return { action: 'fail', reason: `HTTP ${status}` };
@@ -149,6 +151,8 @@ export async function runDownload(o: RunOptions): Promise<RunResult> {
   const want = (o.sha256 ?? '').toLowerCase();
   const urls = o.urls.filter(Boolean);
   if (!urls.length) throw new DownloadError('http', 'indirme adresi yok');
+  // Katalogda özet varsa doğrulama zorunludur: özetleyici yoksa indirme hiç başlamaz
+  if (want && !o.createHasher) throw new DownloadError('hash', 'SHA-256 doğrulayıcı yok');
   const checkAbort = () => {
     if (signal?.aborted) throw new DownloadError('aborted', 'durduruldu');
   };
@@ -186,6 +190,8 @@ export async function runDownload(o: RunOptions): Promise<RunResult> {
 
   let done = false;
   let lastError: DownloadError | null = null;
+  /** Bir ayna beklenenden fazla veri gönderdi: yarım dosyaya güvenilmez */
+  let fazlaVeri = false;
   outer: for (let pass = 0; pass < passes && !done; pass++) {
     if (pass > 0) await sleep((o.backoffMs ?? 1000) * pass, signal);
     for (const mi of mirrorOrder(urls.length, mirror)) {
@@ -212,7 +218,13 @@ export async function runDownload(o: RunOptions): Promise<RunResult> {
       }
     }
   }
-  if (!done) throw lastError ?? new DownloadError('network', 'hiçbir kaynağa ulaşılamadı');
+  if (!done) {
+    // Fazla veri gönderen aynadan sonra yarım dosya güvenilmez: silinir; işçi de alınan miktarı
+    // 0 bildirir. Yalnız başlıktaki boyut farklıysa (eski sürümlü ayna) hiçbir şey yazılmamıştır:
+    // başka aynadan alınmış yarım dosya korunur, sonraki denemede kaldığı yerden sürer.
+    if (fazlaVeri) await store.remove().catch(() => {});
+    throw lastError ?? new DownloadError('network', 'hiçbir kaynağa ulaşılamadı');
+  }
 
   report('verifying');
   const size = await store.size();
@@ -306,6 +318,14 @@ export async function runDownload(o: RunOptions): Promise<RunResult> {
         if (signal?.aborted) throw new DownloadError('aborted', 'durduruldu');
         buf.push(value);
         buffered += value.length;
+        // Bilinen boyuttan fazlası gelirse (bozuk/kötü niyetli ayna) diski doldurmadan dur
+        if (total && offset + buffered > total) {
+          reader.cancel().catch(() => {});
+          buf.length = 0;
+          buffered = 0;
+          fazlaVeri = true;
+          throw new DownloadError('size', 'sunucu beklenenden fazla veri gönderdi');
+        }
         if (buffered >= chunkBytes) await flushBuf();
         // Yavaş bağlantıda da ilerleme görünsün: tampondaki baytlar dahil düzenli bildir
         const now = Date.now();

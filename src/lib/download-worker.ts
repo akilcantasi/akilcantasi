@@ -61,7 +61,7 @@ ctx.onmessage = async (ev: MessageEvent<WorkerIn>) => {
       post({ type: 'aborted', id: m.id, removed: job.remove, received: job.remove ? 0 : received });
     } else {
       await store?.close?.().catch(() => {});
-      post({ type: 'error', id: m.id, code: err.code, message: err.message, received: err.code === 'hash' || err.code === 'size' ? 0 : received });
+      post({ type: 'error', id: m.id, code: err.code, message: err.message, received: err.code === 'hash' ? 0 : received }); // boyut hatasında yarım dosya silindiyse size() zaten 0
     }
   } finally {
     jobs.delete(m.id);

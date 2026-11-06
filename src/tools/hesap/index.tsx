@@ -17,7 +17,7 @@ const FIELDS: { k: keyof Omit<HesapInput, 'days' | 'climate'>; title: string; hi
 
 const DAY_PRESETS = [3, 7, 14];
 
-function Stepper({ id, title, hint, value, max, onChange }: { id: string; title: string; hint: string; value: number; max: number; onChange: (v: number) => void }) {
+function Stepper({ id, title, hint, value, min = 0, max, onChange }: { id: string; title: string; hint: string; value: number; min?: number; max: number; onChange: (v: number) => void }) {
   return (
     <div class="kn-stepper">
       <label class="lbl" for={'h-' + id}>
@@ -25,16 +25,30 @@ function Stepper({ id, title, hint, value, max, onChange }: { id: string; title:
         <small>{hint}</small>
       </label>
       <div class="ctl">
-        <button type="button" aria-label={`${title} azalt`} data-testid={`hesap-${id}-dec`} disabled={value <= 0} onClick={() => onChange(Math.max(0, value - 1))}>−</button>
+        <button type="button" aria-label={`${title} azalt`} data-testid={`hesap-${id}-dec`} disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))}>−</button>
         <input
           id={'h-' + id}
           type="number"
           inputMode="numeric"
-          min={0}
+          min={min}
           max={max}
           value={value}
           data-testid={`hesap-${id}`}
-          onInput={(e) => onChange(Number((e.target as HTMLInputElement).value) || 0)}
+          onInput={(e) => {
+            const el = e.target as HTMLInputElement;
+            // Kutu boşaltılınca (yeni sayı yazılıyor) durum değişmesin: yoksa en küçük değer (ör. 1)
+            // kutuya geri yazılır ve "7" yazmak "17" olur. Boş bırakılırsa onBlur eski değeri koyar.
+            if (el.value === '') return;
+            const v = Math.min(max, Math.max(min, Math.floor(Number(el.value) || 0)));
+            onChange(v);
+            // Sınır dışı / eksi / ondalık yazılınca durum değişmeyebilir; kutu hesaplanan değeri göstersin
+            // (boş bırakmaya izin var: kullanıcı yeni sayı yazıyor olabilir)
+            if (el.value !== '' && el.value !== String(v)) el.value = String(v);
+          }}
+          onBlur={(e) => {
+            const el = e.target as HTMLInputElement;
+            if (el.value !== String(value)) el.value = String(value);
+          }}
         />
         <button type="button" aria-label={`${title} artır`} data-testid={`hesap-${id}-inc`} disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))}>+</button>
       </div>
@@ -47,7 +61,13 @@ export default function Hesap() {
   useEffect(() => {
     saveJSON(KEYS.hesap, inp);
   }, [inp]);
-  const set = (p: Partial<HesapInput>) => setInp(sanitizeInput({ ...inp, ...p }));
+  // Hemen kaydet: useEffect çizimden sonra çalışır; hemen başka ekrana geçilir ya da uygulama
+  // kapanırsa son değişiklik kaybolabiliyordu
+  const set = (p: Partial<HesapInput>) => {
+    const next = sanitizeInput({ ...inp, ...p });
+    saveJSON(KEYS.hesap, next);
+    setInp(next);
+  };
   const r = calculate(inp);
   const hot = inp.climate === 'sicak';
   const drinkAdult = WATER.drinkAdult * (hot ? WATER.hotFactor : 1);
@@ -61,7 +81,7 @@ export default function Hesap() {
         {FIELDS.map((f) => (
           <Stepper key={f.k} id={f.k} title={f.title} hint={f.hint} value={inp[f.k]} max={100} onChange={(v) => set({ [f.k]: v })} />
         ))}
-        <Stepper id="days" title="Gün" hint="AFAD: en az 72 saat (3 gün)" value={inp.days} max={365} onChange={(v) => set({ days: v })} />
+        <Stepper id="days" title="Gün" hint="AFAD: en az 72 saat (3 gün)" value={inp.days} min={1} max={365} onChange={(v) => set({ days: v })} />
         <div class="kn-seg" role="group" aria-label="Gün hazır seçimleri">
           {DAY_PRESETS.map((d) => (
             <button key={d} class="chip" aria-pressed={inp.days === d} data-testid={'hesap-days-' + d} onClick={() => set({ days: d })}>

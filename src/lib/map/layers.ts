@@ -45,7 +45,7 @@ export function ensureOverlayLayers(map: MlMap): boolean {
         source: TRACK_SRC,
         filter: ['==', ['geometry-type'], 'LineString'],
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#0b0e13', 'line-width': 8, 'line-opacity': 0.8 },
+        paint: { 'line-color': '#0e1b2c', 'line-width': 8, 'line-opacity': 0.8 },
       });
       map.addLayer({
         id: 'ac-track-line',
@@ -60,7 +60,7 @@ export function ensureOverlayLayers(map: MlMap): boolean {
         type: 'circle',
         source: TRACK_SRC,
         filter: ['==', ['get', 'kind'], 'start'],
-        paint: { 'circle-radius': 7, 'circle-color': '#3DD68C', 'circle-stroke-color': '#0b0e13', 'circle-stroke-width': 3 },
+        paint: { 'circle-radius': 7, 'circle-color': '#3DD68C', 'circle-stroke-color': '#0e1b2c', 'circle-stroke-width': 3 },
       });
     }
     if (!map.getSource(NAV_SRC)) {
@@ -84,7 +84,7 @@ export function ensureOverlayLayers(map: MlMap): boolean {
         type: 'circle',
         source: NAV_SRC,
         filter: ['==', ['get', 'kind'], 'target'],
-        paint: { 'circle-radius': 5, 'circle-color': '#4DA3FF', 'circle-stroke-color': '#0b0e13', 'circle-stroke-width': 2 },
+        paint: { 'circle-radius': 5, 'circle-color': '#4DA3FF', 'circle-stroke-color': '#0e1b2c', 'circle-stroke-width': 2 },
       }, before);
     }
     return true;

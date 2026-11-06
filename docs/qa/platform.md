@@ -104,3 +104,46 @@ node server/server.mjs --data /home/claude/packs --port 8090 &
 node e2e/real-data-check.mjs http://localhost:8090/ /tmp/realshots
 node e2e/native-infopoint-check.mjs http://localhost:8090/
 ```
+
+## Denetim 2026-11 (kabuk ve web derlemesi)
+
+Ayrıntı: `docs/qa/a11y.md` → "Denetim 2026-11". Platformu ilgilendirenler:
+
+- [x] **Site verileri engelli tarayıcı** (kiosk/gizlilik ayarı): uygulama artık açılıyor
+      (`src/depolama-koruma.ts`), "veri saklamaya izin vermiyor" uyarısı görünüyor.
+- [x] **Masaüstü kaydırma çubuğu** (Windows önizleme, Raspberry Pi tarayıcısı): yan boşluklar eşit,
+      başlık kartlarla hizalı (`html.kaydirma-cubugu` + `scrollbar-gutter`).
+- [x] **index.html:** `color-scheme: dark`, açılış ekranı (betik inene kadar logo + "açılıyor…"),
+      `noscript` notu; CSP ile uyumlu (satır içi yalnız stil, `style-src 'unsafe-inline'` zaten açık).
+- [x] **Manifest:** 192/512 maskable PNG simgeler (`public/icon-maskable-192.png`, `-512.png`,
+      `icon-maskable.svg`'den), `id`, `scope`. theme-color/background-color = `--bg` (#0e1b2c).
+- [x] **Geri tuşu:** tarayıcıda uygulama içinde geri gider (`src/gecmis.ts`).
+- [x] **Dış istekler:** çevrimdışında hiç yok; çevrimiçinde tek istek isteğe bağlı katalog
+      (`https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/packs-manifest.json`),
+      `src/lib/packs-ui.tsx` usePackRows → `refreshRemoteManifest()`: Rehber, Harita, Kütüphane,
+      Kurulum, Paketler ve Hava ekranına her girişte, kullanıcı bir şeye basmadan. Oturum başına bir
+      kez yapılmalı (Kütüphane/paket kapsamı).
+- [ ] **Android geri tuşu** (kalan): `MainActivity` geri tuşunu WebView geçmişine bağlamıyor
+      (`@capacitor/app` yok); her ekranda uygulama arka plana gidiyor. `OnBackPressedCallback` ile
+      `WebView.canGoBack()/goBack()` eklenmeli (a11y.md'de tarif).
+- `e2e/qa-platform.mjs` derleme bölümüne PWA denetimleri eklendi (viewport-fit, theme-color = --bg,
+  color-scheme, açılış ekranı, noscript, manifest renkleri ve 4 PNG simgenin boyutu).
+
+## Denetim 2026-11 — bağımsız gözden geçirme sonrası düzeltmeler
+
+Altı denetim ajanının değişiklikleri bağımsız bir gözden geçirmeden geçti; bulunan sorunlar düzeltildi:
+
+- **Mesh aktarımı:** Gelen çok iletili çerçeve diğer komşulara artık ileti başına ayrı çerçeve yerine toplu itiliyor (`src/lib/mesh/node.ts` `pushMany`). Önceden zincirde (C–A–B) 500 iletilik bir eşitleme B'nin gelen çerçeve sınırına (MeshPeer: 120 + 20/sn) takılıp iletilerin çoğu düşüyordu. Sınama: `tests/mesh.test.ts`.
+- **Kurulum çökme döngüsü:** Kurulum ekranı çökerse artık "tamamlandı" sayılıp kapanıyor (`kurulumuKapat`). Önceden açılışta kapanıp yeniden açılan bir döngüye girebiliyordu.
+- **Hata kartı:** Sekme içindeki hata kartı, aynı sekmede başka ekrana geçilince (geri tuşu, "← Araçlar") sıfırlanıyor (`HataSiniri sifirla`).
+- **İndirme:** Yarım dosya yalnız bir ayna beklenenden fazla veri gönderdiyse siliniyor. Başlıktaki boyutu farklı olan eski bir ayna, başka aynadan inmiş yarım dosyayı artık silmiyor (`download-core.ts`).
+- **Geri tuşu ve katmanlar:** Geri tuşu artık ekranın üstündeki pencereyi önce kapatıyor (`src/gecmis.ts` `useGeriKapat`). Bu pencereler: PDF okuyucu, harita sayfaları, Fener model paneli, sözlük büyük gösterimi. İlk ekranda pencere açıkken eklenen bir koruma kaydı, uygulamanın kapanmasını önlüyor. Sınama: `tests/gecmis.test.ts`, `e2e/qa-a11y.mjs` (e2).
+- **Android geri tuşu:** `MainActivity`'ye WebView geçmişinde geri gitme eklendi. Geçmiş bitince Android'in olağan davranışı sürüyor.
+- **Küçük düzeltmeler:**
+  - Hesap aracında "Gün" kutusunu silip yeni sayı yazınca "17" oluşması.
+  - Rehber aramasında 3 harflik kökün başka kelimenin başını bulması ("yan" → "yangın").
+  - Enkaz aramada bozuk kayıtlı hedefin doğrulanması.
+  - Telefon bilgi noktasında gizli dosya yasağı.
+  - Yüksek kontrastta tema rengi.
+  - 112 düğmelerinde beyaz yazı karşıtlığı.
+  - Uzak paket kataloğu artık her sekme açılışında değil, oturumda 6 saatte bir deneniyor.

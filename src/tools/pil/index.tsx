@@ -28,7 +28,7 @@ const TIPS: { b: string; t: string }[] = [
   { b: 'Video, oyun ve sosyal medyadan uzak durun.', t: 'Haber için pilli radyo daha az enerjiyle günlerce çalışır.' },
   { b: 'Telefon flaşını uzun süre fener olarak kullanmayın.', t: 'Ayrı bir el feneri ve yedek pil daha verimlidir.' },
   { b: 'Telefonu ılık tutun.', t: 'Soğukta pil hızla düşer; iç cebinizde taşıyın. Güneşte ve sıcak araçta bırakmayın.' },
-  { b: 'Powerbank\'i idareli kullanın.', t: 'Telefonu kapalıyken şarj etmek daha hızlıdır. Araçta şarj ederken motoru kapalı alanda çalıştırmayın (karbonmonoksit).' },
+  { b: 'Powerbank\'i idareli kullanın.', t: 'Telefonu kapalıyken şarj etmek daha hızlıdır. Araçta şarj ederken motoru kapalı alanda çalıştırmayın (karbon monoksit zehirlenmesi).' },
   { b: 'Pil çok azaldıysa telefonu kapatın.', t: 'Yalnız gerektiğinde açın; acil bir 112 araması için yedek bırakın.' },
 ];
 

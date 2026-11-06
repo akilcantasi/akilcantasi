@@ -27,3 +27,29 @@ describe('sesli okuma metni', () => {
     expect(plainText('## Başlık\n* **Çök** hemen')).toBe('Başlık\nÇök hemen');
   });
 });
+
+import { copyText } from '../src/lib/fener/format';
+import { FALLBACK_LABELS } from '../src/lib/fener/fallback';
+describe('"Kopyala" metni', () => {
+  it('biçim işaretleri atılır, madde işaretleri kalır', () => {
+    expect(copyText('## Başlık\n* **Çök** hemen\n- Kapan')).toBe('Başlık\n• Çök hemen\n• Kapan');
+  });
+  it('kaynaklar numaralarıyla sona eklenir', () => {
+    const t = copyText('Bastırın [1]. Bakın [2].', [
+      { n: 1, kind: 'rehber', title: 'Ciddi kanama' },
+      { n: 2, kind: 'vikipedi', label: 'WikiMed', title: 'Bleeding' },
+      { n: 3, kind: 'baglam', title: 'Kanama' },
+    ]);
+    expect(t).toBe('Bastırın [1]. Bakın [2].\n\nKaynaklar:\n[1] Rehber: Ciddi kanama\n[2] WikiMed: Bleeding\n[3] Bağlam: Kanama');
+  });
+  it('kaynak yoksa yalnız metin', () => {
+    expect(copyText('  Merhaba  ')).toBe('Merhaba');
+  });
+});
+
+describe('durdurulan cevabın etiketi', () => {
+  it('"Model yüklü değil" denmez', () => {
+    expect(FALLBACK_LABELS.stopped).toBe('Durduruldu — rehberden yanıt');
+    expect(FALLBACK_LABELS.stopped).not.toBe(FALLBACK_LABELS['no-model']);
+  });
+});

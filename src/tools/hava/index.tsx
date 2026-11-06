@@ -9,7 +9,7 @@ import { AY_ADI, ayEtiketi, enYakinIl, gelecekAylar, isHavaPaketi, num, sicaklik
 const CSS = `
 .hv { display: flex; flex-direction: column; gap: 14px; }
 .hv-pick { display: flex; gap: 8px; align-items: stretch; }
-.hv-sel { flex: 1; min-height: 48px; background: var(--card); border: 1px solid var(--line3); border-radius: 14px; color: var(--text); padding: 0 12px; font-size: 16px; }
+.hv-sel { flex: 1; min-height: 48px; background: var(--card); border: 1px solid var(--line-input); border-radius: 14px; color: var(--text); padding: 0 12px; font-size: 16px; }
 .hv-loc { min-height: 48px; white-space: nowrap; }
 .hv-note { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 16px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5; color: var(--text2); margin: 0; }
 .hv-note b { color: var(--text); }

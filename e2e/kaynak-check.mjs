@@ -215,7 +215,9 @@ async function shot(p, name, testid) {
   const before = await p.getAttribute(T('pil-saver-switch'), 'aria-checked');
   await p.click(T('pil-saver-switch'));
   check((await p.getAttribute(T('pil-saver-switch'), 'aria-checked')) !== before, 'pil: tasarruf anahtarı değişti');
-  check(await p.evaluate(() => document.body.classList.contains('saver')) === (before !== 'true'), 'pil: body.saver sınıfı uygulandı');
+  // body sınıfı useEffect ile (çizimden sonra) değişir: hemen bakmak yük altında yanıltır
+  const saverOk = await p.waitForFunction((on) => document.body.classList.contains('saver') === on, before !== 'true', { timeout: 3000 }).then(() => true, () => false);
+  check(saverOk, 'pil: body.saver sınıfı uygulandı');
   check(await p.evaluate(() => localStorage.getItem('ac.batterySaver')) === (before !== 'true' ? '1' : '0'), 'pil: store kaydetti');
   await shot(p, 'kaynak-pil-tips', 'pil-tips');
   await p.click(T('pil-saver-switch'));

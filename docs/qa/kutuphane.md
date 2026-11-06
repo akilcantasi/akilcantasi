@@ -88,3 +88,67 @@ node e2e/qa-kutuphane.mjs          # QA regresyonu (11 adım)
 node e2e/kutuphane-check.mjs http://localhost:8098
 node e2e/sanitize-check.mjs
 ```
+
+## Denetim 2026-11
+
+Kapsam: `KutuphaneTab.tsx`, `KutuphaneMagaza.tsx`, `KutuphaneCeviri.tsx`, `PdfOkuyucu.tsx`, `src/lib/packs-ui.tsx`.
+360×640, 390×844, 1280×800 ve en büyük yazı boyutunda; dört bilgi noktası kurulumu (boş, örnek, tek, çoklu),
+dev sunucusunda `?devzim=`, 400 sayfalık PDF'li sınama arşivi ve yavaşlatılmış paket sunucusuyla denendi.
+
+### Denetlenenler
+- [x] Arama (başlık + tam metin), kaynak kutucukları, makale okuyucu (geri/ileri, iç/dış bağlantı, görsel, sayfada bul, yazı boyutu)
+- [x] PDF okuyucu: sayfalama, yakınlaştırma, kitapta arama, sayfa çevirisi, 400 sayfalık belge, ekran döndürme
+- [x] Arşiv içinden dosya açma (PDF, txt, svg, mp3, bozuk % kodlu ad), Nautilus kitap listesi
+- [x] Çeviri görünümü (gerçek wllama + küçük model): başlat, durdur, gizle/yeniden göster
+- [x] Mağaza: setler, alt çubuk, indir / duraklat / devam / iptal / sil, "Yer yetmez", koleksiyon rafları, rehber paketleri
+- [x] Boş kütüphane, bilgi noktasından okunan paketler
+- [x] Yan boşluklar, 44 px dokunma alanları, taşma, kırpılma, Türkçe metin
+
+### Bulunan ve düzeltilen hatalar
+1. **PDF okuyucunun çubuğu makale çubuğunun altında kalıyordu** (hata): ikisi de yapışkandı; kaydırınca geri, başlık,
+   sayfa numarası ve yakınlaştırma görünmüyordu. Okuyucu açıkken makale çubuğu kayar; dosya/kitap ekranında işe
+   yaramayan "Sayfada bul" ve "Aa" gizli.
+2. **Büyük PDF'te bellek sızıntısı** (hata): hızlı kaydırmada sayfa tuvalleri bırakılmıyordu (400 sayfada 71 tuval,
+   yüzlerce MB; telefonda çökme riski). Şu anki sayfadan uzak tuvaller her sayfa değişiminde bırakılır → 5 tuval.
+3. **Yakınlaştırınca / ekran dönünce okunan yer kayboluyordu** (40. sayfa → 32.): sayfa ve sayfa içi konum korunur.
+4. **Sonuca gitmek uygulama başlığını ekrandan itebiliyordu** ve gidilen sayfa yapışkan çubuğun altında kalıyordu
+   (`scrollIntoView`); "şu anki sayfa" ekranın ortasıyla ölçüldüğünden açık arama listesi altında yanlış sayfa
+   gösteriliyordu. Kaydırma ve sayfa takibi artık çubuğun altındaki görünür alana göre.
+5. **Arama sonuçlarında yazı düğmeden taşıyordu** (yüksekliği sınırlı esnek sütunda büzülme); küçük ekranda çeviri
+   açıkken "Çeviriyi kapat" ekran dışındaydı → çubuk ekran yüksekliğiyle sınırlı ve kendi içinde kayar, çeviri
+   açıkken sonuç listesi gizlenir, kapat düğmesi kayan kutunun dışında.
+6. **Makaledeki PDF bağlantısı yeni pencere açıyordu** (Android WebView'da açılmaz): artık uygulama içi okuyucu.
+7. **SVG görsel kaynak kodu olarak "makale" gibi gösteriliyordu** (türünde "xml" geçiyor): dosya kartı (indirilir).
+8. **Her indirme bitişinde Kütüphane yeniden kuruluyordu**: "Kütüphane açılıyor…" görünüp kaydırma, açık
+   koleksiyon ve "Yönet" paneli sıfırlanıyordu. Eski liste yenisi gelene kadar görünür kalır.
+9. **Gizlenen bitmiş çeviri yeniden açılınca model baştan çeviriyordu** (dakikalar); artık hemen gösterilir.
+   Model yüklenirken "Durdur" yüklemenin bitmesini bekliyordu → hemen durur.
+10. **Büyük yazıda çubuklar bozuktu**: "← Sonuçlara dön" önceki düğmenin üstüne biniyor, bulma kutusu 0 px'e
+    iniyordu, PDF arama kutusu ve başlık eziliyordu. Düğme grupları alt satıra iner; dar ekranda "← Sonuçlar".
+11. **Mağaza büyük yazıda**: alt çubuk ekranın üçte birini kaplıyordu, durum kartı metni tek kelimelik şeride
+    iniyordu → düzeltildi. "Tek tek seç" düğmesinde yazı kenarlığa değiyordu (iç boşluk).
+12. Duraklatılınca alt çubuk "İndir" diyordu → "Devam et" + "N paket duraklatıldı · kaldığı yerden sürer".
+13. Kapak kutucuğunda seçili dış çizgi kırpılıyor, uzun kaynak adı kesiliyordu; boş kütüphane başlığı 2 px içerdeydi
+    (sol/sağ boşluk eşit değil); kitap/dosya ekranında başlık ile açıklama arası fazla boşluk.
+14. Metin: "Kütüphanen hazırlanıyor / Kütüphaneni kur" → "Kütüphaneniz hazırlanıyor / Kütüphanenizi kurun"
+    (uygulamanın geri kalanı "siz" diliyle); "İndiriliyor 45%" → "%45"; kitap listesi notu artık kaynak diline göre
+    (Türkçe kitaplıkta "Türkçeye çevrilebilir" demez); "bu cihaz için ağır" kırmızı değil kehribar; "Gizle" 40 → 44 px.
+15. Bozuk % kodlu dosya adında `decodeURIComponent` hatası (yakalanmamış söz) → güvenli çözme.
+16. **Kararsız test** `tests/kutuphane-real.test.ts` "başlık araması": paylaşılan durum ya da sıra değil, zaman aşımı.
+    1,2 GB dosya işletim sistemi önbelleğinde değilken ilk arama testi tek başına 5 sn'yi aşıyor (soğuk koşuda
+    yalnız dosyayla da 5,09 sn ölçüldü; ısınınca 0,5 sn); tam takımda öteki dosyalarla disk/işlemci paylaşılınca daha
+    sık. Takıma 60 sn süre verildi; hız ayrı "süre bütçesi" testinde ölçülüyor.
+
+### Kalan / not
+- Denetim sırasında `index.html`'deki açılış ekranı (`#acilis`) çizimden sonra DOM'da kalıyordu (belge 2× ekran
+  yüksekliği, `scrollIntoView` başlığı itebiliyordu); başka ajan `src/main.tsx`'te giderdi. PDF okuyucu artık
+  `scrollIntoView` kullanmıyor.
+- Çok büyük yazı + 360×640 + PDF çevirisi açıkken çubuk kendi içinde kayar ("Çeviriyi kapat" için kaydırmak gerekir).
+- Dış bağlantılar `target=_blank` ile açılır; Android'de sistem tarayıcısına gidip gitmediği cihazda denenmeli.
+
+### E2E
+    node e2e/qa-kutuphane.mjs            # dört bilgi noktası kurulumu (bkz. betik başı), derlenmiş uygulama
+    node e2e/pdf-okuyucu-check.mjs       # 8099, sample_kitap_en.zim
+    node e2e/kutuphane-check.mjs http://localhost:8098 && node e2e/sanitize-check.mjs
+    node e2e/kutuphane-ceviri-check.mjs http://localhost:5199/
+    node e2e/kutuphane-denetim-check.mjs http://localhost:5199/ /tmp/ktd   # bu denetimin regresyonu (dev sunucusu)

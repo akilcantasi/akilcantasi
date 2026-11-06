@@ -1,6 +1,7 @@
 // Tarayıcı depolaması kullanılamıyorsa uygulamanın üstünde gösterilen uyarı.
 import { useEffect, useState } from 'preact/hooks';
 import { checkStorage, type StorageProblem } from './lib/storage-check';
+import { depoEngelli } from './depolama-koruma';
 
 const TEXT: Record<Exclude<StorageProblem, null>, { title: string; body: string }> = {
   captive: {
@@ -17,12 +18,16 @@ const TEXT: Record<Exclude<StorageProblem, null>, { title: string; body: string 
   },
 };
 
-export function StorageWarning() {
+export function StorageWarning({ inert }: { inert?: boolean }) {
   const [problem, setProblem] = useState<StorageProblem>(null);
   const [closed, setClosed] = useState(false);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    void checkStorage().then((c) => setProblem(c.problem));
+    // Gerçek localStorage engelliyse (depolama-koruma.ts bellek deposu koydu) denetim yanılır:
+    // bellek deposu çalışır, OPFS de reddedilir ve "gizli sekme" sanılır. Doğru uyarı "engelli".
+    void checkStorage()
+      .then((c) => setProblem(depoEngelli && c.problem !== 'captive' ? 'blocked' : c.problem))
+      .catch(() => setProblem(depoEngelli ? 'blocked' : null));
   }, []);
   if (!problem || closed) return null;
   const t = TEXT[problem];
@@ -44,12 +49,12 @@ export function StorageWarning() {
     }
   };
   return (
-    <div class="storage-warn" role="alert" data-testid="storage-warning" data-problem={problem}>
+    <div class="storage-warn" role="alert" data-testid="storage-warning" data-problem={problem} inert={inert}>
       <strong>{t.title}</strong>
       <p>{t.body}</p>
       <div class="storage-warn-row">
         <code data-testid="storage-warning-addr">{addr}</code>
-        <button type="button" class="btn" onClick={copy}>
+        <button type="button" class="btn" data-testid="storage-warning-copy" onClick={copy}>
           {copied ? 'Kopyalandı' : 'Adresi kopyala'}
         </button>
         <button type="button" class="link-btn" data-testid="storage-warning-close" onClick={() => setClosed(true)}>

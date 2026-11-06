@@ -28,7 +28,7 @@ import { multiSmsHref } from '../../iletisim/yakinlar';
 import { isIOS } from '../../iletisim/sms';
 
 const CSS = `
-.ek-start { width: 100%; min-height: 96px; border: 0; border-radius: 22px; padding: 14px 18px; color: #fff; background: linear-gradient(160deg, #f0565b, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.ek-start { width: 100%; min-height: 96px; border: 0; border-radius: 22px; padding: 14px 18px; color: #fff; background: linear-gradient(160deg, #d44046, var(--sos)); box-shadow: 0 10px 26px rgba(229,72,77,0.35); display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
 .ek-start b { font-size: 20px; line-height: 1.2; }
 .ek-start span { font-size: 13px; opacity: 0.95; line-height: 1.35; }
 .ek-live { border-color: var(--sos); display: flex; flex-direction: column; gap: 12px; }
@@ -47,8 +47,9 @@ html.reduce-motion .ek-dot { animation: none; }
 .ek-row .t span { font-size: 13px; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
 .ek-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .ek-btns .btn { flex: 1 1 140px; }
-.ek-hold { position: relative; overflow: hidden; width: 100%; min-height: 52px; border-radius: 14px; border: 1px solid var(--danger); background: transparent; color: var(--danger); font-weight: 600; font-size: 14px; }
-.ek-hold i { position: absolute; inset: 0; width: 0; background: rgba(255,138,122,0.25); }
+/* Kapatma tehlikeli bir eylem değil: kırmızı değil, sakin çerçeve; basılı tutarken kehribar dolar */
+.ek-hold { position: relative; overflow: hidden; width: 100%; min-height: 52px; border-radius: 14px; border: 1px solid var(--line3); background: var(--glass); color: var(--text2); font-weight: 600; font-size: 14px; padding: 6px 12px; }
+.ek-hold i { position: absolute; inset: 0; width: 0; background: var(--accent-soft); box-shadow: inset -2px 0 var(--accent); }
 .ek-hold span { position: relative; }
 .ek-tips { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--text2); }
 .ek-pick { display: flex; flex-direction: column; gap: 6px; }
@@ -170,14 +171,21 @@ function konumYazi(k: KayitliKonum | null | undefined, simdi: number) {
 
 // ---------------------------------------------------------------- açık enkaz modu
 
-function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }) {
+function Aktif({ d, bina, ad, yenile }: { d: EnkazDurum; bina: Bina | null; ad: string; yenile: () => void }) {
   const simdi = useNow();
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
+  // "Şimdi ses çal"a basıldığı an: servisin bildirimi gecikse de düğme hemen tepki versin
+  const [basildi, setBasildi] = useState(0);
   const reklamOk = d.reklam === 'yayiliyor';
   const susturuldu = (d.sesDuraklatBitis ?? 0) > simdi;
   const gorunur = d.gorunurBitis > simdi;
   // Bir SOS turu ~8 sn sürer: düğme bu sırada "Çalıyor…" der (basınca bir şey olduğu görülsün)
-  const caliyor = !!d.sonSes && simdi - d.sonSes < 8500;
+  const caliyor = (!!d.sonSes && simdi - d.sonSes < 8500) || simdi - basildi < 8500;
+  /** İzin/Bluetooth penceresinden dönünce durum hemen yenilensin (yalnız olaya güvenilmez) */
+  const sonra = () => {
+    yenile();
+    setTimeout(yenile, 1200);
+  };
   const aralik = d.sesAraligiSn >= 60 ? `${Math.round(d.sesAraligiSn / 60)} dakikada bir` : `${d.sesAraligiSn} saniyede bir`;
 
   const gorun = async () => {
@@ -223,13 +231,23 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
                 setMsg(null);
                 const r = await nativeEnkaz.bluetoothAc();
                 if (r && !r.izinler.bluetoothAcik) setMsg({ t: "Bluetooth açılmadı. Bildirim panelinden Bluetooth'u açabilirsiniz; işaret kendiliğinden başlar.", bad: true });
+                sonra();
               }}
             >
               Bluetooth'u aç
             </button>
           )}
           {d.reklam === 'izin-yok' && (
-            <button class="btn" data-testid="ek-izin" onClick={() => nativeEnkaz.izinIste()}>
+            <button
+              class="btn"
+              data-testid="ek-izin"
+              onClick={async () => {
+                setMsg(null);
+                const r = await nativeEnkaz.izinIste();
+                if (r && !r.izinler.bluetooth) setMsg({ t: 'Bluetooth izni verilmedi. Ayarlar → Uygulamalar → Akıl Çantası → İzinler → "Yakındaki cihazlar"dan izin verin.', bad: true });
+                sonra();
+              }}
+            >
               İzin ver
             </button>
           )}
@@ -244,7 +262,16 @@ function Aktif({ d, bina, ad }: { d: EnkazDurum; bina: Bina | null; ad: string }
           }
         >
           <div class="ek-btns">
-            <button class="btn primary" data-testid="ek-ses" disabled={caliyor} onClick={() => nativeEnkaz.sesCal()}>
+            <button
+              class="btn primary"
+              data-testid="ek-ses"
+              disabled={caliyor}
+              onClick={async () => {
+                setBasildi(Date.now());
+                await nativeEnkaz.sesCal();
+                yenile();
+              }}
+            >
               {caliyor ? 'Çalıyor…' : 'Şimdi ses çal'}
             </button>
             {susturuldu ? (
@@ -345,6 +372,13 @@ function Mesajlasma({ d, simdi }: { d: EnkazDurum; simdi: number }) {
 
 // ---------------------------------------------------------------- başlatma
 
+/** SMS uygulamasını hazır mesajla açar (uçtan uca testler bağlantıyı yakalayabilsin) */
+function smsAc(href: string) {
+  const hook = (window as any).__acSmsOpen;
+  if (typeof hook === 'function') return void hook(href);
+  location.href = href;
+}
+
 function Baslat({ binalar, ad, sonKonum, kod, onBasladi }: { binalar: Bina[]; ad: string; sonKonum: KayitliKonum | null; kod?: string; onBasladi: () => void }) {
   const [acik, setAcik] = useState(false);
   // Kullanıcı seçmediyse: son konuma en yakın kayıtlı bina, yoksa ilki (bina sonradan eklenirse de)
@@ -364,13 +398,19 @@ function Baslat({ binalar, ad, sonKonum, kod, onBasladi }: { binalar: Bina[]; ad
       setMsg({ t: 'Enkaz modu başlatılamadı.', bad: true });
       return;
     }
-    if (sms112) await nativeSms.send(['112'], ['112'], metin);
-    if (smsYakin && yakinlar.length)
-      await nativeSms.send(
+    // Uygulama SMS'i kendisi gönderemezse (SMS izni verilmedi) SMS uygulaması hazır açılır;
+    // yoksa kullanıcı SMS'in gittiğini sanır.
+    const gitmeyen: string[] = [];
+    if (sms112 && !(await nativeSms.send(['112'], ['112'], metin)).queued) gitmeyen.push('112');
+    if (smsYakin && yakinlar.length) {
+      const r = await nativeSms.send(
         yakinlar.map((y) => y.phone),
         yakinlar.map((y) => y.name),
         metin,
       );
+      if (!r.queued) gitmeyen.push(...yakinlar.map((y) => y.phone));
+    }
+    if (gitmeyen.length) smsAc(multiSmsHref(gitmeyen, metin, isIOS()));
     onBasladi();
   };
 
@@ -610,6 +650,8 @@ function ArkaPlan({ d, yenile }: { d: EnkazDurum | null; yenile: () => void }) {
   const simdi = useNow(30000);
   const [liste, setListe] = useState<KayitliKonum[]>([]);
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
+  // Son konum kayıtları kurtarma için değerli: tek dokunuşla silinmesin
+  const [silSor, setSilSor] = useState(false);
   const iz = d?.izinler;
   const mod = d?.konumKaydiModu ?? 'kapali';
   useEffect(() => {
@@ -714,15 +756,29 @@ function ArkaPlan({ d, yenile }: { d: EnkazDurum | null; yenile: () => void }) {
                 </li>
               ))}
             </ul>
-            <button
-              class="btn"
-              onClick={async () => {
-                await nativeEnkaz.konumKaydiTemizle();
-                setListe([]);
-              }}
-            >
-              Kayıtları sil
-            </button>
+            {silSor ? (
+              <div class="kn-confirm">
+                <span>Konum kayıtları silinsin mi?</span>
+                <button
+                  class="btn"
+                  data-testid="ek-kayit-sil-evet"
+                  onClick={async () => {
+                    await nativeEnkaz.konumKaydiTemizle();
+                    setListe([]);
+                    setSilSor(false);
+                  }}
+                >
+                  Sil
+                </button>
+                <button class="btn" data-testid="ek-kayit-sil-hayir" onClick={() => setSilSor(false)}>
+                  Vazgeç
+                </button>
+              </div>
+            ) : (
+              <button class="btn" data-testid="ek-kayit-sil" onClick={() => setSilSor(true)}>
+                Kayıtları sil
+              </button>
+            )}
           </>
         ) : (
           <p class="kn-sub">Henüz kayıt yok.</p>
@@ -733,6 +789,9 @@ function ArkaPlan({ d, yenile }: { d: EnkazDurum | null; yenile: () => void }) {
 }
 
 // ---------------------------------------------------------------- araç
+
+/** EnkazServisi.durum(): yalnız servis çalışırken gelen ve kaybolabilen alanlar */
+const SERVIS_ALANLARI = ['reklam', 'sonSes', 'sesSayisi', 'sesDuraklatBitis', 'sonGps', 'gpsDeneniyor', 'mesajDinleme', 'yanit', 'sonKonum'] as const;
 
 export default function EnkazTool() {
   const yerel = nativeEnkaz.available();
@@ -746,7 +805,16 @@ export default function EnkazTool() {
   };
   useEffect(() => {
     yenile();
-    const off = nativeEnkaz.onDurum((x) => setD((o) => ({ ...(o ?? {}), ...x })));
+    // Olay yalnız servisin durumunu taşır (izinler, nöbet vb. durum() çağrısından gelir, korunur).
+    // Servis çalışmıyorsa servise ait alanlar olayda yoktur: eskisi kalmasın (ör. "Bluetooth
+    // kapalı" yazısı ve "Bluetooth'u aç" düğmesi açıldıktan sonra da görünmesin).
+    const off = nativeEnkaz.onDurum((x) =>
+      setD((o) => {
+        const n: EnkazDurum = { ...(o ?? {}), ...x };
+        for (const k of SERVIS_ALANLARI) if (!(k in x)) delete n[k];
+        return n;
+      }),
+    );
     const vis = () => document.visibilityState === 'visible' && yenile();
     document.addEventListener('visibilitychange', vis);
     return () => {
@@ -772,7 +840,7 @@ export default function EnkazTool() {
     <div class="kn" data-testid="enkaz">
       <style>{KAYNAK_CSS + CSS}</style>
       {aktif && d ? (
-        <Aktif d={d} bina={bina} ad={p.name} />
+        <Aktif d={d} bina={bina} ad={p.name} yenile={yenile} />
       ) : (
         <>
           <Baslat binalar={binalar} ad={p.name} sonKonum={sonKonum} kod={d?.kod} onBasladi={yenile} />

@@ -6,6 +6,10 @@
 // gezinme (360 px + en büyük yazı), klavye sırası ve görünür odak, çevrimiçi/çevrimdışı
 // rozeti, doğrudan bağlantılar, pil tasarrufu / düşük güç, yük sonrası çevrimdışı çalışma
 // (tek izinli dış istek: isteğe bağlı çevrim içi katalog).
+// Denetim 2026-11 ekleri: altı sekmede ve 4 ekran boyutunda sol/sağ boşluk eşitliği, güvenli alan,
+// yatay telefon + çentik, büyük yazıda menü ve üst çubuk, masaüstü kaydırma çubuğu, hata sınırı
+// (?qa-cokme=<sekme>), bozuk doğrudan bağlantılar, bozuk/engelli localStorage, geri tuşu (popstate),
+// Kurulum penceresinde odak/inert/geri, açılış ekranı ve çevrimiçi gezintide dış istekler.
 import { createRequire } from 'module';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -36,7 +40,8 @@ if (!base) {
 }
 if (!base.endsWith('/')) base += '/';
 const ORIGIN = new URL(base).origin;
-const ALLOWED_EXTERNAL = ['https://akilcantasi.com/packs/packs-manifest.json'];
+// İsteğe bağlı çevrim içi katalog (src/lib/manifest.ts REMOTE_MANIFEST_URL; packs-ui.tsx usePackRows ister)
+const ALLOWED_EXTERNAL = ['https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/packs-manifest.json', 'https://akilcantasi.com/packs/packs-manifest.json'];
 
 const fails = [];
 const check = (ok, m) => { console.log((ok ? 'OK   ' : 'FAIL ') + m); if (!ok) fails.push(m); };
@@ -166,7 +171,9 @@ for (const textSize of [0, 3]) {
   check(nav.every((n) => n.l >= 0 && n.r <= 360.5 && n.spL >= -0.5 && n.spR <= 360.5), `[nav yazı=${textSize}] tüm sekmeler ve etiketleri ekranda`);
   // Komşu etiketler çakışmasın
   const sorted = [...nav].sort((a, b) => a.l - b.l);
-  check(sorted.every((n, i) => i === 0 || n.spL >= sorted[i - 1].spR - 0.5), `[nav yazı=${textSize}] sekme etiketleri çakışmıyor`);
+  // Komşu etiketler arasında en az 5 px (App.tsx navSigdir gerekirse etiketleri küçültür, kesmez)
+  const araliklar = sorted.slice(1).map((n, i) => n.spL - sorted[i].spR);
+  check(araliklar.every((g) => g >= 5) && nav.every((n) => !n.clipped), `[nav yazı=${textSize}] sekme etiketleri çakışmıyor, kesilmiyor (en dar ${Math.min(...araliklar).toFixed(1)} px)`);
   await page.screenshot({ path: `${SHOTS}/qa-a11y-nav-${textSize}.png` });
   await ctx.close();
 }
@@ -387,6 +394,341 @@ for (const mode of ['saver', 'lowpower']) {
   check(bad.length === 0, 'dış istek yok (katalog hariç)' + (bad.length ? ' → ' + [...new Set(bad)].slice(0, 5).join(', ') : ''));
   check(errs.length === 0, '[çevrimdışı] konsol hatası yok' + (errs.length ? ' → ' + errs.slice(0, 3).join(' | ') : ''));
   await page.screenshot({ path: `${SHOTS}/qa-a11y-offline.png` });
+  await ctx.close();
+}
+
+// ---------------------------------------------------------------- 8) kabuk düzeni: yan boşluklar, güvenli alan, yatay, büyük yazı
+// Yan boşluk ölçümü: #main içindeki geniş kutuların (kart, düğme, başlık) sol ve sağ boşluğu;
+// en sık görülen çift eşit olmalı. Üst çubukta logo ile rozetin kenar boşlukları eşit olmalı.
+async function yanBosluk(page) {
+  return page.evaluate(() => {
+    const main = document.getElementById('main');
+    const mr = main.getBoundingClientRect();
+    const iL = mr.left + main.clientLeft;
+    const iR = iL + main.clientWidth;
+    const say = {};
+    for (const el of main.querySelectorAll('*')) {
+      const b = el.getBoundingClientRect();
+      if (b.width < (iR - iL) * 0.5 || b.height < 8 || b.bottom < 0 || b.top > innerHeight) continue;
+      const st = getComputedStyle(el);
+      const kutu = (st.backgroundColor !== 'rgba(0, 0, 0, 0)') || parseFloat(st.borderLeftWidth) > 0 || ['BUTTON', 'INPUT', 'H1', 'H2', 'P'].includes(el.tagName);
+      if (!kutu) continue;
+      const L = Math.round(b.left - mr.left), R = Math.round(mr.right - b.right);
+      // Tam genişlik (harita) ve yatay kayan şeritlerin taşan öğeleri sayılmaz
+      if (L < 0 || R < 0 || (L === 0 && R === 0)) continue;
+      const k = L + '/' + R;
+      say[k] = (say[k] ?? 0) + 1;
+    }
+    // Sayfanın yan boşluğunu en geniş kutular belirler (en küçük L+R)
+    const enCok = Object.keys(say).sort((a, b) => eval(a.replace('/', '+')) - eval(b.replace('/', '+')))[0] ?? '0/0';
+    const h = document.querySelector('.app-header').getBoundingClientRect();
+    const logo = document.querySelector('.brand-logo').getBoundingClientRect();
+    const pill = document.querySelector('.pill').getBoundingClientRect();
+    const nav = document.querySelector('.app-nav').getBoundingClientRect();
+    return { enCok, hL: Math.round(logo.left - h.left), hR: Math.round(h.right - pill.right), nL: Math.round(nav.left), nR: Math.round(innerWidth - nav.right), nB: Math.round(innerHeight - nav.bottom), logoTop: Math.round(logo.top), navH: Math.round(nav.height), hdrH: Math.round(h.height), hdrBg: getComputedStyle(document.querySelector('.app-header')).backgroundColor };
+  });
+}
+const esit = (pair, tol = 1) => { const [l, r] = pair.split('/').map(Number); return Math.abs(l - r) <= tol; };
+{
+  const VPS = [[360, 640], [390, 844], [412, 915], [1280, 800]];
+  for (const [w, h] of VPS) {
+    const ctx = await newCtx({ w, h });
+    const page = await ctx.newPage();
+    const bad = [];
+    for (const t of ['fener', 'rehber', 'harita', 'iletisim', 'kutuphane', 'araclar']) {
+      await page.goto(base + '?tab=' + t, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(300);
+      const m = await yanBosluk(page);
+      if (!esit(m.enCok) || !esit(m.hL + '/' + m.hR) || !esit(m.nL + '/' + m.nR)) bad.push(`${t} içerik ${m.enCok} başlık ${m.hL}/${m.hR} menü ${m.nL}/${m.nR}`);
+      if (t === 'fener') check(m.hdrBg === 'rgba(0, 0, 0, 0)', `[${w}] üst çubuk saydam (şafak parıltısında kesik çizgi yok)`);
+    }
+    check(bad.length === 0, `[${w}×${h}] altı sekmede sol ve sağ boşluk eşit` + (bad.length ? ' → ' + bad.join(' ; ') : ''));
+    await ctx.close();
+  }
+  // Güvenli alan (Capacitor 8 SystemBars değişkenleri)
+  {
+    const ctx = await newCtx({ w: 390, h: 844 });
+    await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ':root{--safe-area-inset-top:32px;--safe-area-inset-bottom:24px}'; document.head.appendChild(s); }));
+    const page = await ctx.newPage();
+    await page.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    const m = await yanBosluk(page);
+    check(m.logoTop >= 32 && m.nB >= 24 + 6, `güvenli alan: başlık durum çubuğunun altında (logo ${m.logoTop}), menü sistem çubuğunun üstünde (alt boşluk ${m.nB})`);
+    await page.screenshot({ path: `${SHOTS}/qa-a11y-guvenli-alan.png` });
+    await ctx.close();
+  }
+  // Yatay telefon, solda çentik (32 px): içerik, başlık ve menü ortalı kalır; çubuklar incelir
+  {
+    const ctx = await newCtx({ w: 844, h: 390 });
+    await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ':root{--safe-area-inset-left:32px}'; document.head.appendChild(s); }));
+    const page = await ctx.newPage();
+    const bad = [];
+    for (const u of ['?tab=rehber', '?guide=deprem-aninda', '?tab=araclar', '?tool=ayarlar']) {
+      await page.goto(base + u, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(300);
+      const m = await yanBosluk(page);
+      if (!esit(m.enCok) || !esit(m.hL + '/' + m.hR) || !esit(m.nL + '/' + m.nR)) bad.push(`${u} içerik ${m.enCok} başlık ${m.hL}/${m.hR} menü ${m.nL}/${m.nR}`);
+      if (u === '?tab=rehber') check(m.navH <= 56 && m.hdrH <= 50, `yatay: üst çubuk (${m.hdrH}) ve menü (${m.navH}) inceliyor`);
+    }
+    check(bad.length === 0, 'yatay 844×390 + çentik: sol ve sağ boşluk eşit' + (bad.length ? ' → ' + bad.join(' ; ') : ''));
+    await page.screenshot({ path: `${SHOTS}/qa-a11y-yatay.png` });
+    await ctx.close();
+  }
+  // Android büyük yazı (WebView metin yakınlaştırması) taklidi: menü etiketleri ×1,5, başlık ×1,6
+  for (const [w, k] of [[360, 1.5], [320, 1.3]]) {
+    const ctx = await newCtx({ w, h: 640 });
+    await ctx.addInitScript((k) => document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = `html{--nav-scale:${k} !important}`; document.head.appendChild(s); }), k);
+    const page = await ctx.newPage();
+    await page.goto(base + '?tab=kutuphane', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(400);
+    const r = await page.evaluate(async () => {
+      const nav = document.querySelector('.app-nav');
+      const sp = [...nav.querySelectorAll('.nav-btn span')].map((s) => s.getBoundingClientRect());
+      const nr = nav.getBoundingClientRect();
+      let gap = 99;
+      for (let i = 1; i < sp.length; i++) gap = Math.min(gap, sp[i].left - sp[i - 1].right);
+      // Üst çubuk: yazılar ×1,6 (metin yakınlaştırması gibi), sonra yeniden sığdırma
+      const els = [...document.querySelectorAll('.app-header *')];
+      const fs = els.map((e) => parseFloat(getComputedStyle(e).fontSize));
+      els.forEach((e, i) => e.style.setProperty('font-size', fs[i] * 1.6 + 'px'));
+      window.dispatchEvent(new Event('resize'));
+      await new Promise((r) => setTimeout(r, 200));
+      const ad = document.querySelector('.brand-name').getBoundingClientRect();
+      const pill = document.querySelector('.pill').getBoundingClientRect();
+      return { gap, inside: sp[0].left >= nr.left && sp[5].right <= nr.right, fit: nav.style.getPropertyValue('--nav-fit'), adR: ad.right, pillL: pill.left, pillR: pill.right };
+    });
+    check(r.gap >= 5 && r.inside, `[${w} px, etiket ×${k}] menü etiketleri çakışmıyor (en dar aralık ${r.gap.toFixed(1)} px, --nav-fit ${r.fit || 1})`);
+    check(r.adR <= r.pillL + 0.5 && r.pillR <= w, `[${w} px, büyük yazı] uygulama adı rozetle çakışmıyor`);
+    await page.screenshot({ path: `${SHOTS}/qa-a11y-buyuk-yazi-${w}.png` });
+    await ctx.close();
+  }
+  // Masaüstü tarayıcı (kaydırma çubuğu yer kaplar): iki yan eşit, başlık kartlarla hizalı
+  {
+    const b2 = await pw.chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] });
+    const ctx = await b2.newContext({ viewport: { width: 1280, height: 800 } });
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+    const page = await ctx.newPage();
+    await page.goto(base + '?tab=araclar', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => {
+      const main = document.getElementById('main'); const mr = main.getBoundingClientRect();
+      const g = document.querySelector('.tl-group, .card, .list-btn').getBoundingClientRect();
+      const logo = document.querySelector('.brand-logo').getBoundingClientRect();
+      return { sb: main.offsetWidth - main.clientWidth, L: Math.round(g.left - mr.left), R: Math.round(mr.right - g.right), logoL: Math.round(logo.left), gL: Math.round(g.left) };
+    });
+    check(Math.abs(r.L - r.R) <= 1 && Math.abs(r.logoL - r.gL) <= 1, `[1280, görünür kaydırma çubuğu ${r.sb} px] içerik ${r.L}/${r.R}, başlık kartlarla hizalı (${r.logoL}/${r.gL})`);
+    await b2.close();
+  }
+}
+
+// ---------------------------------------------------------------- 9) kabuk dayanıklılığı
+const tidSel = (t) => `[data-testid="${t}"]`;
+const ayakta = (page) => page.evaluate(() => !!document.querySelector('.app-nav') && (document.getElementById('main')?.innerText.trim().length ?? 0) > 0);
+// a) Hata sınırı: bir sekme çökünce yalnız o sekmede sakin kart, gezinme çalışır, "Yeniden dene" kurtarır
+{
+  const ctx = await newCtx({ w: 360, h: 640 });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(base + '?tab=harita&qa-cokme=harita', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(300);
+  check(!!(await page.$(tidSel('hata-siniri'))) && !!(await page.$('.app-nav')), 'hata sınırı: çöken sekmede "Bu bölüm şu an açılamadı" kartı, menü yerinde');
+  await page.screenshot({ path: `${SHOTS}/qa-a11y-hata-siniri.png` });
+  await page.click(tidSel('nav-rehber'));
+  check(!!(await page.waitForSelector(tidSel('guide-category'), { timeout: 5000 }).catch(() => null)), 'hata sınırı: diğer sekmeler çalışıyor');
+  await page.click(tidSel('nav-harita'));
+  await page.click(tidSel('hata-yeniden'));
+  await page.waitForTimeout(400);
+  check(!(await page.$(tidSel('hata-siniri'))) && (await ayakta(page)), 'hata sınırı: "Yeniden dene" bölümü yeniden açıyor');
+  check(errs.length === 0, 'hata sınırı: yakalanan hata sayfayı düşürmüyor' + (errs.length ? ' → ' + errs.join(' | ') : ''));
+  await ctx.close();
+}
+// b) Kötü niyetli / bozuk doğrudan bağlantılar
+{
+  const ctx = await newCtx({ w: 390, h: 844 });
+  const bad = [];
+  for (const u of ['?comm=__proto__', '?comm=toString', '?tool=constructor', '?tool=__proto__', '?cat=__proto__', '?guide=constructor', '?tab=__proto__', '?guide=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E', '?tool=' + 'a'.repeat(3000)]) {
+    const page = await ctx.newPage();
+    const errs = watch(page);
+    let dialog = false;
+    page.on('dialog', (d) => { dialog = true; d.dismiss(); });
+    await page.goto(base + u, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(200);
+    if (!(await ayakta(page)) || errs.length || dialog) bad.push(u.slice(0, 40) + (errs[0] ? ' ' + errs[0] : ''));
+    await page.close();
+  }
+  check(bad.length === 0, 'bozuk doğrudan bağlantılar boş ekran ya da hata vermiyor' + (bad.length ? ' → ' + bad.join(' ; ') : ''));
+  await ctx.close();
+}
+// c) Bozuk localStorage: bütün ac.* anahtarlarına çöp yazılınca uygulama yine açılır
+{
+  // Önce gerçek anahtarları topla: her ekranı bir kez gez
+  const ctx0 = await newCtx({ w: 390, h: 844 });
+  const p0 = await ctx0.newPage();
+  const ekranlar = ['?tab=fener', '?tab=rehber', '?tab=harita', '?tab=iletisim', '?tab=kutuphane', '?tab=araclar', ...TOOLS.map((t) => '?tool=' + t), '?tool=enkaz', '?tool=enkaz-arama', '?tool=hava', ...COMM.map((c) => '?comm=' + c)];
+  for (const u of ekranlar) { await p0.goto(base + u, { waitUntil: 'networkidle' }); await p0.waitForTimeout(150); }
+  const keys = await p0.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('ac.')));
+  await ctx0.close();
+  const sabit = ['ac.settings', 'ac.downloads', 'ac.batterySaver', 'ac.yakinlar', 'ac.sonkonum', 'ac.map.waypoints.v1', 'ac.map.track.v1', 'ac.map.nav.v1', 'ac.lib.textSize', 'ac.lib.source', 'ac.lib.setler', 'ac.lib.secimTuru', 'ac.lib.history', 'ac.kurulum', 'ac.kaynak.stok.v1', 'ac.kaynak.pil.v1', 'ac.kaynak.hesap.v1', 'ac.kaynak.canta.v1', 'ac.hava.il', 'ac.guncelleme.ertele', 'ac.fenerModel', 'ac.enkaz.hedef', 'ac.comm.profile', 'ac.comm.outbox', 'ac.comm.cache', 'ac.binalar'];
+  const hepsi = [...new Set([...sabit, ...keys])];
+  for (const cop of ['{bozuk', 'null', '[1,"a",null,{}]', '{"items":5,"list":"x","v":99}']) {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await ctx.addInitScript(([ks, c]) => { if (sessionStorage.getItem('cop')) return; sessionStorage.setItem('cop', '1'); for (const k of ks) localStorage.setItem(k, c); }, [hepsi, cop]);
+    await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+    const page = await ctx.newPage();
+    const errs = [];
+    page.on('pageerror', (e) => errs.push(e.message));
+    const bos = [];
+    for (const u of ekranlar) {
+      await page.goto(base + u, { waitUntil: 'networkidle' }).catch(() => {});
+      await page.waitForTimeout(150);
+      if (!(await ayakta(page)) || (await page.$(tidSel('hata-siniri')))) bos.push(u);
+    }
+    check(bos.length === 0 && errs.length === 0, `bozuk localStorage (${hepsi.length} anahtar = ${JSON.stringify(cop)}): bütün ekranlar açılıyor` + (bos.length ? ' → boş/çöken: ' + bos.join(',') : '') + (errs.length ? ' → ' + [...new Set(errs)].slice(0, 2).join(' | ') : ''));
+    await ctx.close();
+  }
+}
+// d) Site verileri engelli (localStorage erişimi bile hata fırlatır): uygulama açılır, uyarı görünür
+{
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await ctx.addInitScript(() => {
+    const at = () => { throw new DOMException('The operation is insecure.', 'SecurityError'); };
+    Object.defineProperty(window, 'localStorage', { get: at, configurable: true });
+    Object.defineProperty(window, 'sessionStorage', { get: at, configurable: true });
+  });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(500);
+  const uyari = await page.getAttribute(tidSel('storage-warning'), 'data-problem').catch(() => null);
+  let gez = true;
+  for (const t of ['fener', 'harita', 'iletisim', 'kutuphane', 'araclar']) {
+    await page.click(tidSel('nav-' + t), { timeout: 3000 }).catch(() => (gez = false));
+    await page.waitForTimeout(200);
+    if (!(await ayakta(page))) gez = false;
+  }
+  await page.screenshot({ path: `${SHOTS}/qa-a11y-depo-engelli.png` });
+  check(uyari === 'blocked' && gez && errs.length === 0, `site verileri engelli: uygulama açılıyor, "veri saklamaya izin vermiyor" uyarısı (${uyari})` + (errs.length ? ' → ' + errs[0] : ''));
+  await ctx.close();
+}
+// e) Geri tuşu (tarayıcı geri / Android WebView.goBack → popstate): uygulama içinde geri gider
+{
+  const ctx = await newCtx({ w: 390, h: 844 });
+  const page = await ctx.newPage();
+  const errs = watch(page);
+  const ekran = () => page.evaluate(() => ({ tab: document.querySelector('[aria-current=page]')?.dataset.testid, h1: document.querySelector('#main h1')?.textContent.trim() }));
+  await page.goto(base + '?tab=fener', { waitUntil: 'networkidle' });
+  await page.click(tidSel('nav-rehber'));
+  await page.click(tidSel('guide-category'));
+  await page.waitForSelector(tidSel('category-detail'));
+  await page.click(tidSel('guide-card'));
+  await page.waitForSelector(tidSel('guide-detail'));
+  await page.goBack();
+  check(!!(await page.waitForSelector(tidSel('category-detail'), { timeout: 3000 }).catch(() => null)), 'geri: rehberden kategoriye');
+  await page.goBack();
+  await page.waitForTimeout(200);
+  check((await ekran()).h1 === 'Rehber' && (await ekran()).tab === 'nav-rehber', 'geri: kategoriden Rehber ana ekranına');
+  await page.goBack();
+  await page.waitForTimeout(200);
+  check((await ekran()).tab === 'nav-fener', 'geri: önceki sekmeye (Fener)');
+  await page.goForward();
+  await page.waitForTimeout(200);
+  check((await ekran()).tab === 'nav-rehber', 'ileri: yeniden Rehber');
+  // Uygulama içi "← Araçlar" geçmişe yeni kayıt eklemez; ardından geri araca değil önceki ekrana gider
+  await page.click(tidSel('nav-araclar'));
+  await page.click(tidSel('tool-card-pusula'));
+  await page.waitForSelector(tidSel('tool-pusula'));
+  const uz = await page.evaluate(() => history.length);
+  await page.click(tidSel('tool-back'));
+  await page.waitForTimeout(300);
+  check((await page.evaluate(() => history.length)) === uz && !(await page.$(tidSel('tool-pusula'))), 'uygulama içi geri düğmesi geçmişte geri gider (yeni kayıt yok)');
+  await page.goBack();
+  await page.waitForTimeout(200);
+  check((await ekran()).tab === 'nav-rehber' && !(await page.$(tidSel('tool-pusula'))), 'ardından geri: araca dönmüyor, önceki sekmeye gidiyor');
+  check(errs.length === 0, 'geri tuşu akışında konsol hatası yok' + (errs.length ? ' → ' + errs.join(' | ') : ''));
+  await ctx.close();
+}
+// e2) Katmanlar (büyük gösterim, harita sayfası, PDF okuyucu, model paneli): geri tuşu önce katmanı kapatır
+{
+  const ctx = await newCtx({ w: 390, h: 844 });
+  const page = await ctx.newPage();
+  const errs = watch(page);
+  const durum = () => page.evaluate(() => ({ big: !!document.querySelector('[data-testid="sz-bigview"]'), tab: document.querySelector('[aria-current=page]')?.dataset.testid, sozluk: !!document.querySelector('[data-testid^="sz-big-"]') }));
+  // İlk ekranda (geride kayıt yok): koruma kaydı sayesinde geri uygulamadan çıkmaz
+  await page.goto(base + '?tool=sozluk', { waitUntil: 'networkidle' });
+  await page.click('[data-testid^="sz-big-"]');
+  await page.waitForSelector(tidSel('sz-bigview'));
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(400);
+  let d = await durum();
+  check(!d.big && d.sozluk && d.tab === 'nav-araclar', 'geri: ilk ekranda büyük gösterim kapanır, sözlükte kalınır ' + JSON.stringify(d));
+  // Düğmeyle kapatınca koruma kaydı kalmaz
+  const L = await page.evaluate(() => history.length);
+  await page.click('[data-testid^="sz-big-"]');
+  await page.waitForSelector(tidSel('sz-bigview'));
+  await page.click(tidSel('sz-big-close'));
+  await page.waitForTimeout(400);
+  check((await page.evaluate(() => history.length)) <= L + 1 && !(await durum()).big, 'büyük gösterim düğmeyle kapanır');
+  // Başka ekranda katman: geri ekranı değiştirmez, sonraki geri önceki ekrana döner
+  // (yeni sayfa: Rehber → Araçlar listesi → Sözlük; önceki ekranlar farklı)
+  const page2 = await ctx.newPage();
+  page2.on('pageerror', (e) => errs.push('pageerror: ' + e.message));
+  const durum2 = () => page2.evaluate(() => ({ big: !!document.querySelector('[data-testid="sz-bigview"]'), tab: document.querySelector('[aria-current=page]')?.dataset.testid, sozluk: !!document.querySelector('[data-testid^="sz-big-"]'), liste: !!document.querySelector('[data-testid="tool-card-sozluk"]') }));
+  await page2.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+  await page2.click(tidSel('nav-araclar'));
+  await page2.click(tidSel('tool-card-sozluk'));
+  await page2.click('[data-testid^="sz-big-"]');
+  await page2.waitForSelector(tidSel('sz-bigview'));
+  await page2.evaluate(() => history.back());
+  await page2.waitForTimeout(400);
+  d = await durum2();
+  check(!d.big && d.sozluk, 'geri: büyük gösterim kapanır, ekran değişmez ' + JSON.stringify(d));
+  await page2.evaluate(() => history.back());
+  await page2.waitForTimeout(400);
+  d = await durum2();
+  check(!d.sozluk && d.liste && d.tab === 'nav-araclar', 'sonraki geri: araç listesine ' + JSON.stringify(d));
+  check(errs.length === 0, 'katman geri akışında konsol hatası yok' + (errs.length ? ' → ' + errs.join(' | ') : ''));
+  await ctx.close();
+}
+// f) Kurulum ("Hazırlanalım") penceresi: odak içeride, arka plan erişilmez, geri tuşu kapatır
+{
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+  const page = await ctx.newPage();
+  const errs = watch(page);
+  await page.goto(base + '?kurulum=1', { waitUntil: 'networkidle' });
+  await page.waitForSelector(tidSel('kurulum'));
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.activeElement?.id === 'ku-title'), 'kurulum: açılınca odak pencere başlığında');
+  check(await page.evaluate(() => document.getElementById('main').inert === true && document.querySelector('.app-nav').inert === true), 'kurulum: arkadaki uygulama inert');
+  let disari = 0;
+  for (let i = 0; i < 16; i++) {
+    await page.keyboard.press('Tab');
+    if (await page.evaluate(() => { const a = document.activeElement; return !!a && a !== document.body && !a.closest('[data-testid="kurulum"]'); })) disari++;
+  }
+  check(disari === 0, 'kurulum: Tab tuşu pencerenin dışına çıkmıyor');
+  await page.goBack();
+  await page.waitForTimeout(300);
+  check(!(await page.$(tidSel('kurulum'))) && (await page.evaluate(() => localStorage.getItem('ac.kurulum'))) === '1' && (await page.evaluate(() => document.getElementById('main').inert === false)), 'kurulum: geri tuşu pencereyi kapatıyor, bir daha kendiliğinden açılmıyor');
+  check(errs.length === 0, 'kurulum akışında konsol hatası yok' + (errs.length ? ' → ' + errs.join(' | ') : ''));
+  await ctx.close();
+}
+// g) Açılış ekranı ve dış istekler (çevrimiçi gezinti)
+{
+  const html = await (await fetch(base)).text();
+  check(/id="acilis"/.test(html) && /name="color-scheme" content="dark"/.test(html) && /viewport-fit=cover/.test(html), 'index.html: açılış ekranı, koyu renk düzeni, viewport-fit=cover');
+  const ctx = await newCtx({ w: 390, h: 844 });
+  const external = [];
+  ctx.on('request', (r) => { const u = r.url(); if (!u.startsWith(ORIGIN) && !/^(data|blob):/.test(u)) external.push(u); });
+  const page = await ctx.newPage();
+  await page.goto(base, { waitUntil: 'networkidle' });
+  check(!(await page.$('#acilis')), 'açılış ekranı uygulama çizilince kalkıyor');
+  for (const t of ['fener', 'rehber', 'harita', 'iletisim', 'kutuphane', 'araclar']) { await page.click(tidSel('nav-' + t)); await page.waitForTimeout(600); }
+  const bad = external.filter((u) => !ALLOWED_EXTERNAL.some((a) => u.startsWith(a)));
+  check(bad.length === 0, 'çevrimiçi gezintide katalog dışında dış istek yok' + (bad.length ? ' → ' + [...new Set(bad)].join(', ') : ''));
+  if (external.length) console.log('     (bilgi: kendiliğinden dış istek — src/lib/packs-ui.tsx usePackRows → refreshRemoteManifest: ' + [...new Set(external)].join(', ') + ')');
   await ctx.close();
 }
 

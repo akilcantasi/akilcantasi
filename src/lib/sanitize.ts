@@ -11,8 +11,36 @@ const ALLOW_TAGS = new Set(
 );
 const ALLOW_ATTRS = new Set('id,class,title,lang,dir,alt,colspan,rowspan,scope,headers,start,reversed,type,width,height,datetime,cite,open,href,src,data-src'.split(','));
 
+/**
+ * Makaledeki kimliklerin öneki. Makale uygulamanın kendi belgesine eklendiği için
+ * id="main", id="app" ya da id="Capacitor" gibi kimlikler uygulamanın öğeleriyle ve
+ * window.<ad> genel adlarıyla çakışabilir (DOM clobbering); önek bunu önler.
+ */
+export const ZIM_ID_PREFIX = 'zim-';
+
+/**
+ * Makale sınıflarından yalnız biçimlendirmede kullanılanlar kalır (mw-editsection, noprint…).
+ * Diğerleri uygulamanın kendi sınıflarıyla (ör. tam ekran katmanlar) çakışıp arayüzü
+ * örtebilirdi; ZIM'in kendi CSS'i zaten yüklenmez.
+ */
+export function keepClasses(v: string): string {
+  return v
+    .split(/\s+/)
+    .filter((c) => /^mw-[A-Za-z0-9_-]+$/.test(c) || c === 'noprint')
+    .join(' ');
+}
+
+/** Boşlukla ayrılmış kimlik listesine önek ekler (id, headers) */
+function prefixIds(v: string): string {
+  return v
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((x) => ZIM_ID_PREFIX + x)
+    .join(' ');
+}
+
 /** Yalnızca #çapa, göreli yol ya da http(s) bağlantılarına izin verir (tarayıcının yok saydığı boşluk/kontrol karakterleri dahil denetlenir). */
-function safeUrl(v: string): boolean {
+export function safeUrl(v: string): boolean {
   const clean = v.replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
   const m = /^([a-z][a-z0-9+.-]*):/i.exec(clean);
   return !m || /^https?$/i.test(m[1]);
@@ -44,6 +72,14 @@ export function sanitize(html: string, lib: Pick<ZimArchive, 'resolveLink'>, pat
         if (!ALLOW_ATTRS.has(n)) el.removeAttribute(a.name);
         else if ((n === 'href' || n === 'src' || n === 'data-src' || n === 'cite') && !safeUrl(a.value)) {
           if (!(tag === 'img' && /^data:image\//i.test(a.value.trim()))) el.removeAttribute(a.name);
+        } else if (n === 'id' || n === 'headers') {
+          const v = n === 'id' ? (a.value ? ZIM_ID_PREFIX + a.value : '') : prefixIds(a.value);
+          if (v) el.setAttribute(a.name, v);
+          else el.removeAttribute(a.name);
+        } else if (n === 'class') {
+          const v = keepClasses(a.value);
+          if (v) el.setAttribute(a.name, v);
+          else el.removeAttribute(a.name);
         }
       }
     }
@@ -64,7 +100,9 @@ export function sanitize(html: string, lib: Pick<ZimArchive, 'resolveLink'>, pat
       } catch {
         /* olduğu gibi */
       }
-      if (!id || !doc.getElementById(id)) a.removeAttribute('href');
+      // Kimlikler önekli: çapa da önekli kimliğe gider (tıklama işleyicisi href'i çözüp arar)
+      if (!id || !doc.getElementById(ZIM_ID_PREFIX + id)) a.removeAttribute('href');
+      else a.setAttribute('href', '#' + encodeURIComponent(ZIM_ID_PREFIX + id));
       return;
     }
     const target = lib.resolveLink(path, href);

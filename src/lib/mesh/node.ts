@@ -71,6 +71,18 @@ interface PeerState {
 }
 
 const MAX_TTL = Math.max(...Object.values(TTL_MS));
+/**
+ * Komşu başına "bildiği" kimliklerin üst sınırı. Kötü niyetli bir komşu sürekli rastgele
+ * kimliklerle "have" gönderip belleği sınırsız büyütemesin; eskiler unutulur (en kötü
+ * ihtimalle bir mesaj o komşuya ikinci kez gider, kopyayı o zaten atar).
+ */
+export const MAX_KNOWN_PER_PEER = 5000;
+
+function know(p: PeerState, id: string) {
+  p.known.delete(id);
+  p.known.add(id);
+  if (p.known.size > MAX_KNOWN_PER_PEER) p.known.delete(p.known.values().next().value as string);
+}
 
 export class MeshNode {
   readonly nodeId: string;
@@ -191,7 +203,7 @@ export class MeshNode {
       case 'have': {
         const missing: string[] = [];
         for (const id of f.ids) {
-          p.known.add(id);
+          know(p, id);
           if (!this.store.has(id) && !this.seen.has(id)) missing.push(id);
         }
         for (const fr of idFrames('want', missing)) this.sendRaw(peer, fr);
@@ -208,8 +220,11 @@ export class MeshNode {
       }
       case 'msgs': {
         let any = false;
+        // Aktarılacaklar tek tek değil, çerçeve başına toplu itilir: 500 iletiyi tek tek göndermek
+        // komşunun gelen çerçeve sınırına (MeshPeer: 120 + 20/sn) takılıp iletilerin düşmesine yol açar.
+        const aktar: MeshMessage[] = [];
         for (const m of f.ms) {
-          p.known.add(m.id);
+          know(p, m.id);
           if (this.store.has(m.id) || this.seen.has(m.id)) {
             this.stats.duplicates++;
             continue;
@@ -230,8 +245,9 @@ export class MeshNode {
               /* dinleyici hatası protokolü bozmasın */
             }
           }
-          this.push(local, peer);
+          aktar.push(local);
         }
+        this.pushMany(aktar, peer);
         if (any) this.changed();
         return;
       }
@@ -312,10 +328,17 @@ export class MeshNode {
 
   /** Mesajı, bilmeyen bağlı komşulara it */
   private push(m: MeshMessage, except: string | null) {
-    if (!isForwardable(m, this.now())) return;
+    this.pushMany([m], except);
+  }
+
+  /** Mesajları, bilmeyen bağlı komşulara toplu it (komşu başına en az çerçeve) */
+  private pushMany(ms: MeshMessage[], except: string | null) {
+    const now = this.now();
+    const ileri = ms.filter((m) => isForwardable(m, now));
+    if (!ileri.length) return;
     for (const [peer, p] of this.peers) {
-      if (peer === except || p.known.has(m.id)) continue;
-      this.sendMessages(peer, [m]);
+      if (peer === except) continue;
+      this.sendMessages(peer, ileri.filter((m) => !p.known.has(m.id)));
     }
   }
 
@@ -325,7 +348,7 @@ export class MeshNode {
     for (const frame of packMessages(ms, this.maxFrameBytes)) {
       // Çerçevedeki kimlikleri "biliyor" say; gönderim başarısızsa geri al
       const ids = (JSON.parse(frame).ms as MeshMessage[]).map((m) => m.id);
-      if (p) for (const id of ids) p.known.add(id);
+      if (p) for (const id of ids) know(p, id);
       this.sendRaw(peer, frame, ids);
     }
   }

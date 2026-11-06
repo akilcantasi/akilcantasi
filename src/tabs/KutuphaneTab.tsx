@@ -22,7 +22,7 @@ import { IconBook, IconChat } from '../icons';
 import { sanitize } from '../lib/sanitize';
 import { loadNautilus, type NautilusBook } from '../lib/zim/nautilus';
 import { LibraryStore, MAGAZA_CSS } from './KutuphaneMagaza';
-import { ArticleTranslate, TRANSLATE_CSS } from './KutuphaneCeviri';
+import { ArticleTranslate, TRANSLATE_CSS, isTurkishLang } from './KutuphaneCeviri';
 import { PdfOkuyucu } from './PdfOkuyucu';
 
 const CSS_BASE = `
@@ -38,12 +38,14 @@ const CSS_BASE = `
 .kt-srcrow-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .kt-srcrow-name { font-weight: 600; font-size: 15px; }
 .kt-srcrow-sub { font-size: 12px; color: var(--muted); }
-.kt-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; margin: 0 -18px; padding-left: 18px; padding-right: 18px; }
+.kt-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; margin: 0 calc(-1 * var(--pad-x, 18px)); padding-left: var(--pad-x, 18px); padding-right: var(--pad-x, 18px); }
 .kt-chips::-webkit-scrollbar { display: none; }
 .kt-chips .chip { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .kt-chip-n { font-family: var(--mono); font-size: 11px; opacity: 0.75; }
 /* Rafım: yüklü kaynaklar kapak kutucukları olarak (dokununca arama o kaynakla sınırlanır) */
-.kt-covers { gap: 10px; }
+/* Üst/alt pay: seçili kutucuğun dış çizgisi (outline) kaydırma kabında kırpılmasın */
+.kt-covers { gap: 10px; padding-top: 4px; padding-bottom: 4px; margin-top: -4px; margin-bottom: -4px; }
+.kt-cover-t { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; max-width: 100%; }
 .kt-covers .chip { min-height: 76px; width: 108px; flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 2px; border-radius: 14px; padding: 10px 11px; white-space: normal; text-align: left; font-size: 13.5px; font-weight: 600; line-height: 1.2; color: #fff; border: 1px solid rgba(255,255,255,0.1); background: linear-gradient(160deg, #2f4a72, #22385a); }
 .kt-covers .chip:nth-child(5n+2) { background: linear-gradient(160deg, #1f5f5b, #174845); }
 .kt-covers .chip:nth-child(5n+3) { background: linear-gradient(160deg, #7a3b2e, #5c2c22); }
@@ -64,17 +66,22 @@ const CSS_BASE = `
 .kt-hist { display: flex; flex-wrap: wrap; gap: 8px; }
 .kt-hist .chip { min-height: 44px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .kt-back { min-height: 44px; background: var(--glass); border: 1px solid var(--glass-line); border-radius: 999px; color: var(--accent2); font-size: 14px; font-weight: 500; padding: 0 14px; text-align: left; }
-.kt-bar { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-direction: column; gap: 8px; padding: 8px 18px; margin: -14px -18px 0; border-bottom: 1px solid var(--line); }
-.kt-bar-row { display: flex; align-items: center; gap: 6px; }
+.kt-bar { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; flex-direction: column; gap: 8px; padding: 8px var(--pad-x, 18px); margin: -14px calc(-1 * var(--pad-x, 18px)) 0; border-bottom: 1px solid var(--line); }
+.kt-bar.kt-bar-flat { position: relative; }
+/* Dar ekranda / büyük yazıda düğme grubu alt satıra iner (geri düğmesi ezilmesin) */
+.kt-bar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kt-bar-row .kt-back { flex: 1 1 110px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 380px) { .kt-back-long { display: none; } }
+.kt-bar-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .kt-ibtn { min-width: 44px; min-height: 44px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; font-size: 14px; font-weight: 600; }
 .kt-ibtn:disabled { opacity: 0.35; }
 .kt-ibtn[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); }
-.kt-find { display: flex; align-items: center; gap: 6px; }
-.kt-find .input { height: 44px; }
+.kt-find { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kt-find .input { height: 44px; flex: 1 1 110px; }
 .kt-find-n { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 52px; text-align: center; }
 .kt-title { font-size: 26px; font-weight: 600; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
 .kt-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
-.kt-hero { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px; }
+.kt-hero { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
 .kt-hero h2 { margin: 0; font-size: 22px; font-weight: 600; }
 .kt-hero p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text2); }
 .kt-manage { color: var(--accent2); font-weight: 500; }
@@ -94,6 +101,8 @@ const CSS_BASE = `
 .kt-body a[data-ext] { color: var(--blue); }
 .kt-body a:not([href]) { color: inherit; }
 .kt-file, .kt-books { display: flex; flex-direction: column; gap: 10px; }
+.kt-file > p, .kt-books > p { margin: 0; }
+.kt-file .row, .kt-book .row { flex-wrap: wrap; }
 .kt-book-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .kt-book { padding: 12px; border-radius: 12px; background: var(--bg2); border: 1px solid var(--line2); display: flex; flex-direction: column; gap: 4px; }
 .kt-book-title { font-weight: 700; font-size: 15px; }
@@ -237,7 +246,9 @@ export function KutuphaneTab() {
 
   useEffect(() => {
     let alive = true;
-    setSources(undefined);
+    // Paket listesi değişince (bir indirme bitti, paket silindi) eski liste yenisi gelene kadar
+    // görünür kalır: görünümü "açılıyor…" ile değiştirmek kaydırmayı, açık koleksiyonu ve
+    // "Yönet" panelini her indirme bitişinde sıfırlıyordu.
     getLibraries()
       .then((l) => alive && setSources(l))
       .catch(() => alive && setSources([]));
@@ -470,7 +481,7 @@ function SearchView({ sources }: { sources: LibrarySource[] }) {
               title={src.title}
               onClick={() => chooseSource(src.id)}
             >
-              {src.label}
+              <span class="kt-cover-t">{src.label}</span>
             </button>
           ))}
         </div>
@@ -661,11 +672,15 @@ export function isFilePath(p: string): boolean {
   return FILE_EXT.test(p.split(/[?#]/)[0]);
 }
 
-/**
- * Arşivdeki dosyayı tarayıcının kendi görüntüleyicisinde (PDF, video…) açar; olmazsa indirir.
- * Pencere tıklamayla aynı anda açılır (açılır pencere izni dokunmadan sonraki birkaç saniyeyle
- * sınırlıdır; büyük PDF arşivden bundan uzun sürede okunabilir), dosya hazır olunca içine yüklenir.
- */
+/** Bozuk % kodlamasında hata atmayan decodeURIComponent */
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
 /** Arşivdeki dosyanın baytlarını okur (uygulama içi PDF okuyucu için) */
 async function readZimFile(zim: LibrarySource['zim'], path: string): Promise<Uint8Array | null> {
   const r = await zim.getResource(path).catch(() => null);
@@ -693,8 +708,13 @@ export function guvenliAcmaTuru(mime: string | undefined, path: string): string 
   return null;
 }
 
+/**
+ * Arşivdeki dosyayı tarayıcının kendi görüntüleyicisinde (PDF, video…) açar; güvenli türde
+ * değilse ya da yeni pencere açılamazsa (açılır pencere izni dokunmadan sonraki birkaç saniyeyle
+ * sınırlıdır; büyük dosya arşivden daha uzun sürede okunabilir) indirir.
+ */
 async function openZimFile(zim: LibrarySource['zim'], path: string, download = false): Promise<boolean> {
-  const name = decodeURIComponent(path.split('/').pop() || 'dosya');
+  const name = safeDecode(path.split('/').pop() || 'dosya');
   // Güvenli türde değilse açılmaz, indirilir (bkz. guvenliAcmaTuru)
   const peek = await zim.getResource(path).catch(() => null);
   const tur = peek ? guvenliAcmaTuru(peek.mime, path) : null;
@@ -736,6 +756,8 @@ function ArticleView({ refStr }: { refStr: string }) {
   const [state, setLocal] = useState<ArticleState>({ status: 'loading' });
   const [size, setSize] = useState(() => Math.min(2, Math.max(0, Number(lsGet(LS_SIZE)) || 0)));
   const [findOpen, setFindOpen] = useState(false);
+  /** PDF okuyucu açık mı (FileCard / BookList bildirir) */
+  const [reader, setReader] = useState(false);
   // Arama kutusu açılınca odak kutuya (DOM'a eklendiği anda; boyamayı beklemeden)
   useLayoutEffect(() => {
     if (findOpen) findRef.current?.focus();
@@ -773,11 +795,12 @@ function ArticleView({ refStr }: { refStr: string }) {
         if (!x) return setLocal({ status: 'missing' });
         const { r, a, books } = x;
         if (!a) {
-          const name = decodeURIComponent(r.path.split('/').pop() || r.path);
+          const name = safeDecode(r.path.split('/').pop() || r.path);
           return setLocal({ status: 'file', src: r.source, title: name, path: r.path, mime: '' });
         }
         if (books) return setLocal({ status: 'books', src: r.source, title: r.source.title, path: a.path, books });
-        if (!a.mime.startsWith('text/') && !/json|xml|javascript/.test(a.mime)) {
+        // Görseller (SVG dahil: türünde "xml" geçer) metin olarak değil dosya olarak gösterilir
+        if (a.mime.startsWith('image/') || (!a.mime.startsWith('text/') && !/json|xml|javascript/.test(a.mime))) {
           return setLocal({ status: 'file', src: r.source, title: a.title || a.path, path: a.path, mime: a.mime });
         }
         const isHtml = a.mime.startsWith('text/html');
@@ -865,7 +888,11 @@ function ArticleView({ refStr }: { refStr: string }) {
     const zp = a.getAttribute('data-zim-path');
     if (zp) {
       e.preventDefault();
-      if (isFilePath(zp)) void openZimFile(state.src.zim, zp);
+      // PDF'ler uygulama içi okuyucuda açılır (dosya kartı üzerinden); yeni pencere Android
+      // WebView'da açılmıyordu. Öteki dosyalar eskisi gibi cihazın görüntüleyicisinde.
+      const bare = zp.split(/[?#]/)[0];
+      if (/\.pdf$/i.test(bare)) go.article(makeRef(state.src.id, bare));
+      else if (isFilePath(zp)) void openZimFile(state.src.zim, zp);
       else go.article(makeRef(state.src.id, zp));
       return;
     }
@@ -887,42 +914,52 @@ function ArticleView({ refStr }: { refStr: string }) {
   const fwd = () => canFwd && go.article(nav.stack[nav.idx + 1]);
   const sizeLabel = ['Normal', 'Büyük', 'Çok büyük'][size];
 
+  // Sayfada bul ve yazı boyutu yalnız makale metninde işe yarar (PDF, dosya, kitap listesinde değil)
+  const isText = state.status === 'ok';
+
   return (
     <article class="pad" data-testid="lib-article" aria-labelledby="kt-title">
-      <div class="kt-bar">
+      {/* PDF okuyucunun kendi yapışkan çubuğu var: ikisi üst üste binmesin diye bu çubuk o sırada kayar */}
+      <div class={'kt-bar' + (reader ? ' kt-bar-flat' : '')} data-testid="lib-bar-top">
         <div class="kt-bar-row">
-          <button class="kt-back grow" data-testid="lib-back" onClick={close}>
-            ← Sonuçlara dön
+          <button class="kt-back" data-testid="lib-back" aria-label="Sonuçlara dön" onClick={close}>
+            {/* Dar ekranda "← Sonuçlar" (iki satıra bölünmesin) */}← Sonuçlar<span class="kt-back-long">a dön</span>
           </button>
-          <button class="kt-ibtn" data-testid="lib-nav-back" aria-label="Önceki makale" disabled={!canBack} onClick={back}>
-            <IcoLeft />
-          </button>
-          <button class="kt-ibtn" data-testid="lib-nav-fwd" aria-label="Sonraki makale" disabled={!canFwd} onClick={fwd}>
-            <IcoRight />
-          </button>
-          <button
-            class="kt-ibtn"
-            data-testid="lib-find-toggle"
-            aria-label="Sayfada bul"
-            aria-pressed={findOpen}
-            onClick={() => {
-              setFindOpen(!findOpen);
-            }}
-          >
-            <IcoFind />
-          </button>
-          <button
-            class="kt-ibtn"
-            data-testid="lib-textsize"
-            aria-label={`Yazı boyutu: ${sizeLabel}`}
-            title={`Yazı boyutu: ${sizeLabel}`}
-            aria-pressed={size > 0}
-            onClick={changeSize}
-          >
-            Aa{size === 0 ? '' : size === 1 ? '+' : '++'}
-          </button>
+          <span class="kt-bar-tools">
+            <button class="kt-ibtn" data-testid="lib-nav-back" aria-label="Önceki makale" disabled={!canBack} onClick={back}>
+              <IcoLeft />
+            </button>
+            <button class="kt-ibtn" data-testid="lib-nav-fwd" aria-label="Sonraki makale" disabled={!canFwd} onClick={fwd}>
+              <IcoRight />
+            </button>
+            {isText && (
+              <button
+                class="kt-ibtn"
+                data-testid="lib-find-toggle"
+                aria-label="Sayfada bul"
+                aria-pressed={findOpen}
+                onClick={() => {
+                  setFindOpen(!findOpen);
+                }}
+              >
+                <IcoFind />
+              </button>
+            )}
+            {isText && (
+              <button
+                class="kt-ibtn"
+                data-testid="lib-textsize"
+                aria-label={`Yazı boyutu: ${sizeLabel}`}
+                title={`Yazı boyutu: ${sizeLabel}`}
+                aria-pressed={size > 0}
+                onClick={changeSize}
+              >
+                Aa{size === 0 ? '' : size === 1 ? '+' : '++'}
+              </button>
+            )}
+          </span>
         </div>
-        {findOpen && (
+        {findOpen && isText && (
           <div class="kt-find" role="search">
             <input
               ref={findRef}
@@ -943,15 +980,17 @@ function ArticleView({ refStr }: { refStr: string }) {
             <span class="kt-find-n" data-testid="lib-find-count" aria-live="polite">
               {findQ.trim() ? (findN ? `${findCur + 1}/${findN}` : '0') : ''}
             </span>
-            <button class="kt-ibtn" data-testid="lib-find-prev" aria-label="Önceki eşleşme" disabled={!findN} onClick={() => step(-1)}>
-              <IcoUp />
-            </button>
-            <button class="kt-ibtn" data-testid="lib-find-next" aria-label="Sonraki eşleşme" disabled={!findN} onClick={() => step(1)}>
-              <IcoDown />
-            </button>
-            <button class="kt-ibtn" data-testid="lib-find-close" aria-label="Bulmayı kapat" onClick={closeFind}>
-              <IcoX />
-            </button>
+            <span class="kt-bar-tools">
+              <button class="kt-ibtn" data-testid="lib-find-prev" aria-label="Önceki eşleşme" disabled={!findN} onClick={() => step(-1)}>
+                <IcoUp />
+              </button>
+              <button class="kt-ibtn" data-testid="lib-find-next" aria-label="Sonraki eşleşme" disabled={!findN} onClick={() => step(1)}>
+                <IcoDown />
+              </button>
+              <button class="kt-ibtn" data-testid="lib-find-close" aria-label="Bulmayı kapat" onClick={closeFind}>
+                <IcoX />
+              </button>
+            </span>
           </div>
         )}
       </div>
@@ -995,16 +1034,25 @@ function ArticleView({ refStr }: { refStr: string }) {
           <ArticleBody html={state.html} size={size} bodyRef={bodyRef} onClick={onClick} />
         </>
       )}
-      {state.status === 'file' && <FileCard src={state.src} title={state.title} path={state.path} />}
-      {state.status === 'books' && <BookList src={state.src} books={state.books} />}
+      {state.status === 'file' && <FileCard key={state.path} src={state.src} title={state.title} path={state.path} onReader={setReader} />}
+      {state.status === 'books' && <BookList key={state.path} src={state.src} books={state.books} onReader={setReader} />}
     </article>
   );
 }
 
-function FileCard({ src, title, path }: { src: LibrarySource; title: string; path: string }) {
+/** PDF okuyucunun açık olduğunu üst bileşene bildirir (kapanınca ve bileşen gidince false) */
+function useReaderFlag(open: boolean, onReader?: (open: boolean) => void) {
+  useEffect(() => {
+    onReader?.(open);
+    return () => onReader?.(false);
+  }, [open]);
+}
+
+function FileCard({ src, title, path, onReader }: { src: LibrarySource; title: string; path: string; onReader?: (open: boolean) => void }) {
   const [msg, setMsg] = useState('');
   const pdf = /\.pdf$/i.test(path);
   const [reading, setReading] = useState(pdf);
+  useReaderFlag(pdf && reading, onReader);
   const run = async (download: boolean) => {
     setMsg('Hazırlanıyor…');
     const ok = await openZimFile(src.zim, path, download);
@@ -1044,17 +1092,25 @@ function FileCard({ src, title, path }: { src: LibrarySource; title: string; pat
 }
 
 /** Nautilus kitaplığı (zimgit) kitap listesi: başlık, yazar, açıklama; PDF'ler dosya olarak açılır. */
-function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] }) {
+function BookList({ src, books, onReader }: { src: LibrarySource; books: NautilusBook[]; onReader?: (open: boolean) => void }) {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [reading, setReading] = useState<{ book: NautilusBook; file: string } | null>(null);
+  useReaderFlag(!!reading, onReader);
+  /** Kitap açılırken listenin kaydırma konumu (okuyucu kapanınca geri dönülür) */
+  const listY = useRef(0);
   const fq = foldCharwise(q.trim());
   const shown = fq
     ? books.filter((b) => foldCharwise(`${b.title} ${b.author} ${b.description}`).includes(fq))
     : books;
+  const allPdf = books.length > 0 && books.every((b) => b.files.every((f) => /\.pdf$/i.test(f)));
+  const turkish = isTurkishLang(src.language);
   const open = async (b: NautilusBook, f: string) => {
     if (/\.pdf$/i.test(f)) {
+      // Okuyucu belgenin başından açılsın (liste aşağı kaydırılmış olabilir)
+      listY.current = document.getElementById('main')?.scrollTop ?? 0;
       setReading({ book: b, file: f });
+      scrollTop();
       return;
     }
     setBusy(b.id + f);
@@ -1070,7 +1126,11 @@ function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] })
         language={src.language}
         docKey={src.id + '/' + reading.file}
         load={() => readZimFile(src.zim, reading.file)}
-        onClose={() => setReading(null)}
+        onClose={() => {
+          const y = listY.current;
+          setReading(null);
+          requestAnimationFrame(() => document.getElementById('main')?.scrollTo({ top: y }));
+        }}
       />
     );
   }
@@ -1110,7 +1170,12 @@ function BookList({ src, books }: { src: LibrarySource; books: NautilusBook[] })
         ))}
       </ul>
       {!shown.length && <p class="empty">Eşleşen kitap yok.</p>}
-      <p class="muted kt-small">Kitaplar İngilizce PDF belgeleridir; uygulamanın içinde açılır, içlerinde arama yapılabilir ve sayfalar Fener ile Türkçeye çevrilebilir.</p>
+      {allPdf && (
+        <p class="muted kt-small">
+          {src.languageName && !turkish ? `Kitaplar ${src.languageName} PDF belgeleridir` : 'Kitaplar PDF belgeleridir'}; uygulamanın içinde açılır ve içlerinde arama
+          yapılabilir{turkish ? '.' : '; sayfalar Fener ile Türkçeye çevrilebilir.'}
+        </p>
+      )}
     </div>
   );
 }

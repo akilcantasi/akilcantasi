@@ -11,7 +11,7 @@
 //   ön makaleler listesi X/listing/titleOrdered/v1 içinde tutulur.
 import { HttpRangeSource, type RandomAccessSource } from '../source';
 import { LRU, PagedReader, u16, u32, u64 } from './cache';
-import { decompress } from './decompress';
+import { decompress, MAX_CLUSTER_BYTES } from './decompress';
 import { caseVariants, foldTr } from './text';
 import { GlassDb } from './xapian';
 
@@ -61,6 +61,15 @@ const REDIRECT = 0xffff;
 const LINKTARGET = 0xfffe;
 const DELETED = 0xfffd;
 const NONE = 0xffffffff;
+/**
+ * Tek bir blob için üst sınır (bayt). Arşivdeki ofset tablosu bozuk ya da kötü niyetliyse
+ * gigabaytlarca bellek ayrılıp sekme çökmesin; gerçek ZIM'lerde en büyük bloblar (video,
+ * PDF) bunun çok altındadır. Xapian dizinleri blob olarak okunmaz (blobLocation).
+ */
+export const MAX_BLOB_BYTES = 256 * 1024 * 1024;
+
+/** Taşmasız orta nokta: (a + b) >>> 1 2^32'yi aşan sınırlarda yanlış sonuç verip döngüyü sonsuz yapabilirdi */
+const mid = (a: number, b: number) => Math.floor((a + b) / 2);
 
 const utf8 = new TextDecoder('utf-8');
 
@@ -126,6 +135,16 @@ export class ZimArchive {
     if (header.majorVersion !== 5 && header.majorVersion !== 6) {
       throw new Error(`Desteklenmeyen ZIM sürümü: ${header.majorVersion}.${header.minorVersion}`);
     }
+    // İşaretçi listeleri dosyanın içinde olmalı: bozuk başlık sonradan dev döngülere,
+    // dosya dışı okumalara yol açmasın
+    const size = reader.size;
+    if (
+      header.urlPtrPos + header.entryCount * 8 > size ||
+      header.clusterPtrPos + header.clusterCount * 8 > size ||
+      header.mimeListPos >= size
+    ) {
+      throw new Error('Bozuk ZIM dosyası (başlık dosya boyutuyla uyuşmuyor)');
+    }
     // MIME listesi: boş dizeyle biten, null ile ayrılmış dizeler
     const mimes: string[] = [];
     let pos = header.mimeListPos;
@@ -173,7 +192,8 @@ export class ZimArchive {
   // ---------------------------------------------------------------- dizin
 
   async direntAt(index: number): Promise<ZimDirent> {
-    if (index < 0 || index >= this.header.entryCount) throw new Error('Geçersiz girdi: ' + index);
+    // NaN (dosya dışından okunan bozuk işaretçi) da reddedilir
+    if (!(index >= 0 && index < this.header.entryCount)) throw new Error('Geçersiz girdi: ' + index);
     let p = this.dirents.get(index);
     if (!p) {
       p = this.readDirent(index);
@@ -216,12 +236,12 @@ export class ZimArchive {
     let lo = 0;
     let hi = this.header.entryCount;
     while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      const d = await this.direntAt(mid);
+      const m = mid(lo, hi);
+      const d = await this.direntAt(m);
       const c = d.ns === ns ? cmp(d.url, url) : cmp(d.ns, ns);
       if (c === 0) return d;
-      if (c < 0) lo = mid + 1;
-      else hi = mid;
+      if (c < 0) lo = m + 1;
+      else hi = m;
     }
     return null;
   }
@@ -246,7 +266,11 @@ export class ZimArchive {
   private decompressed(c: number, start: number, end: number, comp: number): Promise<Uint8Array> {
     let p = this.clusters.get(c);
     if (!p) {
-      p = this.reader.readRaw(start + 1, end - start - 1).then((raw) => decompress(comp, raw));
+      const len = end - start - 1;
+      p =
+        len < 0 || len > MAX_CLUSTER_BYTES
+          ? Promise.reject(new Error('Bozuk küme: ' + c))
+          : this.reader.readRaw(start + 1, len).then((raw) => decompress(comp, raw));
       p.catch(() => this.clusters.delete(c));
       this.clusters.set(c, p);
     }
@@ -268,6 +292,7 @@ export class ZimArchive {
       const offs = await this.reader.read(base + blob * osz, osz * 2);
       const a = rd(offs, 0);
       const b = rd(offs, osz);
+      if (!(b >= a) || b - a > MAX_BLOB_BYTES) throw new Error('Bozuk blob');
       return this.reader.read(base + a, b - a);
     }
     const data = await this.decompressed(cluster, start, end, comp);
@@ -397,7 +422,9 @@ export class ZimArchive {
     const base = start + 1;
     const offs = await this.reader.read(base + r.blob! * osz, osz * 2);
     const a = rd(offs, 0);
-    return { offset: base + a, size: rd(offs, osz) - a };
+    const size = rd(offs, osz) - a;
+    if (!(size >= 0) || base + a + size > this.reader.size) return null;
+    return { offset: base + a, size };
   }
 
   private xapianCache = new Map<string, Promise<GlassDb | null>>();
@@ -478,12 +505,13 @@ export class ZimArchive {
             const base = start + 1;
             const offs = await this.reader.read(base + r.blob! * osz, osz * 2);
             const a = rd(offs, 0);
-            count = (rd(offs, osz) - a) / 4;
+            // Liste girdi sayısından uzun olamaz (bozuk boyut sonsuz aramaya yol açmasın)
+            count = Math.max(0, Math.min(Math.floor((rd(offs, osz) - a) / 4), this.header.entryCount));
             const abs = base + a;
             at = async (j) => u32(await this.reader.read(abs + j * 4, 4), 0);
           } else {
             const data = await this.getBlob(r.cluster!, r.blob!);
-            count = data.length / 4;
+            count = Math.min(Math.floor(data.length / 4), this.header.entryCount);
             at = async (j) => u32(data, j * 4);
           }
           this.titleList = { lo: 0, hi: count, at };
@@ -502,14 +530,14 @@ export class ZimArchive {
     let lo = 0;
     let hi = n;
     while (lo < hi) {
-      const m = (lo + hi) >>> 1;
+      const m = mid(lo, hi);
       if ((await nsAt(m)) < ns) lo = m + 1;
       else hi = m;
     }
     const start = lo;
     hi = n;
     while (lo < hi) {
-      const m = (lo + hi) >>> 1;
+      const m = mid(lo, hi);
       if ((await nsAt(m)) <= ns) lo = m + 1;
       else hi = m;
     }
@@ -525,14 +553,14 @@ export class ZimArchive {
     let a = lo;
     let b = hi;
     while (a < b) {
-      const m = (a + b) >>> 1;
+      const m = mid(a, b);
       if (cmp((await this.titleDirent(m)).title, prefix) < 0) a = m + 1;
       else b = m;
     }
     const first = a;
     b = hi;
     while (a < b) {
-      const m = (a + b) >>> 1;
+      const m = mid(a, b);
       const t = (await this.titleDirent(m)).title;
       if (cmp(t.slice(0, prefix.length), prefix) <= 0) a = m + 1;
       else b = m;

@@ -1,7 +1,7 @@
 // Fener uçtan uca kontrolü (gerçek tarayıcı, gerçek wllama):
 //   node e2e/fener-check.mjs [taban-url] [ekran-görüntüsü-klasörü]
 // Gerekenler: Vite dev sunucusu (COOP/COEP başlıklarıyla) ve
-// /__dev/tiny-test.gguf (tools/make_tiny_gguf.py ile üretilir).
+// /testdata/tiny-test.gguf (tools/make_tiny_gguf.py ile üretilir; dev sunucusu proje kökünü sunar).
 // 1) ?devmodel=… ile model modu: soru gönderilir, akış halinde token geldiği doğrulanır.
 // 2) Model olmadan rehber modu: "kanama" sorusuna rehber cevabı gelir.
 import { createRequire } from 'module';
@@ -27,7 +27,7 @@ async function open(url) {
 
 // ---- 1) Model modu --------------------------------------------------------
 {
-  const { page, errors } = await open(new URL('?devmodel=/__dev/tiny-test.gguf', base).href);
+  const { page, errors } = await open(new URL('?devmodel=/testdata/tiny-test.gguf', base).href);
   const env = await page.evaluate(() => ({ isolated: crossOriginIsolated, cores: navigator.hardwareConcurrency, mem: navigator.deviceMemory }));
   console.log('ortam:', JSON.stringify(env));
   check(env.isolated === true, 'crossOriginIsolated = true');

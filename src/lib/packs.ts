@@ -137,16 +137,31 @@ export async function openSource(pack: InstalledPack): Promise<RandomAccessSourc
   return HttpRangeSource.open(pack.url!);
 }
 
+/**
+ * Bütünüyle belleğe okunup JSON olarak ayrıştırılan paket türlerinin üst sınırı. Bozuk ya da
+ * kötü niyetli (ör. bağlı bilgi noktasının sunduğu dev bir ".rehber.json") dosya açılışta
+ * sekmeyi belleksiz bırakmasın. Resmî paketler bunun çok altındadır (rehber ~19 MB, hava ~60 KB).
+ */
+export const JSON_PACK_MAX: Partial<Record<PackKind, number>> = { rehber: 100e6, hava: 16e6 };
+
 /** Model gibi bütün olarak gereken paketler için Blob döndürür. */
 export async function openBlob(pack: InstalledPack, onProgress?: (loaded: number, total: number) => void): Promise<Blob> {
+  const max = JSON_PACK_MAX[pack.kind];
+  const tooBig = () => new Error('Paket beklenenden çok büyük: ' + pack.id);
+  if (max && pack.size > max) throw tooBig();
   if (pack.origin === 'device' && !pack.url) {
     const f = await getDeviceFile(pack.id);
     if (!f) throw new Error('Paket bulunamadı: ' + pack.id);
+    if (max && f.size > max) throw tooBig();
     return f;
   }
   const res = await fetch(pack.url!);
   if (!res.ok || !res.body) throw new Error('Paket indirilemedi: ' + pack.id);
   const total = Number(res.headers.get('content-length') ?? pack.size);
+  if (max && total > max) {
+    res.body.cancel().catch(() => {});
+    throw tooBig();
+  }
   const reader = res.body.getReader();
   const chunks: Uint8Array[] = [];
   let loaded = 0;
@@ -155,6 +170,10 @@ export async function openBlob(pack: InstalledPack, onProgress?: (loaded: number
     if (done) break;
     chunks.push(value);
     loaded += value.length;
+    if (max && loaded > max) {
+      reader.cancel().catch(() => {});
+      throw tooBig();
+    }
     onProgress?.(loaded, total);
   }
   return new Blob(chunks as BlobPart[]);

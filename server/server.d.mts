@@ -6,7 +6,8 @@ export const MIME: Record<string, string>;
 export function mimeOf(name: string): string;
 export function lanAddresses(): string[];
 export function parseRange(header: string | undefined | null, size: number): null | 'invalid' | { start: number; end: number };
-export function safeJoin(root: string, rel: string): string | null;
+export function safeJoin(root: string, rel: string, p?: typeof import('node:path')): string | null;
+export function unsafeSegment(seg: string): boolean;
 
 export const BOARD_KINDS: string[];
 export const BOARD_LIMITS: { id: number; from: number; text: number; body: number; items: number; page: number; ratePerMin: number };

@@ -28,11 +28,12 @@ export const MAGAZA_CSS = `
 .lm-status { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line2); border-radius: 20px; padding: 12px 14px; }
 .lm-ring { width: 62px; height: 62px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .lm-ring b { width: 48px; height: 48px; border-radius: 50%; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
-.lm-status-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+/* Büyük yazıda metin sütunu tek kelimelik şeride inmesin: yer kalmazsa "Yönet" alt satıra iner */
+.lm-status-t { flex: 1 1 110px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .lm-status-t b { font-size: 15.5px; font-weight: 600; }
 .lm-status-t span { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
 .lm-status-t span.upd { color: var(--ok); }
-.lm-manage { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-line); background: transparent; color: var(--accent2); font-size: 13.5px; font-weight: 600; flex-shrink: 0; }
+.lm-manage { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-line); background: transparent; color: var(--accent2); font-size: 13.5px; font-weight: 600; flex-shrink: 0; margin-left: auto; }
 .lm-manage[aria-expanded='true'] { background: var(--glass); }
 .lm-panel { display: flex; flex-direction: column; gap: 8px; }
 /* hızlı seçim */
@@ -58,7 +59,7 @@ export const MAGAZA_CSS = `
 .lm-pick[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 .lm-pick.done { background: rgba(79,209,165,0.14); color: var(--ok); border-color: transparent; }
 /* alt çubuk */
-.lm-bar { position: sticky; bottom: 10px; z-index: 6; margin-top: 4px; background: var(--accent); color: var(--on-accent); border-radius: 18px; padding: 8px 8px 8px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+.lm-bar { position: sticky; bottom: 10px; z-index: 6; margin-top: 4px; background: var(--accent); color: var(--on-accent); border-radius: 18px; padding: 8px 8px 8px 16px; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 .lm-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.3); transition: width 0.4s; }
 .lm-bar-t { position: relative; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; }
 .lm-bar-t b { font-size: 14.5px; font-weight: 700; }
@@ -66,7 +67,7 @@ export const MAGAZA_CSS = `
 .lm-bar button { position: relative; background: #1a1206; color: var(--accent2); border: 0; border-radius: 999px; min-height: 44px; padding: 0 18px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
 .lm-bar button:disabled { opacity: 0.6; }
 /* tüm koleksiyon */
-.lm-toggle { overflow-wrap: anywhere; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 56px; padding: 0 16px; border-radius: 16px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); font-size: 15px; font-weight: 600; text-align: left; }
+.lm-toggle { overflow-wrap: anywhere; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 56px; padding: 10px 16px; border-radius: 16px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); font-size: 15px; font-weight: 600; text-align: left; }
 .lm-toggle:hover { border-color: rgba(255, 200, 97, 0.5); }
 .lm-toggle small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
 .lm-toggle .lm-chev { font-size: 22px; color: var(--accent2); transition: transform 0.15s; }
@@ -208,6 +209,8 @@ export function LibraryStore() {
   const inenDone = inen.reduce((a, r) => a + (dlFor(r)?.received ?? 0), 0);
   const speed = inen.reduce((a, r) => a + (dlFor(r)?.speed ?? 0), 0);
   const yerYok = free != null && qBytes > free;
+  /** Kuyruktaki duraklatılmış (yarım) indirmeler: düğme "Devam et" olur */
+  const yarim = q.filter((r) => dlFor(r)?.status === 'paused').length;
 
   const groups: (Shelf | 'diger')[] = shelf === 'hepsi' ? [...SHELVES, 'diger'] : [shelf];
   const ringBg = `conic-gradient(var(--ok) 0 ${ringPct}%, rgba(255,255,255,0.1) ${ringPct}% 100%)`;
@@ -219,7 +222,7 @@ export function LibraryStore() {
           <b>%{ringPct}</b>
         </div>
         <div class="lm-status-t">
-          <b>{ringPct === 100 ? 'Temel set hazır' : yuklu.length ? 'Kütüphanen hazırlanıyor' : 'Kütüphaneni kur'}</b>
+          <b>{ringPct === 100 ? 'Temel set hazır' : yuklu.length ? 'Kütüphaneniz hazırlanıyor' : 'Kütüphanenizi kurun'}</b>
           <span>
             {yuklu.length ? `${yuklu.length} paket yüklü · ${fmt(yukluBytes)}` : 'Henüz paket yok'}
             {free != null && free > 0 ? ` · ${fmt(free)} boş` : ''}
@@ -369,7 +372,15 @@ export function LibraryStore() {
                 <b>
                   {q.length} paket · {fmt(qBytes)}
                 </b>
-                <span>{yerYok ? `Yer yetmez: ${fmt(free!)} boş` : free != null ? `İndirme sonrası ${fmt(free - qBytes)} boş kalır` : 'Yüklü olanlar düşüldü'}</span>
+                <span>
+                  {yerYok
+                    ? `Yer yetmez: ${fmt(free!)} boş`
+                    : yarim
+                      ? `${yarim} paket duraklatıldı · kaldığı yerden sürer`
+                      : free != null
+                        ? `İndirme sonrası ${fmt(free - qBytes)} boş kalır`
+                        : 'Yüklü olanlar düşüldü'}
+                </span>
               </>
             )}
           </div>
@@ -388,7 +399,7 @@ export function LibraryStore() {
             </button>
           ) : (
             <button data-testid="lib-bar-start" disabled={yerYok || !canSaveToDevice()} onClick={() => kuyrugaEkle(q)}>
-              İndir
+              {yarim ? 'Devam et' : 'İndir'}
             </button>
           )}
         </div>

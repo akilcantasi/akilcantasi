@@ -138,6 +138,40 @@ const yeni = async (opt) => {
   });
   await ctx.close();
 }
+{
+  // Denetim 2026-11: elle "İndir", görünürlük değişimi ve ayar değişimi de kurmaz; çift dokunuş tek kurulum
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 640 } });
+  await ctx.addInitScript((o) => { window.__opt = o; }, { sonDenetim: Date.now() - 3600000 });
+  await ctx.addInitScript(kopru);
+  await ctx.addInitScript(() => {
+    const G = window.Capacitor.Plugins.AkilGuncelleme;
+    // Yavaş yerel kur(): durum 400 ms sonra "kuruluyor" olur
+    G.kur = async () => { window.__calls.push(['kur']); await new Promise((r) => setTimeout(r, 400)); return {}; };
+  });
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(e.message));
+  const n = (m) => p.evaluate((m) => window.__calls.filter((c) => c[0] === m).length, m);
+  await step('Elle denetle → İndir → hazır: hiçbir yol kendiliğinden kurmaz', async () => {
+    await p.goto(base + '?tool=ayarlar');
+    await p.waitForSelector(tid('set-update-now'));
+    await p.click(tid('set-update-now'));
+    await p.waitForSelector(tid('gn-indir'));
+    await p.click(tid('gn-indir'));
+    await p.waitForSelector(tid('gn-kur'));
+    // Uygulama arka plana gidip geri gelir, ayar açılıp kapanır
+    await p.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await p.click(tid('set-update-check'));
+    await p.click(tid('set-update-check'));
+    await p.waitForTimeout(1200);
+    assert.equal(await n('kur'), 0, 'kur kendiliğinden çağrılmamalı');
+  });
+  await step('"Kur"a çift dokunuş tek kurulum başlatır', async () => {
+    await p.dblclick(tid('gn-kur'));
+    await p.waitForTimeout(700);
+    assert.equal(await n('kur'), 1);
+  });
+  await ctx.close();
+}
 await browser.close();
 if (errors.length) { console.log('Sayfa hataları:', errors); fails++; }
 console.log(fails ? `${fails} HATA` : 'Hepsi geçti');

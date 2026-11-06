@@ -219,6 +219,49 @@ export function tierIncludes(recommended: Tier, t: Tier) {
   return TIERS.indexOf(t) <= TIERS.indexOf(recommended);
 }
 
+/**
+ * İnternetten gelen katalogdaki indirme adreslerinin izinli alanları. Android yerel indiricisi
+ * (PaketIndirici.izinliAdres) ve uygulamayla gelen katalog aynı listeyi kullanır: yalnız https,
+ * yalnız bu alanlar ve alt alanları (Kiwix ve aynaları, Wikimedia, Hugging Face, GitHub).
+ */
+export const IZINLI_ALANLAR = [
+  'kiwix.org',
+  'ftp.fau.de',
+  'ftp.nluug.nl',
+  'mirrors.dotsrc.org',
+  'mirror.accum.se',
+  'dumps.wikimedia.org',
+  'wi.mirror.driftle.ss',
+  'huggingface.co',
+  'hf.co',
+  'akilcantasi.com',
+  'github.com',
+  'githubusercontent.com',
+];
+
+export function izinliAdres(u: string): boolean {
+  try {
+    const x = new URL(u);
+    if (x.protocol !== 'https:') return false;
+    const h = x.hostname.toLowerCase();
+    return IZINLI_ALANLAR.some((a) => h === a || h.endsWith('.' + a));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * İnternetten (merkezi katalog) gelen katalogda izinli olmayan adresler atılır; adresi kalmayan
+ * paket listeden çıkar. (Bilgi noktasının kendi kataloğu işletmenin denetimindedir ve LAN aynası
+ * gösterebilir; uygulama zaten o sunucudan yüklenmiştir.)
+ */
+export function onlyAllowedUrls(m: Manifest): Manifest {
+  const packs = m.packs
+    .map((p) => ({ ...p, urls: p.urls.filter((u) => u.startsWith('osm:') || izinliAdres(u)) }))
+    .filter((p) => p.urls.length > 0 && (!p.contents || p.contents.every((c) => izinliAdres(c.url))));
+  return { ...m, packs };
+}
+
 /** Merkezi katalog: hf-yukle.cmd her yüklemede günceller (yeni harita/nokta sürümleri, boyutlar) */
 export const REMOTE_MANIFEST_URL = 'https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/packs-manifest.json';
 export const BUNDLED_MANIFEST: Manifest = validateManifest(bundled).manifest;
@@ -261,18 +304,41 @@ export async function loadManifest(force = false): Promise<Manifest> {
   return current;
 }
 
-/** İnternet varsa merkezi kataloğu dener; daha yeniyse onu döndürür. Hata fırlatmaz. */
-export async function refreshRemoteManifest(): Promise<Manifest | null> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return null;
+/** Oturumda son uzak katalog denemesi: her sekme açılışında Hugging Face'e gidilmesin */
+let uzakDeneme: { zaman: number; is: Promise<Manifest | null> } | null = null;
+const UZAK_ARALIK_MS = 6 * 3600_000;
+
+/**
+ * İnternet varsa merkezi kataloğu dener; daha yeniyse onu döndürür. Hata fırlatmaz.
+ * Oturumda en çok 6 saatte bir ağa çıkılır; aradaki çağrılar aynı sonucu paylaşır.
+ */
+export function refreshRemoteManifest(): Promise<Manifest | null> {
+  const simdi = Date.now();
+  if (uzakDeneme && simdi - uzakDeneme.zaman < UZAK_ARALIK_MS) return uzakDeneme.is;
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return Promise.resolve(null);
+  const deneme = { zaman: simdi, is: uzakKatalog().then((r) => {
+    // Ağa ulaşılamadıysa 5 dakika sonra yeniden denenebilsin
+    if (r === UZAK_HATA) deneme.zaman = Date.now() - UZAK_ARALIK_MS + 5 * 60_000;
+    return r === UZAK_HATA ? null : r;
+  }) };
+  uzakDeneme = deneme;
+  return deneme.is;
+}
+
+const UZAK_HATA = Symbol('uzak-hata');
+
+async function uzakKatalog(): Promise<Manifest | null | typeof UZAK_HATA> {
   try {
     const r = validateManifest(await fetchJson(REMOTE_MANIFEST_URL, 5000));
+    const remote = onlyAllowedUrls(r.manifest);
     const base = current ?? BUNDLED_MANIFEST;
-    if (r.manifest.packs.length && newer(r.manifest, base)) {
-      current = forThisDevice(r.manifest);
+    if (remote.packs.length && newer(remote, base)) {
+      current = forThisDevice(remote);
       return current;
     }
   } catch {
     /* erişilemiyor — sorun değil */
+    return UZAK_HATA;
   }
   return null;
 }

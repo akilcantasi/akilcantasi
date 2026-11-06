@@ -29,21 +29,29 @@ function ertelendi(surum: string): boolean {
 export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?: boolean }) {
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null);
   const [gizlendi, setGizli] = useState(false);
+  // Çift dokunuşta iki kurulum oturumu açılmasın (durum "kuruluyor"a geçene kadar)
+  const [basildi, setBasildi] = useState(false);
   const y = d.yeni;
   // Sürüm bilgisi sonradan gelebilir: erteleme her çizimde denetlenir
   if (!y || (bant && (gizlendi || ertelendi(y.surum)))) return null;
   const iniyor = d.is === 'indiriliyor';
 
   const kur = async () => {
+    if (basildi) return;
     setMsg(null);
     if (!d.kurulumIzni) {
       await guncelleme.kurulumIzni();
       setMsg({ t: 'Açılan sayfada "Bu kaynaktan izin ver"i açıp geri dönün, sonra yeniden "Kur"a basın. Bu yalnız bir kez sorulur.' });
       return;
     }
-    const r = await guncelleme.kur();
-    if (r?.hata) setMsg({ t: HATA_YAZI[r.hata] ?? 'Kurulamadı.', bad: true });
-    else setMsg({ t: 'Kuruluyor… Uygulama birkaç saniye içinde kapanıp yeni sürümle açılacak.' });
+    setBasildi(true);
+    try {
+      const r = await guncelleme.kur();
+      if (r?.hata) setMsg({ t: HATA_YAZI[r.hata] ?? 'Kurulamadı.', bad: true });
+      else setMsg({ t: 'Kuruluyor… Uygulama birkaç saniye içinde kapanıp yeni sürümle açılacak.' });
+    } finally {
+      setBasildi(false);
+    }
   };
 
   return (
@@ -73,8 +81,8 @@ export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?
       {msg && <p class={msg.bad ? 'bad' : ''}>{msg.t}</p>}
       <div class="gn-btns">
         {y.hazir ? (
-          <button class="btn primary" data-testid="gn-kur" disabled={d.enkazAcik || d.is === 'kuruluyor'} onClick={kur}>
-            {d.is === 'kuruluyor' ? 'Kuruluyor…' : 'Kur'}
+          <button class="btn primary" data-testid="gn-kur" disabled={d.enkazAcik || d.is === 'kuruluyor' || basildi} onClick={kur}>
+            {d.is === 'kuruluyor' || basildi ? 'Kuruluyor…' : 'Kur'}
           </button>
         ) : (
           !iniyor && (

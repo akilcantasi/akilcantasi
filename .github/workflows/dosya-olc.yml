@@ -9,6 +9,9 @@ on:
         description: 'İndirme adresi'
         required: true
 
+# Bu iş depoya ya da GitHub API'sine hiç dokunmaz: jetona yetki verilmez
+permissions: {}
+
 jobs:
   olc:
     runs-on: ubuntu-latest
@@ -19,7 +22,8 @@ jobs:
           URL: ${{ github.event.inputs.url }}
         run: |
           set -e
-          curl -sSfL --retry 3 -o "$RUNNER_TEMP/f" "$URL"
+          # Yalnız https (yönlendirmeler dahil): file://, http:// ya da iç ağ adresleri okunmasın
+          curl -sSfL --proto '=https' --proto-redir '=https' --retry 3 -o "$RUNNER_TEMP/f" "$URL"
           sha=$(sha256sum "$RUNNER_TEMP/f" | awk '{print $1}')
           size=$(stat -c %s "$RUNNER_TEMP/f")
           echo "OLCUM size=$size sha256=$sha"

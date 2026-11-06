@@ -143,6 +143,7 @@ export function reloadPackGuides(): Promise<void> {
     return loading;
   }
   loading = (async () => {
+    const errsBefore = JSON.stringify(packErrors);
     try {
       const { listPacks, openBlob } = await import('../lib/packs');
       const list = (await listPacks()).filter((p) => p.kind === 'rehber');
@@ -168,6 +169,12 @@ export function reloadPackGuides(): Promise<void> {
       }
       const changed = next.length !== loaded.length || next.some((l, i) => l !== loaded[i]);
       if (changed) setLoadedPacks(next);
+      else if (JSON.stringify(packErrors) !== errsBefore) {
+        // Paket açılamadı: rehber listesi değişmese de arayüz hatayı göstermeli
+        // (yoksa Rehber'deki kart "rehberler açılıyor…" yazısında kalıyordu)
+        version++;
+        listeners.forEach((f) => f());
+      }
     } catch {
       /* depolama okunamıyor — paket rehberi yok sayılır */
     }

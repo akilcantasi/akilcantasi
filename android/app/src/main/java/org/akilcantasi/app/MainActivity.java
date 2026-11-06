@@ -6,6 +6,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
+import androidx.activity.OnBackPressedCallback;
+
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
 
@@ -58,6 +60,22 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GuncellemePlugin.class);
         hedefKoy(getIntent());
         super.onCreate(savedInstanceState);
+
+        // Geri tuşu: uygulama içi geçmişte bir adım geri (src/gecmis.ts her ekranı history'ye yazar).
+        // Geçmiş bitince Android'in olağan davranışı (uygulamadan çık / arka plana al).
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView w = bridge == null ? null : bridge.getWebView();
+                if (w != null && w.canGoBack()) {
+                    w.goBack();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                    setEnabled(true);
+                }
+            }
+        });
 
         // Fener (llama.cpp WASM) çok iş parçacıklı çalışabilsin diye
         // uygulamanın kendi dosyalarına COOP/COEP başlıkları eklenir.

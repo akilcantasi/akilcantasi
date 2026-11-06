@@ -1,3 +1,5 @@
+// İLK içe aktarım olmalı: localStorage engelliyse diğer modüller yüklenirken çökmesin
+import './depolama-koruma';
 import { render } from 'preact';
 import '@fontsource/poppins/latin-400.css';
 import '@fontsource/poppins/latin-ext-400.css';
@@ -19,8 +21,38 @@ import { App } from './App';
 import { go, TAB_IDS, type TabId } from './lib/store';
 import { TOOLS } from './tools/registry';
 import { initPackGuides } from './content/pack-guides';
+import { initGecmis } from './gecmis';
+
+/**
+ * Doğrudan bağlantıdaki kimlik kullanılabilir mi? Adres herkesin elinde: `__proto__`,
+ * `constructor` gibi nesne anahtarları bölüm tablolarında "bulunur" ve ekranı çökertiyordu
+ * (?comm=__proto__ → boş ekran). Bunlar ve aşırı uzun değerler yok sayılır.
+ */
+function gecerliKimlik(v: string | null): v is string {
+  return !!v && v.length <= 200 && !v.startsWith('__') && !(v in Object.prototype);
+}
+
+/**
+ * Kaydırma çubuğu yer kaplıyor mu (masaüstü tarayıcı)? Öyleyse html.kaydirma-cubugu: içerik ve
+ * üst çubuk iki yanda eşit pay alır (app.css). Telefonlarda çubuk içeriğin üstünde kayar (0 px).
+ */
+function kaydirmaCubugunuDenetle() {
+  try {
+    const d = document.createElement('div');
+    d.style.cssText = 'position:absolute;top:-999px;width:100px;height:50px;overflow-y:scroll';
+    document.body.appendChild(d);
+    const w = d.offsetWidth - d.clientWidth;
+    d.remove();
+    document.documentElement.classList.toggle('kaydirma-cubugu', w > 0);
+  } catch {
+    /* ölçülemedi: pay yok */
+  }
+}
 
 const root = document.getElementById('app')!;
+kaydirmaCubugunuDenetle();
+// index.html'deki açılış ekranı (betik inene kadar logo): uygulama çizilmeden kaldırılır
+document.getElementById('acilis')?.remove();
 if (new URLSearchParams(location.search).has('art')) {
   import('./art/Gallery').then(({ ArtGallery }) => render(<ArtGallery />, root));
 } else {
@@ -29,10 +61,17 @@ if (new URLSearchParams(location.search).has('art')) {
   const tab = q.get('tab');
   // Bilinmeyen sekme kimliği uygulamayı çökertmesin (boş ekran): yok say.
   if (tab && (TAB_IDS as readonly string[]).includes(tab)) go.tab(tab as TabId);
-  if (q.get('cat')) go.category(q.get('cat'));
-  if (q.get('guide')) go.guide(q.get('guide'));
-  if (q.get('tool')) go.tool(q.get('tool'));
-  if (q.get('comm')) go.comm(q.get('comm'));
+  const cat = q.get('cat');
+  const guide = q.get('guide');
+  const tool = q.get('tool');
+  const comm = q.get('comm');
+  if (gecerliKimlik(cat)) go.category(cat);
+  if (gecerliKimlik(guide)) go.guide(guide);
+  if (gecerliKimlik(tool)) go.tool(TOOLS.some((t) => t.id === tool) ? tool : null);
+  else if (tool) go.tab('araclar'); // bilinmeyen araç: Araçlar listesi açılır
+  if (gecerliKimlik(comm)) go.comm(comm);
+  else if (comm) go.tab('iletisim');
+  initGecmis();
   render(<App />, root);
   // Kurulu rehber paketlerini (.rehber.json) yükle; ?guide= paket rehberi ise yüklenince açılır
   initPackGuides();

@@ -128,10 +128,27 @@ public final class EnkazIsareti {
         return b;
     }
 
+    /**
+     * Etiket kimliği doğrulanmamış yayından gelir (bildirim başlığında ve listede görünür): denetim ve
+     * biçim karakterleri (yön çevirme, sıfır genişlik) atılır, en çok ETIKET_KARAKTER karakter.
+     */
     public static String etiketCoz(byte[] b) {
         if (b == null || b.length < 3 || b[0] != 'A' || b[1] != 'K' || b[2] != 2) return null;
-        return new String(b, 3, b.length - 3, StandardCharsets.UTF_8);
+        String s = new String(b, 3, b.length - 3, StandardCharsets.UTF_8);
+        StringBuilder r = new StringBuilder();
+        for (int i = 0; i < s.length() && r.length() < ETIKET_KARAKTER; i++) {
+            char c = s.charAt(i);
+            int t = Character.getType(c);
+            if (t == Character.CONTROL || t == Character.FORMAT) continue;
+            r.append(c);
+        }
+        int n = r.length();
+        if (n > 0 && Character.isHighSurrogate(r.charAt(n - 1))) r.setLength(n - 1);
+        return r.toString().trim();
     }
+
+    /** Çözülen etiketin en çok uzunluğu (karakter); kendi yayınımız ETIKET_BAYT ile zaten kısadır */
+    static final int ETIKET_KARAKTER = 40;
 
     /** Kurtarıcı mesajı: hedef kimlik, numara, kod */
     public static byte[] mesajKodla(int hedef, int no, int kod) {

@@ -43,6 +43,19 @@ const readText = (p) => read(p).toString('utf8');
   check(assets.some((f) => /^ort-wasm.*\.wasm$/.test(f)), 'ONNX Runtime wasm paketlendi (çevrimdışı ses tanıma)');
   check(assets.some((f) => /^wllama.*\.wasm$/.test(f)), 'wllama wasm paketlendi');
   check(assets.some((f) => /^maplibre-[^w].*\.js$/.test(f)), 'maplibre ayrı parça');
+  // PWA / web derlemesi (bilgi noktası: Windows, Raspberry Pi, telefon tarayıcısı)
+  const css = readText('src/styles/app.css');
+  const bg = (css.match(/--bg:\s*(#[0-9a-f]{6})/i) ?? [])[1]?.toLowerCase();
+  check(/name="viewport"[^>]*viewport-fit=cover/.test(html), 'index.html: viewport-fit=cover (çentik / güvenli alan)');
+  check((html.match(/name="theme-color" content="(#[0-9a-fA-F]{6})"/) ?? [])[1]?.toLowerCase() === bg, 'index.html: theme-color gece mavisi zeminle aynı (' + bg + ')');
+  check(/name="color-scheme" content="dark"/.test(html) && /id="acilis"/.test(html) && /<noscript>/.test(html), 'index.html: koyu renk düzeni, açılış ekranı ve noscript notu');
+  const man = JSON.parse(readText('dist/manifest.webmanifest'));
+  check(man.theme_color.toLowerCase() === bg && man.background_color.toLowerCase() === bg && man.display === 'standalone' && man.lang === 'tr', 'manifest: renkler, standalone, tr');
+  for (const [n, purpose] of [[192, 'any'], [512, 'any'], [192, 'maskable'], [512, 'maskable']]) {
+    const ic = man.icons.find((i) => i.sizes === `${n}x${n}` && i.purpose === purpose && i.type === 'image/png');
+    const buf = ic && fs.existsSync(path.join(ROOT, 'dist', ic.src)) ? read('dist/' + ic.src) : null;
+    check(!!buf && buf.readUInt32BE(16) === n && buf.readUInt32BE(20) === n, `manifest: ${n}×${n} ${purpose} PNG simge var ve boyutu doğru`);
+  }
 }
 
 // ---------------------------------------------------------------------------

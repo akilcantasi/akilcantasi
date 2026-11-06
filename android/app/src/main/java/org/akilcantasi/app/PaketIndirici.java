@@ -65,6 +65,8 @@ public final class PaketIndirici {
     private static final int STALL_MS = 25000;
     private static final int MAX_TRIES = 8;
     private static final String UA = "AkilCantasi-Android/1.0";
+    /** İndirme bittiğinde telefonda en az bu kadar boş yer kalmalı */
+    static final long YEDEK_ALAN = 64L * 1024 * 1024;
 
     private static PaketIndirici instance;
 
@@ -235,7 +237,7 @@ public final class PaketIndirici {
         }
         long free = freeBytes();
         long have = old != null ? old.received.get() : 0;
-        if (size > 0 && free >= 0 && size - have > free) {
+        if (size > 0 && free >= 0 && size - have + YEDEK_ALAN > free) {
             throw new IOException("Yer yetersiz: yaklaşık " + fmt(size - have) + " gerekli, " + fmt(free) + " boş");
         }
         Job j = new Job(file, new ArrayList<>(urls), size > 0 ? size : (old != null ? old.size : 0), sha256 != null ? sha256 : (old != null ? old.sha256 : null));
@@ -265,6 +267,8 @@ public final class PaketIndirici {
     }
 
     public void cancel(String file) {
+        // Ad sayfadan gelir: "../" ile paket klasörü dışındaki .part/.durum dosyaları silinmesin
+        if (!isPackName(file)) return;
         Job j;
         synchronized (this) {
             j = jobs.remove(file);
@@ -348,6 +352,12 @@ public final class PaketIndirici {
             final List<Seg> fsegs = segs;
             long done = 0;
             for (Seg s : segs) done += s.pos - s.start;
+            // Boyut önceden bilinmiyorsa (katalogda yaklaşık boyut) yer denetimi burada: telefonun
+            // belleği sıfıra kadar dolmasın (SMS kuyruğu, konum kaydı da yazılamaz olur)
+            long bos = freeBytes();
+            if (bos >= 0 && total - done + YEDEK_ALAN > bos) {
+                throw new IOException("Yer yetersiz: yaklaşık " + fmt(total - done) + " gerekli, " + fmt(bos) + " boş");
+            }
             j.received.set(done);
             j.status = "downloading";
             changed();

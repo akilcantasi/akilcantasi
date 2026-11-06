@@ -1,6 +1,6 @@
 // Afet çantası: AFAD / Ready.gov listesine dayalı kontrol listesi, profiller,
 // son kullanma tarihleri ve özel öğeler. Durum src/tools/_kaynak/canta.ts.
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { go } from '../../lib/store';
 import { GROUPS, PROFILES, type GroupId, type OptionId } from '../_kaynak/canta-data';
 import { addCustom, alerts, loadCanta, progress, removeCustom, resetChecks, saveCanta, setExpiry, toggleItem, viewItems, type CantaState, type ViewItem } from '../_kaynak/canta';
@@ -73,15 +73,17 @@ function Item({ it, onToggle, onDate, onRemove }: { it: ViewItem; onToggle: () =
 }
 
 export default function Canta() {
-  const [s, setS] = useState<CantaState>(loadCanta);
+  const [s, setS0] = useState<CantaState>(loadCanta);
   const [name, setName] = useState('');
   const [group, setGroup] = useState<GroupId>('su-gida');
   const [confirmReset, setConfirmReset] = useState(false);
   const [saveErr, setSaveErr] = useState(false);
 
-  useEffect(() => {
-    setSaveErr(!saveCanta(s));
-  }, [s]);
+  // Değişiklik hemen kaydedilir (çizimden sonra değil): hemen çıkılırsa kaybolmasın
+  const setS = (n: CantaState) => {
+    setSaveErr(!saveCanta(n));
+    setS0(n);
+  };
 
   const items = viewItems(s);
   const pr = progress(items);

@@ -23,6 +23,9 @@ export class BlobSource implements RandomAccessSource {
   }
 }
 
+/** Range desteklemeyen sunucudan (200) en çok bu kadar bayt bütün olarak okunur */
+const MAX_WHOLE_READ = 64 * 1024 * 1024;
+
 /** HTTP Range destekli sunucudaki dosya (masaüstü sunucusu / bilgi noktası). */
 export class HttpRangeSource implements RandomAccessSource {
   private constructor(private url: string, readonly size: number, readonly name: string) {}
@@ -44,6 +47,18 @@ export class HttpRangeSource implements RandomAccessSource {
     const end = Math.min(offset + length, this.size) - 1;
     const res = await fetch(this.url, { headers: { Range: `bytes=${offset}-${end}` } });
     if (res.status !== 206 && res.status !== 200) throw new Error(`Okuma hatası ${res.status}`);
+    if (res.status === 200 && Number(res.headers.get('content-length') ?? 0) > MAX_WHOLE_READ) {
+      // Range'i yok sayıp çok büyük dosyanın tamamını gönderen sunucu her okumada belleği doldurmasın
+      res.body?.cancel().catch(() => {});
+      throw new Error('Sunucu aralıklı okumayı desteklemiyor: ' + this.name);
+    }
+    if (res.status === 206) {
+      const cr = /^bytes\s+(\d+)-/i.exec(res.headers.get('content-range') ?? '');
+      if (cr && Number(cr[1]) !== offset) {
+        res.body?.cancel().catch(() => {});
+        throw new Error('Beklenmeyen aralık: ' + this.name);
+      }
+    }
     const buf = new Uint8Array(await res.arrayBuffer());
     if (res.status === 200) return buf.subarray(offset, end + 1);
     return buf;
