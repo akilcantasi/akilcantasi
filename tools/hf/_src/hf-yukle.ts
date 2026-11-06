@@ -9,12 +9,18 @@
 //      çalıştırınca biten dosyalar atlanır).
 //   3) Lisans ve kaynak tablosuyla bir veri kartı (README.md) yükler.
 //   4) public/ ve dist/ içindeki packs-manifest.json'da bu paketlerin ilk adresini Hugging Face yapar.
+//   5) Kataloğu Ed25519 ile imzalar (tools/katalog-imzala.mjs) ve packs-manifest.json ile
+//      packs-manifest.json.sig'i tek commit'te yükler. Uygulama imzası tutmayan kataloğu kullanmaz.
+//      Gizli anahtar: KATALOG_IMZA_ANAHTARI ortam değişkeni ya da _gizli/katalog-imza-anahtari.txt.
+//   --katalog (ya da --sadece katalog): paket yüklemeden yalnız kataloğu imzalayıp yükler.
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { createRepo, pathsInfo, uploadFile, uploadFilesWithProgress, whoAmI } from '@huggingface/hub';
+import { createRepo, pathsInfo, uploadFile, uploadFiles, uploadFilesWithProgress, whoAmI } from '@huggingface/hub';
+// @ts-expect-error — düz JS modülü
+import { dosyaImzala, gizliAnahtarBul, uygulamaAcikAnahtari } from '../../katalog-imzala.mjs';
 // @ts-expect-error — düz JS modülü
 import { createFetcher } from '../../../server/fetcher.mjs';
 
@@ -40,7 +46,10 @@ const arg = (k: string) => {
 const ROOT = path.resolve(arg('--kok') ?? process.cwd());
 const DATA = path.resolve(arg('--data') ?? path.join(ROOT, 'data'));
 const DRY = args.includes('--deneme');
-const ONLY = (arg('--sadece') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+const ONLY_RAW = (arg('--sadece') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+/** Yalnız kataloğu imzalayıp yükle (paket yükleme yok) */
+const KATALOG_ONLY = args.includes('--katalog') || ONLY_RAW.includes('katalog');
+const ONLY = ONLY_RAW.filter((s) => s !== 'katalog');
 
 const cfg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools', 'hf', 'paketler.json'), 'utf8'));
 const ORG: string = arg('--org') ?? cfg.org;
@@ -154,7 +163,7 @@ async function main() {
   if (!mpaths.length) throw new Error('packs-manifest.json bulunamadı (public/ ya da dist/).');
   const manifest = JSON.parse(await fsp.readFile(mpaths[0], 'utf8'));
   const byId = new Map<string, Entry>(manifest.packs.map((p: Entry) => [p.id, p]));
-  const ids: string[] = (ONLY.length ? ONLY : cfg.paketler).filter((id: string) => {
+  const ids: string[] = (KATALOG_ONLY && !ONLY.length ? [] : ONLY.length ? ONLY : cfg.paketler).filter((id: string) => {
     if (byId.has(id)) return true;
     log(`! katalogda yok, atlandı: ${id}`);
     return false;
@@ -162,6 +171,13 @@ async function main() {
   const dirOf = (e: Entry) => cfg.dizin[e.kind] ?? e.kind;
 
   const token = process.env.HF_TOKEN ?? '';
+  // İmza anahtarı en başta denetlenir: saatler süren yüklemeden sonra katalog imzasız kalmasın
+  // (imzasız ya da eski imzalı katalog uygulamalarca yok sayılır)
+  let imzaAnahtari: unknown = null;
+  if (!DRY) {
+    imzaAnahtari = gizliAnahtarBul({ kok: ROOT });
+    if (!imzaAnahtari) throw new Error('Katalog imza anahtarı yok: KATALOG_IMZA_ANAHTARI ortam değişkenini ya da _gizli/katalog-imza-anahtari.txt dosyasını ayarlayın (docs/PAKET_GUVENLIGI.md).');
+  }
   if (!DRY) {
     if (!token) throw new Error('HF_TOKEN yok. hf-yukle.cmd ile çalıştırın; token sorulur.');
     const me = await whoAmI({ accessToken: token });
@@ -234,6 +250,14 @@ async function main() {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);
+    } else if (!e.sha256 && (e.sizeApprox || !e.size || size === e.size)) {
+      // Özeti eksik paket (ör. Kiwix ZIM'i): yüklenen dosyanın özeti kataloğa yazılır
+      log('  SHA-256 hesaplanıyor…');
+      patch.sha256 = await sha256File(local);
+      if (e.sizeApprox || !e.size) {
+        patch.size = size;
+        patch.sizeApprox = false;
+      }
     }
     updates.set(e.id, patch);
     done.push(e);
@@ -251,6 +275,8 @@ async function main() {
       file: { path: 'README.md', content: new Blob([card((manifest.packs as Entry[]).filter((p) => updates.has(p.id) || p.urls.some((u) => u.startsWith(HF_BASE))), dirOf)]) },
       commitTitle: 'Veri kartı',
     });
+  }
+  if (done.length || KATALOG_ONLY) {
     // Katalog: Hugging Face adresi öne; ölü akilcantasi.com adresleri çıkar
     for (const mp of mpaths) {
       const m = JSON.parse(await fsp.readFile(mp, 'utf8'));
@@ -262,18 +288,27 @@ async function main() {
         Object.assign(p, u);
         if (p.kind === 'poi') p.desc = p.desc.replace(/İnternet varken OpenStreetMap'ten doğrudan bu cihazda oluşturulur \(birkaç dakika sürer\)\./, 'Hazır paket olarak hızlıca iner; gerekirse cihazda OpenStreetMap\'ten yeniden oluşturulur.');
       }
-      m.updated = new Date().toISOString().slice(0, 10);
-      await fsp.writeFile(mp, JSON.stringify(m, null, 2) + '\n');
-      log(`Katalog güncellendi: ${path.relative(ROOT, mp)}`);
+      if (done.length) {
+        m.updated = new Date().toISOString().slice(0, 10);
+        await fsp.writeFile(mp, JSON.stringify(m, null, 2) + '\n');
+        log(`Katalog güncellendi: ${path.relative(ROOT, mp)}`);
+      }
+      // İmza dosyası katalogla yan yana durur (packs-manifest.json.sig); depoya da işlenir
+      dosyaImzala(mp, imzaAnahtari, uygulamaAcikAnahtari(ROOT));
+      log(`Katalog imzalandı: ${path.relative(ROOT, mp)}.sig`);
     }
-    // Uygulamalar internet varken bu kataloğu okuyup yeni sürümleri görür (REMOTE_MANIFEST_URL)
-    await uploadFile({
+    // Uygulamalar internet varken bu kataloğu okuyup yeni sürümleri görür (REMOTE_MANIFEST_URL).
+    // Katalog ve imzası tek commit'te gider: arada imzası tutmayan bir katalog yayımlanmış olmaz.
+    await uploadFiles({
       repo: REPO,
       accessToken: token,
-      file: { path: 'packs-manifest.json', content: new Blob([await fsp.readFile(mpaths[0])], { type: 'application/json' }) },
-      commitTitle: 'Katalog',
+      files: [
+        { path: 'packs-manifest.json', content: new Blob([await fsp.readFile(mpaths[0])], { type: 'application/json' }) },
+        { path: 'packs-manifest.json.sig', content: new Blob([await fsp.readFile(mpaths[0] + '.sig')], { type: 'text/plain' }) },
+      ],
+      commitTitle: 'Katalog (imzalı)',
     });
-    log('Merkezi katalog yüklendi: packs-manifest.json');
+    log('Merkezi katalog ve imzası yüklendi: packs-manifest.json, packs-manifest.json.sig');
   }
   console.log(`\n  Bitti: ${done.length}/${ids.length} paket Hugging Face'te.\n  https://huggingface.co/datasets/${REPO.name}\n`);
 }

@@ -4,7 +4,7 @@ import { MASALLAR, wordCount } from '../src/tools/cocuk/masal-veri';
 import { QUIZ, finalMessage } from '../src/tools/cocuk/quiz';
 import { breathPhase, flip, floodFill, hexToRgba, hideMismatch, isWon, newMemoryGame, shuffle, type MemoryGame } from '../src/tools/cocuk/logic';
 import { COLORING_PICS, MEMORY_PICS, PICS } from '../src/tools/cocuk/pictures';
-import { CITY_FREQS, isFmBand, fmt } from '../src/tools/radyo/frekanslar';
+import { CITY_FREQS, CITY_FREQS_SORTED, isFmBand, isUnverified, fmt } from '../src/tools/radyo/frekanslar';
 
 /** belirlenimci rastgele sayı üreteci (mulberry32) */
 function rng(seed: number) {
@@ -244,12 +244,17 @@ describe('nefes oyunu', () => {
 });
 
 describe('radyo frekansları', () => {
-  it('her il için Radyo 1 ve Radyo Haber var, değerler FM bandında', () => {
-    expect(CITY_FREQS.length).toBeGreaterThanOrEqual(10);
-    expect(new Set(CITY_FREQS.map((c) => c.id)).size).toBe(CITY_FREQS.length);
+  it('81 il var, değerler FM bandında; eksik kayıt not ile açıklanıyor', () => {
+    expect(CITY_FREQS.length).toBe(81);
+    expect(new Set(CITY_FREQS.map((c) => c.id)).size).toBe(81);
+    expect(new Set(CITY_FREQS.map((c) => c.city)).size).toBe(81);
+    expect(CITY_FREQS_SORTED.map((c) => c.city)[0]).toBe('Adana');
+    expect(CITY_FREQS_SORTED.map((c) => c.city).at(-1)).toBe('Zonguldak');
     for (const c of CITY_FREQS) {
-      expect(c.radyo1.length, c.id).toBeGreaterThan(0);
-      expect(c.haber.length, c.id).toBeGreaterThan(0);
+      // Radyo 1 ya da Radyo Haber yoksa ya da merkez dışı verici gösteriliyorsa kullanıcıya not düşülür
+      if (!c.radyo1.length && !c.haber.length) expect(c.note, c.id).toBeTruthy();
+      if (isUnverified(c)) expect(c.note, c.id).toMatch(/doğrulanmış frekans bulunamadı/);
+      if (c.district && !/^Merkez$|^Üsküdar$|^Çankaya$|^Yüreğir$|^Şehitkamil$|^Meram$/.test(c.district)) expect(c.note, c.id).toBeTruthy();
       for (const k of ['radyo1', 'haber', 'trtfm', 'radyo3', 'turku', 'nagme', 'kurdi'] as const)
         for (const f of c[k] ?? []) {
           expect(isFmBand(f), `${c.id}/${k}/${f}`).toBe(true);
@@ -263,5 +268,12 @@ describe('radyo frekansları', () => {
     expect(f('ankara').radyo1).toEqual([93.3]);
     expect(f('izmir').haber).toEqual([99.1]);
     expect(fmt([100.3, 88])).toBe('100.3 / 88.0');
+    // 2026-11-07 eklemeleri (radyo.trt.net.tr/frekanslar/<il>-merkez)
+    expect(f('kahramanmaras').radyo1).toEqual([99.8]);
+    expect(f('sanliurfa').haber).toEqual([95.7]);
+    expect(f('van').haber).toEqual([95.8]);
+    // TRT'de kaydı olmayan il: boş, doğrulanmadı
+    expect(isUnverified(f('kayseri'))).toBe(true);
+    expect(isUnverified(f('ankara'))).toBe(false);
   });
 });

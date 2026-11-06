@@ -1,4 +1,7 @@
-import java.io.ByteArrayOutputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.util.List;
+import org.akilcantasi.app.PaketButunlugu;
 import java.nio.charset.StandardCharsets;
 import org.akilcantasi.app.FenerMotoru;
 
@@ -10,8 +13,30 @@ public class Test {
     check(FenerMotoru.var(System.getProperty("arkauc", "")), "kütüphane yüklendi " + FenerMotoru.yuklemeHatasi());
     System.out.println("    " + FenerMotoru.arkaUclar().substring(0, Math.min(160, FenerMotoru.arkaUclar().length())));
     check(FenerMotoru.yukle("/yok/boyle.gguf", 512, 2, 0) == 0 && FenerMotoru.sonHata().contains("açılamadı"), "olmayan dosya: Türkçe hata");
+
+    // Bütünlük denetimi (AkilCantasiPlugin.fenerYukle ile aynı akış): kayıtsız model açılır ve
+    // kaydedilir; kaydı tutmayan model yerel motora hiç verilmez
+    File ic = Files.createTempDirectory("fener-ic").toFile();
+    PaketButunlugu bt = new PaketButunlugu(ic);
+    File mf = new File(model);
+    List<File> kayitsiz = bt.modelDenetle(mf);
+    check(!kayitsiz.isEmpty(), "kaydı olmayan model reddedilmez (eski sürümde indirilmiş paketler)");
     long h = FenerMotoru.yukle(model, 1024, 2, 99);
     check(h != 0, "model yüklendi " + FenerMotoru.sonHata());
+    bt.kayitsizlariKaydet(kayitsiz);
+    check(bt.modelDenetle(mf).isEmpty() && bt.denetle(mf) == PaketButunlugu.Durum.TAMAM, "ilk başarılı açılıştan sonra kaydedildi");
+    File kopya = new File(ic, "degisik.gguf");
+    try (InputStream in = new FileInputStream(mf); OutputStream o = new FileOutputStream(kopya)) {
+      byte[] buf = new byte[1 << 20]; int n; long kalan = 9L << 20;
+      while (kalan > 0 && (n = in.read(buf, 0, (int) Math.min(buf.length, kalan))) > 0) { o.write(buf, 0, n); kalan -= n; }
+    }
+    bt.kaydet(kopya, null);
+    long zaman = kopya.lastModified();
+    try (RandomAccessFile r = new RandomAccessFile(kopya, "rw")) { r.seek(64); int x = r.read(); r.seek(64); r.write(x ^ 0x5a); }
+    kopya.setLastModified(zaman);
+    boolean reddedildi = false;
+    try { bt.modelDenetle(kopya); } catch (IOException e) { reddedildi = PaketButunlugu.MODEL_DEGISMIS.equals(e.getMessage()); }
+    check(reddedildi, "değiştirilmiş model yüklenmeden reddedilir: " + PaketButunlugu.MODEL_DEGISMIS);
     System.out.println("    " + FenerMotoru.bilgi(h));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();

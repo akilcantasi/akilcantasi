@@ -42,7 +42,7 @@ jobs:
           files = {s.rfilename: (s.size or 0) for s in info.siblings}
           m = json.load(open('public/packs-manifest.json'))
           pref = f'https://huggingface.co/datasets/{REPO}/resolve/main/'
-          used = {'README.md', '.gitattributes', 'packs-manifest.json'}
+          used = {'README.md', '.gitattributes', 'packs-manifest.json', 'packs-manifest.json.sig'}
           for p in m['packs']:
               for u in p.get('urls', []) + [c.get('url', '') for c in p.get('contents', []) or []]:
                   if u.startswith(pref):

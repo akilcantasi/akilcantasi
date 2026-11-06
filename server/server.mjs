@@ -13,7 +13,9 @@
 //   GET  /download/akil-cantasi.apk
 //   GET  /packs-manifest.json   data/ içinde varsa oradan, yoksa dist/'ten
 //   GET  /api/board?since=<ms>  {items:[…], now} mesaj panosu (rev > since)
-//   POST /api/board             {id,kind,from,text,lat?,lon?,status?} → data/board.json
+//   POST /api/board             {id,kind,from,text,lat?,lon?,status?,pub?,sig?,ts?,upd?} → data/board.json
+//                               İmzalı kayıp ilanının durumunu yalnız aynı anahtarla imzalı
+//                               güncelleme (upd) değiştirir; aksi halde 403.
 //   GET  /api/fetch             {available, allowed, jobs:[…]} sunucu tarafı paket indirmeleri
 //   POST /api/fetch             {action:'start'|'pause'|'cancel', file} (yalnız bu bilgisayardan;
 //                               telefonlardan izin için --uzaktan-indirme ya da AKIL_REMOTE_FETCH=1)
@@ -24,7 +26,9 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import crypto from 'node:crypto';
 import { createFetcher } from './fetcher.mjs';
+import { imzaAlanlari, kanonikBilgiNoktasi, kanonikDurum, kanonikIlan, kimlikBagli } from './imza-kanonik.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SERVER_NAME = 'Akıl Çantası Bilgi Noktası';
@@ -222,7 +226,65 @@ export function validateBoardItem(raw) {
   } else if (raw.status != null && raw.status !== '') {
     return { ok: false, error: 'Bu türde durum olmaz' };
   }
+  // İmza alanları (biçim). İmzanın kendisi pano deposunda doğrulanır.
+  const imz = imzaAlanlari(raw, kind);
+  if (!imz.ok) return { ok: false, error: imz.error };
+  if (imz.f) Object.assign(item, imz.f);
   return { ok: true, item };
+}
+
+// ---------------------------------------------------------------------------
+// İmzalar (Ed25519, Node crypto). Kanonik biçim: server/imza-kanonik.mjs (istemciyle ortak).
+
+/** pub: base64url 32 bayt, sig: base64url 64 bayt. Bozuk girdide false. */
+export function imzaDogrula(pub, msg, sig) {
+  try {
+    const key = crypto.createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: pub }, format: 'jwk' });
+    const s = Buffer.from(sig, 'base64url');
+    if (s.length !== 64) return false;
+    return crypto.verify(null, Buffer.from(msg, 'utf8'), key, s);
+  } catch {
+    return false;
+  }
+}
+
+/** İlanın kendi imzası tutuyor mu? */
+export function ilanImzasiGecerli(it) {
+  return !!it.pub && !!it.sig && imzaDogrula(it.pub, kanonikIlan(it), it.sig);
+}
+
+/** Durum güncellemesi ilanın anahtarıyla mı imzalanmış? */
+export function durumImzasiGecerli(it, u) {
+  return !!it.pub && !!u && imzaDogrula(it.pub, kanonikDurum(it.id, u.st, u.ts, it.pub), u.sig);
+}
+
+export const SAHIP_HATASI = 'Bu ilanın durumunu yalnızca ilanı veren telefon değiştirebilir.';
+
+/**
+ * Bilgi noktasının kendi anahtarı: <data>/.bilgi-noktasi-anahtari.json (gizli dosya: /data/
+ * altından sunulmaz, pakete karışmaz). Yazılamazsa yalnız bu çalıştırma için bellekte üretilir.
+ */
+async function bilgiNoktasiAnahtari(dataDir) {
+  const file = path.join(dataDir, '.bilgi-noktasi-anahtari.json');
+  let priv = null;
+  try {
+    const jwk = JSON.parse(await fsp.readFile(file, 'utf8'));
+    priv = crypto.createPrivateKey({ key: jwk, format: 'jwk' });
+  } catch {
+    priv = crypto.generateKeyPairSync('ed25519').privateKey;
+    try {
+      await fsp.writeFile(file, JSON.stringify(priv.export({ format: 'jwk' })), { mode: 0o600, flag: 'wx' });
+    } catch (e) {
+      // Aynı anda başka bir süreç yazdıysa onunkini kullan
+      try {
+        priv = crypto.createPrivateKey({ key: JSON.parse(await fsp.readFile(file, 'utf8')), format: 'jwk' });
+      } catch {
+        console.warn('Bilgi noktası anahtarı kaydedilemedi; bu çalıştırma için geçici anahtar kullanılıyor.');
+      }
+    }
+  }
+  const pub = crypto.createPublicKey(priv).export({ format: 'jwk' }).x;
+  return { pub, imzala: (msg) => crypto.sign(null, Buffer.from(msg, 'utf8'), priv).toString('base64url') };
 }
 
 /**
@@ -241,7 +303,10 @@ async function openBoard(dataDir, o = {}) {
       const v = validateBoardItem(raw);
       if (!v.ok) continue;
       const time = Number(raw.time) || Date.now();
-      items.set(v.item.id, { ...v.item, time, rev: Number(raw.rev) || time, ...(raw.local ? { local: true } : {}) });
+      const it = { ...v.item, time, rev: Number(raw.rev) || time, ...(raw.local ? { local: true } : {}) };
+      // Durumu güncellemeden gelen imzalı kayıp ilanında durum, kayıtlı güncellemeyle aynı olsun
+      if (it.pub && it.kind === 'kayip') it.status = it.upd ? it.upd.st : 'araniyor';
+      items.set(v.item.id, it);
     }
   } catch (e) {
     // Dosya yok: boş pano. Bozuksa üzerine yazılmasın diye yedeklenir (kayıtlar elle kurtarılabilsin)
@@ -251,6 +316,13 @@ async function openBoard(dataDir, o = {}) {
       console.warn('Pano dosyası okunamadı; yedeklendi:', yedek);
     }
   }
+  /** Bilgi noktasının kendi kaydına (local) imza: istemciler anahtarı sabitler ve etiketi doğrular */
+  const bnImzala = (it) => {
+    if (!o.bn || !it.local) return;
+    it.bpub = o.bn.pub;
+    it.bsig = o.bn.imzala(kanonikBilgiNoktasi(it, o.bn.pub));
+  };
+  for (const it of items.values()) if (it.local && (it.bpub !== o.bn?.pub || !it.bsig)) bnImzala(it);
   let lastRev = 0;
   for (const it of items.values()) lastRev = Math.max(lastRev, it.rev);
   // Saat geri alınsa da rev artarak gitsin (?since= güvenilir kalsın)
@@ -318,11 +390,30 @@ async function openBoard(dataDir, o = {}) {
       return saveError;
     },
     rateOk,
-    /** @returns {{status:number, item:any, duplicate?:boolean}} */
+    /** @returns {{status:number, item?:any, duplicate?:boolean, error?:string}} */
     add(item, local) {
       const cur = items.get(item.id);
       if (cur) {
-        // Tek izinli değişiklik: kayıp ilanı "bulundu" olarak işaretlenir
+        if (cur.pub) {
+          // İmzalı kayıt: yalnız kayıp ilanının durumu, aynı anahtarla imzalı ve daha yeni bir
+          // güncellemeyle değişir. Anahtarı olmayan ya da yanlış imzalı değişiklik 403.
+          const u = item.upd;
+          if (cur.kind === 'kayip' && item.kind === 'kayip') {
+            if (u && cur.upd && u.sig === cur.upd.sig) return { status: 200, item: cur, duplicate: true };
+            if (u && durumImzasiGecerli(cur, u)) {
+              // Gerçek ama eski güncelleme (ör. mesh'ten geç gelen): yok sayılır
+              if ((cur.upd && u.ts <= cur.upd.ts) || u.ts <= (cur.ts ?? 0)) return { status: 200, item: cur, duplicate: true };
+              cur.status = u.st;
+              cur.upd = u;
+              cur.rev = nextRev();
+              scheduleSave();
+              return { status: 200, item: cur };
+            }
+            if (u || item.status !== cur.status) return { status: 403, error: SAHIP_HATASI };
+          } else if (item.status !== cur.status) return { status: 403, error: SAHIP_HATASI };
+          return { status: 200, item: cur, duplicate: true };
+        }
+        // Eski (imzasız) kayıt: tek izinli değişiklik, kayıp ilanı "bulundu" olarak işaretlenir
         if (cur.kind === 'kayip' && item.kind === 'kayip' && cur.status === 'araniyor' && item.status === 'bulundu') {
           cur.status = 'bulundu';
           cur.rev = nextRev();
@@ -331,8 +422,19 @@ async function openBoard(dataDir, o = {}) {
         }
         return { status: 200, item: cur, duplicate: true };
       }
+      if (item.pub) {
+        if (!kimlikBagli(item.id, item.pub)) return { status: 403, error: 'Kayıt kimliği imza anahtarına bağlı değil; kabul edilmedi.' };
+        if (!ilanImzasiGecerli(item)) return { status: 403, error: 'İmza doğrulanamadı; kayıt kabul edilmedi.' };
+        if (item.kind === 'kayip') {
+          if (item.upd) {
+            if (!durumImzasiGecerli(item, item.upd)) return { status: 403, error: SAHIP_HATASI };
+            item.status = item.upd.st;
+          } else if (item.status !== 'araniyor') return { status: 403, error: SAHIP_HATASI };
+        }
+      }
       const rev = nextRev();
       const it = { ...item, time: rev, rev, ...(local ? { local: true } : {}) };
+      bnImzala(it);
       items.set(it.id, it);
       if (items.size > maxItems) {
         // Önce sıradan kayıtlar silinir (biri panoyu doldurarak kayıp ilanlarını silemesin)
@@ -398,7 +500,8 @@ export async function startServer(opts = {}) {
   const host = opts.host ?? '0.0.0.0';
   const throttleBps = opts.throttleBps ?? (Number(process.env.AKIL_THROTTLE) || 0);
   await fsp.mkdir(dataDir, { recursive: true }).catch(() => {});
-  const board = await openBoard(dataDir, opts.board);
+  const bn = await bilgiNoktasiAnahtari(dataDir).catch(() => null);
+  const board = await openBoard(dataDir, { ...opts.board, bn });
   const remoteFetch = opts.remoteFetch ?? process.env.AKIL_REMOTE_FETCH === '1';
   async function loadManifest() {
     for (const p of [path.join(dataDir, 'packs-manifest.json'), path.join(distDir, 'packs-manifest.json')]) {
@@ -606,6 +709,10 @@ export async function startServer(opts = {}) {
     // "bilgi noktasından" etiketi: yalnız bu bilgisayarın kendi sayfasından (başka bir sitenin
     // tarayıcıdan gönderdiği istek ya da başka köken loopback olsa da sayılmaz)
     const r = board.add(v.item, isLoopback(ip) && ayniKoken(req));
+    if (r.error) {
+      sendJson(req, res, r.status, { error: r.error });
+      return;
+    }
     sendJson(req, res, r.status, { ok: true, item: r.item, duplicate: !!r.duplicate });
   }
 
@@ -722,7 +829,7 @@ export async function startServer(opts = {}) {
 
     if (pathname === '/api/status') {
       const port = server.address()?.port;
-      sendJson(req, res, 200, { server: true, name: SERVER_NAME, addresses: lanAddresses(), port, clients: clientCount(), apk: !!(await findApk()) });
+      sendJson(req, res, 200, { server: true, name: SERVER_NAME, addresses: lanAddresses(), port, clients: clientCount(), apk: !!(await findApk()), ...(bn ? { pub: bn.pub } : {}) });
       return;
     }
     if (pathname === '/api/packs') {

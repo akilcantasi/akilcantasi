@@ -234,6 +234,59 @@ for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { wi
   check(asked.some((t) => t.includes('qwerty asdf')), 'sonuçsuz arama: sorgu Fener\'e gönderilir');
   await q.close();
 }
+// --- Öneriler 2026-11: rehberler arası bağlantılar --------------------------------------------
+{
+  const q = await newPage({ width: 360, height: 640 });
+  const LINKS = [
+    ['enkaz-kurtarma', 'ezilme-yaralanmasi'], ['hayatta-kalma-soguk-gece', 'hipotermi'], ['ozel-gruplar-acil-dogum', 'ilk-yardim-bebek-kpr'],
+    ['yangin-duman-solunmasi', 'temel-yasam-destegi'], ['yangin-duman-solunmasi', 'yanik'], ['yaralanma-saplanan-cisim', 'yaralanma-goz'],
+  ];
+  for (const [from, to] of LINKS) {
+    await q.goto(base + '?guide=' + from, { waitUntil: 'load', timeout: 60000 });
+    await q.waitForSelector(T('guide-detail'));
+    const raw = await q.evaluate(() => document.querySelector('[data-testid="guide-detail"]').textContent.includes('[['));
+    check(!raw, `${from}: işaretleme ([[…]]) ekranda görünmez`);
+    const link = `${T('guide-link')}[data-guide-id="${to}"]`;
+    check(!!(await q.$(link)), `${from}: metinde ${to} bağlantısı var`);
+    check(!!(await q.$(`${T('guide-related')} ${T('guide-card')}[data-guide-id="${to}"]`)), `${from}: "İlgili rehberler" listesinde ${to}`);
+    const fromTitle = data.guides[from].title;
+    await q.click(link);
+    await q.waitForFunction((t) => document.querySelector('#rh-title')?.textContent === t, data.guides[to].title, { timeout: 5000 }).catch(() => {});
+    check((await q.textContent('#rh-title')) === data.guides[to].title, `${from} → ${to}: bağlantı rehberi açar`);
+    check((await q.textContent(T('guide-back'))).trim() === '← ' + fromTitle, `${to}: geri düğmesi bağlantının olduğu rehbere ("${fromTitle}")`);
+    await q.click(T('guide-back'));
+    check((await q.textContent('#rh-title')) === fromTitle, `${to}: geri ${from} rehberine döner`);
+  }
+  // Kategori içinden açılan rehberde bağlantı → hedef → geri → aynı rehber → geri → kategori
+  await q.goto(base + '?cat=deprem&guide=enkaz-kurtarma', { waitUntil: 'load', timeout: 60000 });
+  await q.waitForSelector(T('guide-detail'));
+  const catTitle = data.cats.find((c) => c.id === 'deprem').title;
+  await q.click(`${T('guide-related')} ${T('guide-card')}[data-guide-id="ezilme-yaralanmasi"]`);
+  check((await q.textContent('#rh-title')) === data.guides['ezilme-yaralanmasi'].title, 'İlgili rehberler kartı rehberi açar');
+  await q.click(T('guide-back'));
+  check((await q.textContent(T('guide-back'))).trim() === '← ' + catTitle, 'bağlantıdan geri dönünce rehberin kendi geri düğmesi korunur (kategori)');
+  // Fener ve arama işaretlemeyi görmez
+  const plain = await q.evaluate(async () => {
+    const s = await import('/src/lib/guides-search.ts');
+    return s.guideToText(s.getGuide('enkaz-kurtarma'));
+  });
+  check(!plain.includes('[[') && plain.includes('"Ezilme yaralanması" rehberine bakın'), 'guideToText (Fener bağlamı) işaretlemesiz düz metin');
+  // Büyük yazıda bağlantılı adım ve ilgili rehberler taşmaz
+  await q.goto(base + '?guide=yangin-duman-solunmasi', { waitUntil: 'load', timeout: 60000 });
+  await q.waitForSelector(T('guide-detail'));
+  await q.evaluate(() => (document.documentElement.style.fontSize = '130%'));
+  await q.waitForTimeout(200);
+  const big = await q.evaluate(() => {
+    const main = document.getElementById('main');
+    const small = [...document.querySelectorAll('[data-testid="guide-related"] button')].filter((b) => b.getBoundingClientRect().height < 44).length;
+    return { h: main.scrollWidth <= main.clientWidth + 1, small };
+  });
+  check(big.h && big.small === 0, 'büyük yazı: bağlantılı rehberde taşma yok, ilgili rehber kartları ≥44 px ' + JSON.stringify(big));
+  await q.$eval(T('guide-related'), (e) => e.scrollIntoView({ block: 'center' }));
+  await q.screenshot({ path: shots + '/baglanti-buyuk-yazi-360.png' });
+  await q.close();
+}
+
 // Kendine Yetmek paketi: kurulu değil → indir → kategoriler → paket rehberi; bozuk paket → silip yeniden indir
 {
   const fs = await import('fs');
@@ -276,9 +329,26 @@ for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { wi
         await q.click(T('ky-redownload'));
       }
       await q.waitForSelector(T('guide-pack-section'), { timeout: 60000 }).catch(() => {});
+      // Öneriler 2026-11: kategoriler katlanır üst başlıklar altında; başlangıçta kapalı
+      const groups = await q.$$eval(T('ky-group'), (els) => els.map((e) => [e.dataset.groupId, e.querySelector('[data-testid="ky-group-count"]')?.textContent]));
+      check(groups.length >= 10 && groups.length <= 14 && !groups.some((g) => g[0] === 'diger'), `Kendine Yetmek: ${groups.length} üst başlık, "Diğer" yok`);
+      check(groups.every((g) => /^\d+ kategori · \d+ rehber$/.test(g[1] ?? '')), 'Kendine Yetmek: başlıklarda kategori ve rehber sayısı');
+      check(!broken ? (await q.$$(`${T('guide-category')}[data-pack-id]`)).length === 0 : true, 'Kendine Yetmek: başlıklar başlangıçta kapalı');
+      if (!broken) {
+        await q.screenshot({ path: shots + '/ky-gruplar.png', fullPage: false });
+        const g0 = groups[0]?.[0];
+        await q.click(`${T('ky-group')}[data-group-id="${g0}"] ${T('ky-group-toggle')}`);
+        const n0 = (await q.$$(`${T('ky-group')}[data-group-id="${g0}"] ${T('guide-category')}`)).length;
+        check(n0 > 0 && (await q.getAttribute(`${T('ky-group')}[data-group-id="${g0}"] ${T('ky-group-toggle')}`, 'aria-expanded')) === 'true', `Kendine Yetmek: "${g0}" açılır (${n0} kategori)`);
+        await q.click(`${T('ky-group')}[data-group-id="${g0}"] ${T('ky-group-toggle')}`);
+        check((await q.$$(`${T('ky-group')}[data-group-id="${g0}"] ${T('guide-category')}`)).length === 0, `Kendine Yetmek: "${g0}" kapanır`);
+      }
+      if (!(await q.$(T('ky-groups')))) console.log('  (Kendine Yetmek başlıkları yok)');
+      else if ((await q.textContent(T('ky-toggle-all'))).trim() === 'Hepsini aç') await q.click(T('ky-toggle-all'));
       const packCats = await q.$$eval(`${T('guide-category')}[data-pack-id]`, (els) => els.map((e) => e.dataset.categoryId));
       check(hits >= 1 && packCats.length > 10, `Kendine Yetmek${broken ? ' (silip yeniden indir)' : ''}: indi, ${packCats.length} kategori`);
       if (!broken && packCats.length) {
+        check(packCats.length === 57, `Kendine Yetmek: "Hepsini aç" ile 57 kategorinin hepsi görünür (${packCats.length})`);
         await q.screenshot({ path: shots + '/ky-kurulu.png', fullPage: false });
         await q.click(`${T('guide-category')}[data-category-id="${packCats[0]}"]`);
         await q.waitForSelector(T('guide-card'));
@@ -292,6 +362,32 @@ for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { wi
         check(!!(await q.$(`${T('guide-card')}[data-guide-id="${gid}"]`)), 'paket rehberinden geri: paket kategorisine döner');
         // aramada paket rehberleri de çıkar
         await q.click(T('category-back'));
+        check((await q.$$(`${T('guide-category')}[data-pack-id]`)).length === 57, 'Kendine Yetmek: kategoriden dönünce açık başlıklar açık kalır');
+        // 360 px ve büyük yazı: başlıklar ve kategori kutuları taşmaz
+        await q.setViewportSize({ width: 360, height: 640 });
+        await q.evaluate(() => (document.documentElement.style.fontSize = '130%'));
+        await q.waitForTimeout(250);
+        const lay = await q.evaluate(() => {
+          const main = document.getElementById('main');
+          const small = [...document.querySelectorAll('[data-testid="ky-group-toggle"], [data-testid="ky-toggle-all"]')].filter((b) => { const r = b.getBoundingClientRect(); return r.height < 44 || r.width < 44; }).length;
+          const over = [...document.querySelectorAll('.ky-group-title, .ky-group-hint, .ky-group-count, .rh-cat-title')].filter((e) => e.scrollWidth > e.clientWidth + 1).length;
+          return { h: main.scrollWidth <= main.clientWidth + 1, small, over };
+        });
+        check(lay.h && !lay.small && !lay.over, '360 px + büyük yazı: Kendine Yetmek başlıklarında taşma yok, hedefler ≥44 px ' + JSON.stringify(lay));
+        await q.$eval(T('ky-groups'), (e) => e.scrollIntoView({ block: 'start' }));
+        await q.screenshot({ path: shots + '/ky-gruplar-360-buyuk.png' });
+        // Paket rehberindeki tırnaklı gönderme ('Çam' rehberinde) bağlantı olur
+        await q.evaluate(() => (document.documentElement.style.fontSize = ''));
+        await q.goto(base + '?guide=sf-ybt-kis', { waitUntil: 'load', timeout: 60000 });
+        await q.waitForSelector(T('guide-detail'), { timeout: 30000 }).catch(() => {});
+        if (await q.$(T('guide-detail'))) {
+          const l = `${T('guide-link')}[data-guide-id="sf-ybt-cam"]`;
+          check(!!(await q.$(l)), "paket rehberi: 'Çam' rehberine gönderme bağlantı olur");
+          await q.click(l);
+          check(((await q.textContent('#rh-title')) ?? '').startsWith('Çam'), 'paket bağlantısı hedef rehberi açar');
+        } else check(false, 'paket rehberi ?guide=sf-ybt-kis açılmadı');
+        await q.goto(base + '?tab=rehber', { waitUntil: 'networkidle' });
+        await q.waitForSelector(T('guide-search'));
         await q.fill(T('guide-search'), 'kav');
         check((await q.$$(T('guide-card'))).length > 0, 'arama paket rehberlerini de bulur');
       }
@@ -312,7 +408,8 @@ for (const [name, vp] of VIEWS) {
     const r = await q.evaluate(() => {
       const main = document.getElementById('main');
       const out = { hscroll: main.scrollWidth > main.clientWidth + 1 || document.documentElement.scrollWidth > innerWidth + 1, overflow: [], small: [] };
-      for (const el of main.querySelectorAll('button, a, input')) {
+      // Metin içi rehber bağlantıları (.rh-link) WCAG 2.5.8 satır içi istisnası; aynı hedefler altta 44 px kart olarak da var
+      for (const el of main.querySelectorAll('button, a:not(.rh-link), input')) {
         const b = el.getBoundingClientRect();
         if (b.width && (b.height < 44 || b.width < 44)) out.small.push((el.dataset.testid || el.className) + ` ${Math.round(b.width)}×${Math.round(b.height)}`);
       }

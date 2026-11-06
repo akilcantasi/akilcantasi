@@ -73,10 +73,10 @@ Kapsam: src/tabs/RehberTab.tsx, src/tabs/KendineYetmek.tsx, src/content/**, src/
    yinelenen `.rh-row:hover` kuralı kaldırıldı.
 
 ### Kalan / öneri
-- Rehber metnindeki göndermeler ("…" rehberine bakın) düz yazı; dokununca o rehberi açan bağlantı olabilir.
+- ~~Rehber metnindeki göndermeler düz yazı~~ → Öneriler 2026-11'de bağlantı oldu.
 - Arama ünsüz yumuşamasını bilmiyor ("ısırık" ↔ "ısırığı", "kalp" ↔ "kalbi"). Denendi; iki eğri sorguyu
   ("işyerinde deprem hazırlığı", "otizmli çocuk deprem") bozduğu için geri alındı, ağırlıkla yeniden denenebilir.
-- Kendine Yetmek kurulunca 57 kategori ana ekranda tek tek kutu olarak çıkıyor (uzun sayfa); 12 üst başlığa katlanabilir.
+- ~~Kendine Yetmek'in 57 kategorisi tek tek kutu~~ → Öneriler 2026-11'de 13 katlanır başlık.
 - `all-guides-shot.mjs` yüklü makinede bir kez "Target crashed" verdi; kalan rehberlerle yeniden çalıştırınca tamamlandı.
 
 ### Komutlar
@@ -85,3 +85,36 @@ Kapsam: src/tabs/RehberTab.tsx, src/tabs/KendineYetmek.tsx, src/content/**, src/
   kaydırma konumu, sonuçsuz aramada Fener'e sor, Kendine Yetmek indirme (indirme adresi yerel `data/rehber/kendine-yetmek.rehber.json`
   dosyasına yönlendirilir) ve bozuk paket → silip yeniden indir.
 - Çizimler: `node e2e/all-guides-shot.mjs http://127.0.0.1:5461/ /tmp/ag/out` (önce `/tmp/ag/ids.json`).
+
+## Öneriler 2026-11
+
+### Rehberler arası bağlantılar
+- Biçim: `[[rehber-kimliği|görünen metin]]` (özet, uyarı, adım, Yapmayın). Ortak yardımcı `src/content/guide-links.ts`
+  (`parseGuideLinks`, `stripGuideLinks`, `linkQuotedTitles`, `buildTitleIndex`).
+- Yerleşik rehberlerdeki 6 gönderme bağlantıya çevrildi: enkaz-kurtarma → ezilme-yaralanmasi, hayatta-kalma-soguk-gece →
+  hipotermi, ozel-gruplar-acil-dogum → ilk-yardim-bebek-kpr, yangin-duman-solunmasi → temel-yasam-destegi ve yanik,
+  yaralanma-saplanan-cisim → yaralanma-goz. Başka bağlantısız "… rehberine bakın" yok (test denetliyor).
+- Ekranda: metin içinde kehribar, altı çizili bağlantı (WCAG 2.5.8 satır içi istisnası) ve rehberin altında 44 px'lik
+  "İlgili rehberler" kartları. Bağlantıdan açılan rehberin geri düğmesi bağlantının olduğu rehbere döner (zincir korunur).
+- Yayımlanmış Kendine Yetmek paketi yeniden derlenmedi: tırnaklı başlık + "rehber…" göndermeleri ('Çam' rehberinde)
+  başlık tek bir rehbere denk geliyorsa kendiliğinden bağlantı olur (pakette 53 gönderme). Eşleşmeyenler düz yazı kalır.
+- Arama dizini (`guides-search.ts`), `guideToText` ve Fener (`rag.ts` `stepToText`, `fallback.ts` özet) işaretlemeyi atar.
+- Arama sonuç kartlarının özetinde işaretleme atılır (kart zaten düğme; içinde bağlantı yok).
+
+### Kendine Yetmek: 13 üst başlık
+- `src/content/ky-groups.ts`: 57 kategori → 13 başlık (istemci tarafı eşleme, paket değişmedi); bilinmeyen kategori "Diğer".
+- Başlık kartı: başlık, kısa açıklama, "N kategori · M rehber"; dokununca kategori kutuları açılır. Başlangıçta kapalı,
+  "Hepsini aç / kapat" var, açık başlıklar `akil.ky.acik` anahtarında; kategoriden dönünce açık kalır.
+- 360 px ve büyük yazıda (html %130) taşma yok, hedefler ≥44 px (e2e denetliyor).
+
+### Komutlar
+- Birim: `npx vitest run tests/guide-links.test.ts tests/ky-groups.test.ts tests/guides.test.ts tests/fener.test.ts tests/arama-kalitesi.test.ts`
+- E2E: `node e2e/qa-rehber.mjs http://127.0.0.1:5263/ /tmp/qa-rehber` → `1995 OK, 0 HATA` (yeni: 6 bağlantı + geri dönüş,
+  İlgili rehberler, guideToText düz metin, büyük yazı; Kendine Yetmek başlıkları, aç/kapat, Hepsini aç → 57 kategori,
+  360 px + büyük yazı, paket rehberinde 'Çam' bağlantısı). Satır içi `.rh-link` dokunma hedefi denetiminden muaf.
+
+### Kalan
+- Paket metnindeki bazı göndermeler başlıkla birebir eşleşmediği için bağlantı olmadı (ör. "ana uygulamadaki rehberi açın",
+  'Reçine yapıştırıcı' ve 'Tutkal' rehberlerine → yalnız Tutkal). Paket yeniden derlenirken `[[…]]` ile işaretlenebilir;
+  ama eski uygulama sürümleri işaretlemeyi çıplak gösterir.
+

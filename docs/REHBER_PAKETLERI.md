@@ -27,6 +27,28 @@ Dosya adı: `<paket-id>.rehber.json` (uzantı zorunlu; sıradan `.json` harita n
 - Yerleşik bir rehberle aynı kimliği taşıyan paket rehberi yok sayılır.
 - Rehberin `note` alanı (yerleşik rehberlerde de) ayrıntı ekranının başında uyarı bandı olarak gösterilir.
 
+### Rehberler arası bağlantı
+
+Özet, uyarı, adım ve "Yapmayın" metinlerinde başka bir rehbere bağlantı verilebilir:
+
+```
+"Uzun süre sıkışmış birini çekmeyin; [[ezilme-yaralanmasi|\"Ezilme yaralanması\" rehberine]] bakın."
+```
+
+- Biçim `[[rehber-kimliği|görünen metin]]`. Arayüz bunu dokununca o rehberi açan bağlantıya çevirir
+  ve rehberin altına "İlgili rehberler" listesi (44 px'lik kartlar) ekler. Bağlantıdan açılan
+  rehberin geri düğmesi bağlantının olduğu rehbere döner.
+- Hedef yoksa (silinmiş ya da paket kurulu değil) yalnız görünen metin düz yazı olarak kalır.
+- Arama dizini, Fener (RAG ve modelsiz cevap) ve `guideToText` işaretlemeyi atar; tek ortak
+  yardımcı: `src/content/guide-links.ts` (`stripGuideLinks`).
+- İşaretlemesi olmayan eski metinlerde tırnak içindeki rehber başlığının hemen ardından "rehber…"
+  geliyorsa ('Çam' rehberinde, "Hipotermi" rehberi) ve başlık (ya da parantez, iki nokta, uzun
+  çizgiden önceki kısmı) tek bir rehbere denk geliyorsa o da bağlantı olur. Yayımlanmış
+  "Kendine Yetmek" paketi yeniden derlenmeden ~50 gönderme böyle bağlanır.
+- Yeni paket metinlerinde de `[[…]]` kullanılabilir; ama bu işaretlemeyi tanımayan eski uygulama
+  sürümleri onu çıplak metin olarak gösterir. Paket yeniden derlenecekse bunu göz önünde tutun.
+- Test: `tests/guide-links.test.ts` (yerleşik rehberlerdeki her hedef var; paketteki göndermeler doğru rehbere bağlanır).
+
 ## Kaynak ve derleme
 
 Kaynaklar: `packs-src/sifirdan/<klasör>/guides.ts` (`PACK`, `CATEGORIES`, `GUIDES`),
@@ -55,6 +77,10 @@ Betik:
 2. `manifest-girdileri.json` içindeki girdileri `public/packs-manifest.json` → `packs` dizisine
    ekleyin (aynı `id` varsa değiştirin), `updated` tarihini artırın. Girdiler `validateManifest`
    ile denetlenmiştir; paket her derlemede değişirse `size` ve `sha256` de değişir.
+3. Kataloğu yeniden imzalayın: `node tools/katalog-imzala.mjs` (`public/packs-manifest.json.sig`
+   yazılır; imza anahtarı yalnız proje sahibindedir). Anahtar sizde yoksa aylık iş ya da
+   `hf-yukle` yayımlarken yeniden imzalar. İnternetteki merkezi katalog imzasız ya da imzası
+   tutmazsa uygulamalarca yok sayılır (bkz. [PAKET_GUVENLIGI.md](PAKET_GUVENLIGI.md)).
 
 ## Uygulamadaki akış
 
@@ -66,8 +92,14 @@ Betik:
 - `src/content/pack-guides.ts`: kurulu paketleri OPFS'ten ya da bilgi noktasından okur, doğrular,
   bellekte tutar; paket listesi değişince (`packsVersion`) yeniler ve abonelere haber verir
   (`usePackGuides`, `subscribePackGuides`). Açılışta `initPackGuides()` (main.tsx).
-- Rehber sekmesi: paket kategorileri ana kategorilerden sonra "Sıfırdan" bölümünde; paket
-  çizimleri `<Art>` üzerinden `<img>` ile. `?guide=<id>` ve `?cat=<id>` paket yüklenince açılır.
+- Rehber sekmesi: paket kategorileri ana kategorilerden sonra "Kendine Yetmek" bölümünde, 13 katlanır
+  üst başlık altında (Yabani bitkiler, Av ve balık, Yiyecek saklama ve mutfak, Su, Hijyen ve sağlık,
+  Barınak, Ateş, Giyim ve zanaat, Tarım ve hayvancılık, Enerji, Onarım, Yolculuk ve yerleşim, Bilgi
+  ve topluluk). Eşleme istemcidedir (`src/content/ky-groups.ts`, kategori kimliği → başlık); pakete
+  dokunulmaz. Eşlemede olmayan yeni kategoriler "Diğer" başlığına düşer; yeni kategori eklenince
+  eşlemeye de ekleyin (`tests/ky-groups.test.ts` yayımlanmış paketle karşılaştırır). Açık başlıklar
+  `akil.ky.acik` anahtarında saklanır. Paket çizimleri `<Art>` üzerinden `<img>` ile.
+  `?guide=<id>` ve `?cat=<id>` paket yüklenince açılır.
 - Arama (`guides-search.ts`: `getAllGuides`, `getGuide`) paket rehberlerini de kapsar; dizin
   paket sürümü değişince yeniden kurulur. Fener RAG aynı aramayı kullanır.
 - Testler: `tests/rehber-paket.test.ts`.

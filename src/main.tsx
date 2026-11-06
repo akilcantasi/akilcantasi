@@ -22,6 +22,7 @@ import { go, TAB_IDS, type TabId } from './lib/store';
 import { TOOLS } from './tools/registry';
 import { initPackGuides } from './content/pack-guides';
 import { initGecmis } from './gecmis';
+import { swKaydet } from './sw-kayit';
 
 /**
  * Doğrudan bağlantıdaki kimlik kullanılabilir mi? Adres herkesin elinde: `__proto__`,
@@ -76,11 +77,15 @@ if (new URLSearchParams(location.search).has('art')) {
   // Kurulu rehber paketlerini (.rehber.json) yükle; ?guide= paket rehberi ise yüklenince açılır
   initPackGuides();
   prefetchLazyChunks();
+  // Tarayıcıda (bilgi noktası, masaüstü) uygulama kabuğu çevrimdışı açılabilsin; Android'de yok
+  swKaydet();
 }
 
 /**
- * Tarayıcıdan (bilgi noktası) açılan uygulamada service worker yok: tembel yüklenen
- * parçalar ancak ilk kullanımda indirilir. Bağlantı sonradan koparsa (Wi-Fi'dan
+ * Tarayıcıdan (bilgi noktası) açılan uygulamada tembel yüklenen parçalar ancak ilk
+ * kullanımda indirilir; telefondan http://192.168.x.x ile girilince service worker da
+ * çalışmaz (güvenli bağlam değil). Ayrıca SW varsa (localhost/https) bu ön yükleme
+ * parçaları SW önbelleğine de koyar. Bağlantı sonradan koparsa (Wi-Fi'dan
  * çıkıldı) açılmamış araçlar "Yüklenemedi" der. Bu yüzden sayfa açıldıktan sonra,
  * boşta kalınca bütün araçlar ve harita/arama modülleri önceden yüklenir; modül
  * önbelleğinde kalırlar ve bağlantı kopsa da çalışırlar. Büyük model kütüphaneleri

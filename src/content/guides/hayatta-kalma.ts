@@ -550,7 +550,7 @@ export const GUIDES: Guide[] = [
       "Birden fazla kişiyseniz birbirinize sokulun; sırt sırta ya da yan yana yatın.",
       "Yatmadan önce bir şeyler yiyin ve ılık bir şey için. Vücut ısıyı yiyecekten üretir.",
       "Üşürseniz kol ve bacaklarınızı kımıldatın, ama terleyecek kadar yorulmayın.",
-      "Titreme durur, uyuşukluk, sakarlık ya da konuşma bozukluğu başlarsa bu hipotermidir: 112'yi arayın, Hipotermi rehberine bakın."
+      "Titreme durur, uyuşukluk, sakarlık ya da konuşma bozukluğu başlarsa bu hipotermidir: 112'yi arayın, [[hipotermi|Hipotermi rehberine]] bakın."
     ],
     "art": [
       null,

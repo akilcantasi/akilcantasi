@@ -12,6 +12,9 @@ paket üretimi için tools/osm_poi_export.md belgesine bakın.
 
 Gereksinimler: pip install pmtiles mapbox-vector-tile shapely
 Kullanım:      python3 tools/make_sample_map.py [çıktı_klasörü]
+               python3 tools/make_sample_map.py --yerler [çıktı_klasörü]
+                 → testdata/sample_yerler_ornek.pmtiles: aynı harita + "places" katmanı
+                   (uydurma yer adları; harita yer adı aramasının testleri için)
 """
 import gzip
 import json
@@ -112,7 +115,7 @@ def clip(geom, tb):
     return None if c.is_empty else c
 
 
-def make_tile(z, x, y):
+def make_tile(z, x, y, places=None):
     tb = tile_bounds_merc(z, x, y)
     layers = []
 
@@ -145,6 +148,19 @@ def make_tile(z, x, y):
             if c:
                 bl.append({'geometry': c, 'properties': {'kind': 'building'}})
         add('buildings', bl)
+    if places:
+        pl = []
+        for name, kind, detail, mz, pop, lon, lat in places:
+            if z < mz - 1:
+                continue
+            g = Point(*merc(lon, lat))
+            if not box(*tb).contains(g):
+                continue
+            props = {'name': name, 'kind': kind, 'kind_detail': detail, 'min_zoom': mz}
+            if pop:
+                props['population'] = pop
+            pl.append({'geometry': g, 'properties': props})
+        add('places', pl)
     if not layers:
         return None
     data = mapbox_vector_tile.encode(
@@ -154,14 +170,14 @@ def make_tile(z, x, y):
     return gzip.compress(data, mtime=0)
 
 
-def build_pmtiles(path):
+def build_pmtiles(path, places=None):
     tiles = []
     for z in range(MINZ, MAXZ + 1):
         x0, y0 = lonlat_to_tile(BBOX[0], BBOX[3], z)
         x1, y1 = lonlat_to_tile(BBOX[2], BBOX[1], z)
         for x in range(x0, x1 + 1):
             for y in range(y0, y1 + 1):
-                t = make_tile(z, x, y)
+                t = make_tile(z, x, y, places)
                 if t:
                     tiles.append((zxy_to_tileid(z, x, y), t))
     tiles.sort()
@@ -183,12 +199,12 @@ def build_pmtiles(path):
                 'center_lat_e7': e7(39.91),
             },
             {
-                'name': 'Akıl Çantası örnek harita (sentetik)',
+                'name': 'Akıl Çantası örnek harita (sentetik)' + (' + yer adları' if places else ''),
                 'description': 'SENTETIK test geometrisi - gercek konum dogrulugu yoktur',
                 'attribution': '© OpenStreetMap katkıcıları (şema) · sentetik test verisi',
                 'vector_layers': [
                     {'id': n, 'fields': {'kind': 'String'}}
-                    for n in ['earth', 'water', 'landuse', 'roads', 'buildings']
+                    for n in ['earth', 'water', 'landuse', 'roads', 'buildings'] + (['places'] if places else [])
                 ],
             },
         )
@@ -226,6 +242,35 @@ def build_poi(path):
         json.dump(fc, f, ensure_ascii=False, indent=1)
     return len(feats)
 
+
+# ---- Yer adları (harita aramasının testi için) ----
+# Uydurma adlar; Türkçe harf katlamasını (ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c) sınamak için seçildi.
+# Protomaps "places" şeması: kind, kind_detail (OSM place=*), min_zoom, population.
+# Yalnızca `--yerler` ile üretilir: sample_ornek.pmtiles değişmez (başka testler ona dayanır).
+PLACES = [
+    ('Ankara', 'locality', 'city', 4, 5000000, 32.8541, 39.9208),
+    ('Örnekçay', 'locality', 'town', 8, 60000, 32.700, 39.905),
+    ('Çamlıtepe', 'locality', 'town', 8, 40000, 32.780, 39.950),
+    ('Kızılay', 'neighbourhood', 'suburb', 13, 0, 32.8541, 39.9208),
+    ('Örnek Mahallesi', 'neighbourhood', 'suburb', 13, 0, 32.845, 39.915),
+    ('Güneşli Mahallesi', 'neighbourhood', 'suburb', 13, 0, 32.865, 39.930),
+    ('Işıklar Mahallesi', 'macrohood', 'quarter', 11, 0, 32.725, 39.885),
+    ('İğdecik', 'locality', 'village', 11, 0, 32.670, 39.940),
+    ('Şahinler', 'locality', 'village', 11, 0, 32.760, 39.960),
+    ('Gökçeören', 'locality', 'village', 11, 0, 32.800, 39.875),
+    ('Üçpınar', 'locality', 'village', 11, 0, 32.880, 39.955),
+    ('Çağlayan', 'locality', 'village', 11, 0, 32.690, 39.880),
+    ('Söğütlü', 'locality', 'hamlet', 13, 0, 32.740, 39.935),
+    ('Yeşil Vadi', 'locality', 'locality', 13, 0, 32.820, 39.890),
+]
+
+if __name__ == '__main__' and '--yerler' in sys.argv:
+    args = [a for a in sys.argv[1:] if a != '--yerler']
+    out = args[0] if args else os.path.join(os.path.dirname(__file__), '..', 'testdata')
+    os.makedirs(out, exist_ok=True)
+    n = build_pmtiles(os.path.join(out, 'sample_yerler_ornek.pmtiles'), PLACES)
+    print(f'{n} karo ({len(PLACES)} yer adı) yazıldı -> {os.path.abspath(out)}')
+    sys.exit(0)
 
 if __name__ == '__main__':
     out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'testdata')

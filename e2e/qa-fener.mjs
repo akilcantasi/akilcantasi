@@ -290,6 +290,9 @@ if (run('model')) {
   await page.click('[data-testid="fener-model-close"]');
   await page.waitForFunction(() => document.querySelector('[data-testid="fener-status"]')?.dataset.model === 'tiny-0.5b-q4_k_m.gguf');
   check(/elle seçildi/.test(await page.textContent('[data-testid="fener-model-meta"]')), 'çubukta "elle seçildi"');
+  // Panel kapanınca geri tuşu kaydı history.back() ile geri alınır (gecmis.ts); bu gezinme
+  // bitmeden yenilenirse yenileme iptal olur (net::ERR_ABORTED)
+  await page.waitForTimeout(400);
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForSelector('[data-testid="fener-status"][data-mode="model"]');
   await installEngineMock(page);

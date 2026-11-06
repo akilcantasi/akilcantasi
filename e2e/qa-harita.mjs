@@ -4,6 +4,7 @@
 //   gerçek Türkiye haritası (bilgi noktası sunucusu, data/ içinde turkiye.pmtiles):
 //   KONUM_START=39.9208,32.8541 node e2e/qa-harita.mjs http://localhost:8460/ /tmp/qa-harita-real ""
 // Ek ortam değişkeni: QA_SKIP_KONUM=1 → konum-check.mjs akışını atla.
+// Bölüm 10 (yer adı araması) örnek veride testdata/sample_yerler_ornek.pmtiles kullanır.
 import { createRequire } from 'module';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -431,6 +432,92 @@ if (!realMap) {
   });
   check(vis, 'en büyük yazı: "Yön göster" kart alanında kırpılmıyor');
   await shot(p, shots + '/qa-harita-buyuk-yazi.png');
+  await ctx.close();
+}
+
+// ---------- 10) Yer adı araması (internetsiz) ----------
+// Örnek veride yer adlı örnek harita (sample_yerler_ornek.pmtiles: uydurma il/ilçe/mahalle/köy adları);
+// gerçek haritada "Ankara". Harita merkezinin seçilen yere kaydığı denetlenir.
+{
+  const yerQuery = realMap ? '' : 'devmap=/testdata/sample_yerler_ornek.pmtiles&devpoi=/testdata/sample_poi_ornek.geojson';
+  const yerUrl = base + '?tab=harita' + (yerQuery ? '&' + yerQuery : '');
+  const { ctx, p } = await open({ viewport: { width: 360, height: 640 }, geolocation: { ...START, accuracy: 8 }, permissions: ['geolocation'] });
+  // Yer adları hazırlanırken durumu görebilmek için harita dosyası yavaş verilir
+  if (!realMap) await ctx.route('**/sample_yerler_ornek.pmtiles', async (r) => { await new Promise((ok) => setTimeout(ok, 350)); await r.continue(); });
+  await p.goto(yerUrl, { waitUntil: 'domcontentloaded' });
+  await waitMap(p);
+  const ara = '[data-testid="yer-ara"]';
+  check(await p.$eval(ara, (e) => e.getBoundingClientRect().height >= 44), 'yer arama: alan ≥ 44 px');
+  await p.click(ara);
+  const hazirlik = await p.waitForSelector('[data-testid="yer-hazirlik"]', { timeout: 5000 }).then((e) => e.textContent()).catch(() => '');
+  if (!realMap) check(/Yer adları hazırlanıyor… %\d+/.test(hazirlik), 'yer arama: hazırlanırken "Yer adları hazırlanıyor… %n" (' + hazirlik + ')');
+  check(await p.isVisible('[data-testid="yer-bos"]'), 'yer arama: boş sorguda ipucu');
+  await p.waitForSelector('[data-testid="yer-hazirlik"]', { state: 'detached', timeout: realMap ? 240000 : 30000 });
+  const hedefAd = realMap ? 'Ankara' : 'Işıklar Mahallesi';
+  await p.fill(ara, realMap ? 'ANKARA' : 'isik'); // büyük harf / Türkçe harfsiz yazım
+  await p.waitForSelector('[data-testid="yer-sonuc"]');
+  const ilk = await p.$eval('[data-testid="yer-sonuc"]', (e) => ({ ad: e.querySelector('.yer-sonuc-ad').textContent, tur: e.querySelector('[data-testid="yer-tur"]').textContent }));
+  check(ilk.ad === hedefAd && ilk.tur === (realMap ? 'İl' : 'Mahalle'), `yer arama: ilk sonuç ${hedefAd} (${JSON.stringify(ilk)})`);
+  const kisa = await smallTargets(p, '[data-testid="yer-sonuc"], [data-testid="yer-ara-sil"]');
+  check(kisa.length === 0, 'yer arama: sonuçlar ve temizle düğmesi ≥ 44 px ' + JSON.stringify(kisa));
+  check(await p.$eval('[data-testid="yer-sonuclar"]', (e) => e.getBoundingClientRect().bottom <= (window.visualViewport?.height ?? innerHeight)), 'yer arama: sonuç listesi görünür alanda bitiyor');
+  await shot(p, shots + '/qa-harita-yer-sonuc-360.png');
+  const once = await p.evaluate(() => window.__acMap.getCenter());
+  await p.click('[data-testid="yer-sonuc"] >> nth=0');
+  await p.waitForSelector('[data-testid="yer-card"]');
+  await p.waitForTimeout(1600);
+  const sonra = await p.evaluate(() => window.__acMap.getCenter());
+  const hedef = realMap ? { lat: 39.93, lng: 32.86 } : { lat: 39.885, lng: 32.725 };
+  const tol = realMap ? 0.2 : 0.002;
+  check(Math.abs(sonra.lat - hedef.lat) < tol && Math.abs(sonra.lng - hedef.lng) < tol && Math.hypot(sonra.lat - once.lat, sonra.lng - once.lng) > tol / 2, `yer arama: harita seçilen yere kaydı (${once.lat.toFixed(4)},${once.lng.toFixed(4)} → ${sonra.lat.toFixed(4)},${sonra.lng.toFixed(4)})`);
+  check(!(await p.isVisible('[data-testid="yer-sonuclar"]')), 'yer arama: seçimden sonra liste kapandı');
+  check((await p.textContent('[data-testid="yer-card-name"]')) === hedefAd, 'yer arama: seçim kartında ad');
+  check((await p.$$('[data-testid="yer-marker"]')).length === 1, 'yer arama: haritada seçim işaretçisi');
+  await shot(p, shots + '/qa-harita-yer-kart-360.png');
+  await p.click('[data-testid="yer-direction"]');
+  await p.waitForSelector('[data-testid="map-dir-panel"] [data-testid="dir-text"]', { timeout: 30000 });
+  check((await p.textContent('[data-testid="map-dir-panel"]')).includes(hedefAd), 'yer arama: "Yön göster" seçilen yere');
+  await p.keyboard.press('Escape');
+  await p.waitForSelector('[data-testid="map-dir-panel"]', { state: 'detached' });
+  // Sonuç yok
+  await p.fill(ara, 'qqqqzz');
+  await p.waitForSelector('[data-testid="yer-sonuc-yok"]');
+  check((await p.textContent('[data-testid="yer-sonuc-yok"]')).includes('bulunamadı'), 'yer arama: sonuç yok durumu');
+  // Nokta araması: tür adıyla → nokta kartı açılır, yer kartı kapanır
+  if (!realMap) {
+    await p.fill(ara, 'eczane');
+    await p.waitForSelector('[data-testid="yer-sonuc"][data-tur="eczane"]');
+    await p.keyboard.press('Enter');
+    await p.waitForSelector('[data-testid="poi-card"]');
+    check(!(await p.isVisible('[data-testid="yer-card"]')), 'yer arama: nokta seçilince yer kartı kapanır, nokta kartı açılır (Enter = ilk sonuç)');
+    check((await p.textContent('[data-testid="poi-card"]')).includes('Eczane'), 'yer arama: nokta kartında tür');
+    // Escape listeyi kapatır
+    await p.click(ara);
+    await p.fill(ara, 'kiz');
+    await p.waitForSelector('[data-testid="yer-sonuc"]');
+    await p.keyboard.press('Escape');
+    check(!(await p.isVisible('[data-testid="yer-sonuclar"]')), 'yer arama: Escape listeyi kapatır');
+  }
+  check(await p.evaluate(() => { const m = document.querySelector('.app-main'); return m.scrollWidth <= m.clientWidth; }), 'yer arama: 360 px yatay taşma yok');
+  await ctx.close();
+}
+
+// 10b) En büyük yazı: alan ve sonuçlar sığar
+{
+  const yerQuery = realMap ? '' : 'devmap=/testdata/sample_yerler_ornek.pmtiles&devpoi=/testdata/sample_poi_ornek.geojson';
+  const { ctx, p } = await open({ viewport: { width: 360, height: 640 } }, () => localStorage.setItem('ac.settings', JSON.stringify({ textSize: 3 })));
+  await p.goto(base + '?tab=harita' + (yerQuery ? '&' + yerQuery : ''), { waitUntil: 'domcontentloaded' });
+  await waitMap(p);
+  await p.click('[data-testid="yer-ara"]');
+  await p.fill('[data-testid="yer-ara"]', 'örnek');
+  await p.waitForSelector('[data-testid="yer-sonuc"]');
+  const r = await p.evaluate(() => {
+    const m = document.querySelector('.app-main');
+    const l = document.querySelector('[data-testid="yer-sonuclar"]').getBoundingClientRect();
+    return { hx: m.scrollWidth - m.clientWidth, alt: l.bottom, vh: window.visualViewport?.height ?? innerHeight, ilk: document.querySelector('[data-testid="yer-sonuc"]').getBoundingClientRect().height };
+  });
+  check(r.hx <= 0 && r.ilk >= 44, 'yer arama en büyük yazı: taşma yok, sonuç ≥ 44 px ' + JSON.stringify(r));
+  await shot(p, shots + '/qa-harita-yer-buyuk-yazi.png');
   await ctx.close();
 }
 

@@ -450,14 +450,14 @@ export const GUIDES: Guide[] = [
     "steps": [
       "Kendinizi tehlikeye atmadan kişiyi dumanlı yerden temiz havaya çıkarın.",
       "112'yi arayın.",
-      "Bilinci kapalıysa ve normal nefes almıyorsa kalp masajına başlayın (\"Temel yaşam desteği\" rehberi).",
+      "Bilinci kapalıysa ve normal nefes almıyorsa kalp masajına başlayın ([[temel-yasam-destegi|\"Temel yaşam desteği\" rehberi]]).",
       "Bilinci kapalı ama nefes alıyorsa yan yatırın (derlenme pozisyonu).",
       "Bilinci açıksa oturtun, sıkı giysilerini gevşetin.",
       "Astımı varsa kendi kullandığı inhaleri kullanmasına yardım edin.",
       "Yanında kalın, yalnız bırakmayın. Durumu hızla kötüleşebilir.",
       "Ses kısıklığı, nefes darlığı, hırıltı, durmayan öksürük, ağız-burunda is, siyah balgam, göğüs ağrısı, bilinç bulanıklığı ya da baş dönmesi varsa ambulansla hastaneye gitmeli.",
       "İyi görünse bile 24–36 saat bu belirtileri izleyin. Biri başlarsa 112'yi arayın.",
-      "Yanık varsa 20 dakika serin akan suyla soğutun (\"Yanık\" rehberi)."
+      "Yanık varsa 20 dakika serin akan suyla soğutun ([[yanik|\"Yanık\" rehberi]])."
     ],
     "dont": [
       "Dumanlı yere korunmasız girmeyin; siz de bayılabilirsiniz.",

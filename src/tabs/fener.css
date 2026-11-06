@@ -48,6 +48,10 @@
 @keyframes fener-dot { 30% { opacity: 1; } }
 
 .fener-error { font-size: 13px; color: var(--danger); }
+/* Kayıttan geri yüklenen, yazılırken yarıda kalmış cevap: sakin, amber çizgili not */
+.fener-yarim { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px; border-radius: 12px; border: 1px dashed rgba(245, 165, 36, 0.5); background: rgba(245, 165, 36, 0.06); font-size: 13px; color: var(--text2); line-height: 1.4; }
+.fener-yarim .grow { flex: 1 1 180px; }
+.fener-retry { min-height: 44px; padding: 0 14px; font-size: 14px; border-color: var(--accent); color: var(--accent); }
 .fener-sources { display: flex; flex-wrap: wrap; gap: 6px; }
 .fener-tag { max-width: 100%; min-height: 44px; cursor: pointer; }
 .fener-tag:disabled { cursor: default; opacity: 0.8; }
@@ -109,6 +113,10 @@
 .fener-model-fit.fit-heavy, .fener-model-fit.fit-slow { color: var(--accent); }
 .fener-model-fit.fit-incomplete { color: var(--danger); }
 .fener-models-hint, .fener-models-note { font-size: 12px; margin: 0; line-height: 1.4; }
+/* GPU çökme sonrası kapatıldıysa: sakin bilgi notu ve yeniden deneme düğmesi */
+.fener-gpu { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 6px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--line2); background: rgba(255, 255, 255, 0.03); font-size: 12px; color: var(--text2); line-height: 1.4; }
+.fener-gpu > span { flex: 1 1 200px; }
+.fener-gpu-btn { min-height: 44px; padding: 0 14px; font-size: 13px; border-color: var(--accent); color: var(--accent); }
 .fener-models-empty { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .fener-models-empty .empty { margin: 0; }
 

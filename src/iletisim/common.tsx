@@ -5,6 +5,7 @@ import { go } from '../lib/store';
 import { KIND_LABEL, STATUS_LABEL, formatCoords, parseMissing, timeAgo, type BoardItem } from './board';
 import { loadProfile, saveProfile, type Profile } from './outbox';
 import { board, type ServiceState } from './client';
+import { bnSabitMi, useDogrulama, type Dogrulama } from './imza';
 import type { Pos } from './sms';
 import { sonKonumKaydet } from '../lib/enkaz/enkaz';
 
@@ -100,6 +101,10 @@ button.sos-tile:hover { border-color: rgba(255,200,97,0.5); }
 .cm-tag.yardim, .cm-tag.araniyor, .cm-tag.pending { border-color: #6b5320; color: var(--accent); }
 .cm-tag.yarali { border-color: #7a3a33; color: var(--danger); }
 .cm-tag.local { border-color: #2a4f7a; color: var(--blue); }
+/* imza: doğrulandı sakin ve küçük; doğrulanamadı kehribar (kırmızı değil) */
+.cm-tag.dogru { border-color: var(--line2); color: var(--ok); font-size: 11px; }
+.cm-tag.uyari { border-color: #6b5320; color: var(--accent); }
+.cm-uyari { font-size: 13px; color: var(--accent); line-height: 1.45; margin: 0; }
 .cm-coords { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
 .cm-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 14.5px; margin: 0; }
 .cm-kv dt { color: var(--muted); }
@@ -304,6 +309,11 @@ export function ConnCard({ s, compact }: { s: ServiceState; compact?: boolean })
             {s.outbox ? ` · ${s.outbox} kayıt gönderiliyor` : ''}
           </p>
           {s.meshOn && <p>Yakın cihaz ağı açık · {s.meshPeers} cihaz</p>}
+          {s.bnPin === 'farkli' && (
+            <p class="cm-uyari" data-testid="bn-key-changed">
+              Bu adresteki bilgi noktasının anahtarı daha önce görülenden farklı. Cihaz yeniden kurulmuş olabilir; “bu bilgi noktasından” etiketi gösterilmiyor.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -334,19 +344,59 @@ export function ConnCard({ s, compact }: { s: ServiceState; compact?: boolean })
 
 // ---- Pano kaydı ----
 
+/** Gösterilecek durum: imzalı kayıp ilanında yalnız geçerli imzalı güncellemeden gelir */
+export function gorunenDurum(it: BoardItem, d: Dogrulama | null) {
+  return d ? d.status : it.status;
+}
+
+/** Kaydın imza durumu tek kelimeyle (data-imza ve testler için) */
+export function imzaEtiketi(it: BoardItem, d: Dogrulama | null): 'imzasiz' | 'bekliyor' | 'gecerli' | 'gecersiz' {
+  if (!it.pub) return 'imzasiz';
+  if (!d) return 'bekliyor';
+  return d.ilan === 'gecerli' && d.durum !== 'gecersiz' ? 'gecerli' : 'gecersiz';
+}
+
 export function ItemCard({ it, now, actions }: { it: BoardItem; now: number; actions?: ComponentChildren }) {
-  const st = it.status;
+  const d = useDogrulama()(it);
+  const st = gorunenDurum(it, d);
+  const imza = imzaEtiketi(it, d);
+  // Bilgi noktası imzası: geçerli ve anahtar sabitlenmişse "bu bilgi noktasından"; imzasız eski
+  // kayıtta eski etiket; imza tutmuyorsa etiket gösterilmez, "doğrulanamadı" denir
+  const bn = it.local ? (!it.bsig ? 'eski' : !d ? 'bekliyor' : d.bn === 'gecerli' && bnSabitMi(it.bpub) ? 'gecerli' : 'gecersiz') : 'yok';
   const missing = it.kind === 'kayip' ? parseMissing(it.text) : null;
   return (
-    <article class={'cm-item' + (it.pending ? ' pending' : '')} data-testid="board-item" data-kind={it.kind} data-id={it.id} data-status={st ?? ''}>
+    <article
+      class={'cm-item' + (it.pending ? ' pending' : '')}
+      data-testid="board-item"
+      data-kind={it.kind}
+      data-id={it.id}
+      data-status={st ?? ''}
+      data-imza={imza}
+      data-bn={bn}
+    >
       <div class="cm-item-head">
         <span class="cm-tag">{KIND_LABEL[it.kind]}</span>
         {st && <span class={'cm-tag ' + st}>{STATUS_LABEL[st]}</span>}
         <b>{it.from}</b>
         <span>{it.pending ? '' : timeAgo(it.time, now)}</span>
         {it.pending && <span class="cm-tag pending">gönderilmeyi bekliyor</span>}
-        {it.local && <span class="cm-tag local">bilgi noktasından</span>}
+        {bn === 'eski' && <span class="cm-tag local">bilgi noktasından</span>}
+        {bn === 'gecerli' && (
+          <span class="cm-tag local" data-testid="item-bn" title="Bu bilgi noktası cihazının imzası doğrulandı">
+            bu bilgi noktasından
+          </span>
+        )}
         {it.viaMesh && <span class="cm-tag">yakın cihazdan</span>}
+        {imza === 'gecerli' && bn !== 'gecersiz' && (
+          <span class="cm-tag dogru" data-testid="item-verified" title="İmza doğrulandı: kayıt, onu yazan telefondan değişmeden geldi">
+            ✓ doğrulandı
+          </span>
+        )}
+        {(imza === 'gecersiz' || bn === 'gecersiz') && (
+          <span class="cm-tag uyari" data-testid="item-unverified">
+            doğrulanamadı
+          </span>
+        )}
       </div>
       {missing ? (
         <dl class="cm-kv">
@@ -383,6 +433,11 @@ export function ItemCard({ it, now, actions }: { it: BoardItem; now: number; act
         )
       )}
       {it.lat != null && it.lon != null && <span class="cm-coords">Konum: {formatCoords(it.lat, it.lon)}</span>}
+      {d && it.pub && d.ilan === 'gecersiz' && <p class="cm-uyari">İmza tutmuyor: kayıt yolda değiştirilmiş olabilir. Önemli kararlardan önce doğrulayın.</p>}
+      {d && it.pub && d.ilan === 'gecerli' && d.durum === 'gecersiz' && (
+        <p class="cm-uyari">Durum değişikliği ilanı veren telefondan gelmiyor; yok sayıldı.</p>
+      )}
+      {bn === 'gecersiz' && <p class="cm-uyari">“Bilgi noktasından” imzası doğrulanamadı; bu kaydı sıradan bir kayıt gibi değerlendirin.</p>}
       {actions}
     </article>
   );

@@ -101,7 +101,7 @@ yok ("Konum aranıyor") taklitleriyle denendi, ekran görüntüleri incelendi.
 ### Kalan / öneri
 - Harita, sekmeden çıkınca kaldırılıp girince yeniden kuruluyor (WebGL bağlamı, stil, karolar). Kaynak artık
   birikmiyor ama haritayı sekme değişiminde canlı tutmak (App.tsx'te gizleyerek) daha hızlı olur; kapsam dışı.
-- Haritada adres/yer adı araması yok (PMTiles'taki yer adlarından yerel dizin kurulabilir).
+- ~~Haritada adres/yer adı araması yok~~ → Öneriler turunda eklendi (aşağıda "Yer adı araması").
 - "Yol tarifi" dış harita uygulamasını açar; internetsiz çoğu zaman çalışmaz (ekranda "Yön göster" var).
 - Büyük yazıda Rehber içeriği 25 px, Harita 18 px kenar payıyla çiziliyor (app.css'teki zoom kuralı `.pad`
   payını da büyütüyor); tüm sekmeler için app.css'te `.pad` payı ölçeğe bölünebilir.
@@ -113,3 +113,66 @@ yok ("Konum aranıyor") taklitleriyle denendi, ekran görüntüleri incelendi.
 - Yeni e2e bölümü (9): hazır paket indirme (katalog ve indirme adresi örnek dosyaya yönlendirilir), dış ağ isteği yok,
   sekme değişiminde kaynak/tuval birikmiyor, paket listesi değişince harita korunuyor, seçilen nokta ortada,
   yatay/dikey, kayıt göstergesi kehribar, en büyük yazıda taşma ve kırpılma yok.
+
+## Öneriler 2026-11: Yer adı araması (internetsiz)
+
+Haritanın üstündeki "İlçe, mahalle, köy ara…" alanı: il, ilçe, mahalle, köy, mezra ve adı olan yerler ile
+afet noktaları (toplanma alanı, sağlık, eczane, su, barınma) internetsiz aranır; sonuca dokununca harita oraya
+uçar, kehribar bir halka ve nokta kartıyla aynı düzende bir seçim kartı ("Yön göster", "Yol tarifi") açılır.
+Nokta sonucu mevcut nokta kartını açar.
+
+### Veri nereden
+- **Yer adları harita paketinin kendisinden.** Protomaps şemasındaki `places` katmanı (`kind`, `kind_detail`,
+  `name`, `name:tr`) cihazda bir kez okunur. Yeni paket ya da indirme gerekmez; eski paketlerde de çalışır.
+  - z12 karoları okunur (paket daha az ayrıntılıysa en büyük yakınlaştırması; genel z0–10 paketinde z10).
+    Türkiye paketinde z12, z13–14'teki yer adlarının ~%97'sini, z10'dakilerin hepsini içerir (ölçüldü).
+  - Tür eşlemesi (OSM `place=*`): city/town → İlçe, village → Köy, suburb/quarter/neighbourhood → Mahalle,
+    hamlet/isolated_dwelling/farm → Mezra, locality → Yer. İl: 81 il merkezi listesi (tools/hava/iller.json, kamu
+    verisi) ile adı ve konumu (30 km) eşleşen yerleşim; haritada bulunamayan il listedeki koordinatla eklenir,
+    harita alanı dışındaki iller listelenmez. Kocaeli/Sakarya/Hatay aramaları merkez yerleşimi bulur.
+  - Bağlam: köy/mahalle için 25 km içindeki en yakın ilçe ("… yakını"), ilçe için en yakın il.
+  - Türkçe adı olmayan Latin dışı adlar (komşu ülkeler) dizine girmez.
+- **Noktalar** yüklü nokta paketinden (bellekte zaten var). "toplanma", "hastane", "eczane", "su" gibi tür
+  adları yazılınca adında geçmese de o türün haritanın ortasına en yakın 10 noktası gelir.
+
+### Eşleşme ve sıralama
+- Türkçe duyarlı: büyük/küçük harf, ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c ve â/î/û eşit sayılır ("isiklar" → Işıklar).
+- Sıra: tam eşleşme > baştan > kelime başı > içinde geçme / kelimeler herhangi sırada > tür adı; eşitlikte
+  il > ilçe > mahalle > (toplanma alanı) > köy > diğer noktalar > mezra > yer; sonra harita merkezine uzaklık.
+- En çok 30 sonuç; aynı ad ve türde 1 km'den yakın kopyalar teklenir. Enter ilk sonucu seçer, Escape kapatır.
+
+### Hız ve donma
+- Okuma dosya sırasıyla ~2 MB parçalarla (PMTiles dizini doğrudan okunur; bilgi noktasında binlerce küçük
+  istek yerine ~70 istek), açma/çözme/ad sadeleştirme/önbellek bir Web Worker'da. İşçi açılamazsa ana iş
+  parçacığında 256 KB parçalarla, aralarda nefes alarak.
+- Sonuç OPFS'te `yer-dizini/` altında saklanır (anahtar: dizin sürümü + paket adı + boyutu); eski paketin dizini
+  silinir. Bir kez kurulur; sonraki açılışta işçide okunup sütunlu paketle (kopyasız) aktarılır.
+- Hazırlanırken arama alanında "Yer adları hazırlanıyor… %n" ve ilerleme çubuğu; bu sırada iller ve noktalar
+  aranabilir. Sekme açıldıktan 2,5 sn sonra kendiliğinden başlar; pil tasarrufu / düşük güçte yalnız arama
+  alanına dokununca.
+- Ölçümler (bu makine, 2 çekirdek):
+  - Örnek harita (sample_yerler_ornek.pmtiles, 14 yer): ~150 ms.
+  - Gerçek Türkiye haritası (turkiye.pmtiles, 857 MB): z12'de 20 900 karo, 132 MB sıkıştırılmış okunur;
+    82 724 yer adı (37 828 köy, 21 947 mahalle, 1 037 ilçe, 81 il, 7 993 mezra, 13 837 yer).
+    Node'da 3–6 sn; Chromium'da (HTTP Range, Vite) 6,6 sn, en uzun ana iş parçacığı görevi 112 ms (harita
+    çizimi dahil). Önbellekten açılış 0,9 sn. Önbellek dosyası 3,4 MB. Bir arama 8–20 ms.
+  - Telefon tahmini: orta sınıf Android'de 4–6 kat yavaş → ilk kurulum ~20–40 sn (bir kez), sonra ~1–2 sn.
+
+### Test
+- Birim: `npx vitest run tests/yer-arama.test.ts` (sadeleştirme, eşleşme sınıfları, sıralama, tür adı araması,
+  il/bağlam tamamlama, PMTiles dizin çözümü, örnek haritadan dizin kurma, places katmanı olmayan paket, bozuk
+  karo, iptal, saklama biçimi ve işçi paketi gidiş-dönüş).
+- Gerçek harita ölçümü: `YER_GERCEK_OLC=1 YER_GERCEK=<turkiye.pmtiles> npx vitest run tests/yer-arama.test.ts -t "gerçek harita"`.
+  Aylık harita iş akışı da bunu çalıştırır ("Yer adı araması denetimi"; başarısızsa uyarı, yükleme durmaz).
+- E2E: qa-harita.mjs bölüm 10 (360×640 ve en büyük yazı): hazırlanıyor durumu (harita dosyası yavaş verilerek),
+  boş ipucu, "isik" → Işıklar Mahallesi (Mahalle), dokunma hedefleri ≥ 44 px, liste görünür alanda, dokununca
+  harita merkezi seçilen yere kayar, liste kapanır, seçim kartı + işaretçi, "Yön göster" paneli, sonuç yok,
+  "eczane" + Enter → nokta kartı, Escape, yatay taşma yok. Gerçek haritada "ANKARA" → İl.
+- Örnek veri: `python3 tools/make_sample_map.py --yerler` → `testdata/sample_yerler_ornek.pmtiles` (örnek
+  haritayla aynı + uydurma yer adları; sample_ornek.pmtiles bayt bayt aynı kalır).
+
+### Sınırlar
+- Sokak adı ve bina numarası yok (karolardaki yol adları sokak düzeyinde dizine alınmadı).
+- "İlçe" etiketi OSM town/city'ye dayanır; beldeler de "İlçe" görünebilir. Büyükşehirlerde köyden mahalleye
+  dönen yerler OSM'de hâlâ village ise "Köy" görünür.
+- z13–14'te ilk kez görünen az sayıda yer (~%3) dizinde yok.

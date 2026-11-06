@@ -1,6 +1,6 @@
 // Harita sekmesi: çevrimdışı PMTiles harita + toplanma/sağlık/eczane/su/barınma
 // noktaları, konum (pusula konisiyle), en yakın toplanma alanı, kuş uçuşu yön,
-// konum paylaşma, iz kaydı + başlangıca dönüş ve yer işaretleri.
+// konum paylaşma, iz kaydı + başlangıca dönüş, yer işaretleri ve internetsiz yer adı araması.
 // Hiçbir koşulda internetten karo, font ya da sprite çekilmez.
 import { openDirections } from '../lib/map/yol-tarifi';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -50,6 +50,8 @@ import { copyText, useWaypoints } from '../lib/map/ui';
 import { IzCard, NavCard, Sheet, WaypointSheet, useTicker, type AddPreset } from '../lib/map/panels';
 import { KonumArama } from '../lib/map/KonumArama';
 import { HaritaPaketleri } from '../lib/map/HaritaPaketleri';
+import { YerArama } from '../lib/map/YerArama';
+import type { Sonuc } from '../lib/map/yer-arama';
 import { nativeKonum, type KonumDurum } from '../lib/native';
 import { sonKonumKaydet } from '../lib/enkaz/enkaz';
 import './harita.css';
@@ -113,6 +115,10 @@ export function HaritaTab() {
   const [packs, setPacks] = useState<Packs>({ status: 'loading', mapSrc: null, pois: [], poiLoaded: false, errors: [] });
   const [filter, setFilter] = useState<Filter>('hepsi');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** Yer adı aramasında seçilen il/ilçe/mahalle/köy (nokta seçimiyle aynı anda olmaz) */
+  const [yerSecim, setYerSecim] = useState<Sonuc | null>(null);
+  /** Haritanın kapsadığı alan (aramada bu alanın dışındaki iller listelenmez) */
+  const [haritaSinir, setHaritaSinir] = useState<[number, number, number, number] | null>(null);
   const [loc, setLoc] = useState<UserLoc | null>(null);
   const [locState, setLocState] = useState<LocState>('idle');
   // Android'de telefonun bildirdiği uydu durumu ve aramanın başladığı an (görselleştirme için)
@@ -141,6 +147,7 @@ export function HaritaTab() {
         setIzOpen(false);
         setWpSheet(null);
         setSelectedId(null);
+        setYerSecim(null);
       }),
     [],
   );
@@ -158,6 +165,7 @@ export function HaritaTab() {
   const poiLayer = useRef<PoiLayerController | null>(null);
   const wpMarkers = useRef(new Map<string, { marker: MlMarker; el: HTMLButtonElement; key: string }>());
   const userMarker = useRef<MlMarker | null>(null);
+  const yerMarker = useRef<MlMarker | null>(null);
   const watchId = useRef<number | null>(null);
   const wantNearest = useRef(false);
   const centerOnFix = useRef(false);
@@ -264,6 +272,7 @@ export function HaritaTab() {
           // Paketin en küçük yakınlaştırmasının altında karo yok: boş ekran yerine sınırla
           minZoom = Math.max(minZoom, h.minZoom);
           if (!bounds) bounds = [[h.minLon, h.minLat], [h.maxLon, h.maxLat]];
+          if (!cancelled && h.minLon < h.maxLon && h.minLat < h.maxLat) setHaritaSinir([h.minLon, h.minLat, h.maxLon, h.maxLat]);
         } catch (e) {
           console.warn('[harita] PMTiles okunamadı', e);
           if (pmUrl) (await import('../lib/map/pmtilesSource')).dropPmtilesSource(pmUrl);
@@ -335,6 +344,8 @@ export function HaritaTab() {
       wpMarkers.current.clear();
       userMarker.current?.remove();
       userMarker.current = null;
+      yerMarker.current?.remove();
+      yerMarker.current = null;
       if (map) {
         try {
           const c = map.getCenter();
@@ -452,6 +463,25 @@ export function HaritaTab() {
     const el = userMarker.current?.getElement();
     if (el) setUserHeading(el, heading, mapRef.current?.getBearing() ?? 0);
   }, [heading, loc, mapReady]);
+
+  // ---- Aramada seçilen yerin işaretçisi ----
+  useEffect(() => {
+    const map = mapRef.current;
+    const ml = mlRef.current;
+    if (!yerSecim || !map || !ml) {
+      yerMarker.current?.remove();
+      yerMarker.current = null;
+      return;
+    }
+    if (!yerMarker.current) {
+      const el = document.createElement('div');
+      el.className = 'yer-mk';
+      el.dataset.testid = 'yer-marker';
+      el.innerHTML = '<span></span>';
+      yerMarker.current = new ml.Marker({ element: el }).setLngLat([yerSecim.lon, yerSecim.lat]).addTo(map);
+    } else yerMarker.current.setLngLat([yerSecim.lon, yerSecim.lat]);
+    yerMarker.current.getElement().setAttribute('aria-label', `${yerSecim.etiket}: ${yerSecim.ad}`);
+  }, [yerSecim, mapReady]);
 
   // ---- İz kaydı: yenilemeden sonra devam et, kayıt konumlarını mavi noktaya ver ----
   useEffect(() => {
@@ -649,6 +679,7 @@ export function HaritaTab() {
   function selectPoi(id: string | null) {
     setSelectedId(id);
     if (!id) return;
+    setYerSecim(null);
     const p = packs.pois.find((x) => x.id === id);
     if (p) moveTo([p.lon, p.lat]);
   }
@@ -731,6 +762,24 @@ export function HaritaTab() {
     setToast(fromUser ? null : 'Konumun henüz bilinmiyor: harita merkezine en yakın toplanma alanı seçildi. Konum aranıyor…');
   }
 
+  /** Yer aramasından seçim: haritayı oraya uçur; nokta ise nokta kartını aç */
+  function onYerSec(s: Sonuc) {
+    if (s.poiId) {
+      setYerSecim(null);
+      setSelectedId(s.poiId);
+      const p = poiById.get(s.poiId);
+      if (p && filter !== 'hepsi' && filter !== p.type) setFilter('hepsi');
+    } else {
+      setSelectedId(null);
+      setYerSecim(s);
+    }
+    camera((map) => {
+      const opts = { center: [s.lon, s.lat] as [number, number], zoom: s.poiId ? Math.max(map.getZoom(), s.zoom) : s.zoom };
+      if (saver()) map.jumpTo(opts);
+      else map.flyTo({ ...opts, duration: 900, essential: true });
+    });
+  }
+
   function onNearest() {
     if (loc) pickNearest(loc, true);
     else {
@@ -750,6 +799,9 @@ export function HaritaTab() {
   useEffect(() => {
     if (selectedId) document.querySelector('[data-testid="poi-card"]')?.scrollIntoView({ block: 'nearest' });
   }, [selectedId]);
+  useEffect(() => {
+    if (yerSecim) document.querySelector('[data-testid="yer-card"]')?.scrollIntoView({ block: 'nearest' });
+  }, [yerSecim]);
 
   useEffect(() => {
     if (!toast) return;
@@ -758,6 +810,13 @@ export function HaritaTab() {
   }, [toast]);
 
   const rel = selected && loc ? { d: distanceM(loc, selected), b: bearingDeg(loc, selected) } : null;
+  const yerRel = yerSecim && loc ? { d: distanceM(loc, yerSecim), b: bearingDeg(loc, yerSecim) } : null;
+  /** "Yön göster" panelinin hedefi: seçili nokta ya da aramada seçilen yer */
+  const yonHedef: YonHedef | null = selected
+    ? { name: selected.name, lat: selected.lat, lon: selected.lon, type: selected.type }
+    : yerSecim
+      ? { name: yerSecim.ad, lat: yerSecim.lat, lon: yerSecim.lon, label: yerSecim.etiket }
+      : null;
   const locMsg = LOC_MSG[locState];
   const visiblePois = packs.pois.filter((p) => filter === 'hepsi' || p.type === filter);
 
@@ -807,6 +866,16 @@ export function HaritaTab() {
 
   return (
     <div class="harita">
+      {hasAnything && (
+        <YerArama
+          src={packs.mapSrc}
+          noktalar={packs.pois}
+          sinir={haritaSinir ?? poiSinir(packs.pois)}
+          merkez={mapCenter}
+          otomatik={!saver()}
+          onSec={onYerSec}
+        />
+      )}
       {hasAnything && (
         <div class="chips-row" role="group" aria-label="Nokta türü">
           {FILTERS.map((f) => (
@@ -891,7 +960,7 @@ export function HaritaTab() {
 
       {/* Kartlar (konum mesajı, nokta, hedef, iz) haritanın altında kendi içinde kayar:
           küçük ekranda birkaç kart açıkken sayfa kaymaz, harita görünür kalır. */}
-      {(locMsg || selected || nav || izOpen) && (
+      {(locMsg || selected || yerSecim || nav || izOpen) && (
       <div class="map-panels" data-testid="map-panels">
       {locState === 'waiting' ? (
         <KonumArama durum={konumDurum} baslangic={aramaBas} kompakt />
@@ -924,6 +993,42 @@ export function HaritaTab() {
               class="btn grow"
               data-testid="poi-route"
               onClick={() => void openDirections({ lat: selected.lat, lon: selected.lon, name: selected.name })}
+            >
+              Yol tarifi
+            </button>
+          </div>
+        </div>
+      )}
+
+      {yerSecim && (
+        <div class="card poi-card" data-testid="yer-card" role="region" aria-label="Aramada seçilen yer">
+          <div class="row">
+            <span class="yer-rozet yer-rozet-yer" aria-hidden="true">
+              <span class="yer-mk-ic" />
+            </span>
+            <span class="label grow">{yerSecim.etiket}</span>
+            <button type="button" class="poi-close" data-testid="yer-close" aria-label="Yer kartını kapat" onClick={() => setYerSecim(null)}>
+              ×
+            </button>
+          </div>
+          <div class="poi-name" data-testid="yer-card-name">
+            {yerSecim.ad}
+          </div>
+          {yerSecim.ust && <div class="muted poi-note">{yerSecim.ust} yakını</div>}
+          <div class="poi-dist mono" data-testid="yer-dist">
+            {yerRel
+              ? `${formatDistance(yerRel.d)} · yürüyerek ~${formatDuration(walkMinutes(yerRel.d))} · ${compassText(yerRel.b)} (kuş uçuşu)`
+              : 'Konum bilinmiyor'}
+          </div>
+          <div class="row">
+            <button type="button" class="btn primary grow" data-testid="yer-direction" onClick={() => setPanel('yon')}>
+              Yön göster
+            </button>
+            <button
+              type="button"
+              class="btn grow"
+              data-testid="yer-route"
+              onClick={() => void openDirections({ lat: yerSecim.lat, lon: yerSecim.lon, name: yerSecim.ad })}
             >
               Yol tarifi
             </button>
@@ -982,8 +1087,8 @@ export function HaritaTab() {
       )}
 
       {panel === 'konum' && <KonumPanel loc={loc} locState={locState} durum={konumDurum} baslangic={aramaBas} onLocate={() => locate(false)} onClose={() => setPanel(null)} />}
-      {panel === 'yon' && selected && (
-        <YonPanel poi={selected} loc={loc} locState={locState} durum={konumDurum} baslangic={aramaBas} onLocate={() => locate(false)} onClose={() => setPanel(null)} />
+      {panel === 'yon' && yonHedef && (
+        <YonPanel poi={yonHedef} loc={loc} locState={locState} durum={konumDurum} baslangic={aramaBas} onLocate={() => locate(false)} onClose={() => setPanel(null)} />
       )}
     </div>
   );
@@ -1067,14 +1172,26 @@ function KonumPanel({ loc, locState, onLocate, onClose, durum, baslangic }: { lo
   );
 }
 
-function YonPanel({ poi, loc, locState, onLocate, onClose, durum, baslangic }: { poi: Poi; loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void; durum: KonumDurum | null; baslangic: number }) {
+/** Yön paneli hedefi: afet noktası (türüyle) ya da aramada seçilen yer (etiketiyle) */
+interface YonHedef extends LatLon {
+  name: string;
+  type?: PoiType;
+  label?: string;
+}
+
+function poiSinir(pois: Poi[]): [number, number, number, number] | null {
+  const b = poiBounds(pois);
+  return b ? [b[0][0], b[0][1], b[1][0], b[1][1]] : null;
+}
+
+function YonPanel({ poi, loc, locState, onLocate, onClose, durum, baslangic }: { poi: YonHedef; loc: UserLoc | null; locState: LocState; onLocate: () => void; onClose: () => void; durum: KonumDurum | null; baslangic: number }) {
   const c = useCompass(true);
   const heading = c.status === 'ok' ? c.heading : null;
   const needPerm = c.status === 'needs-permission';
   useEffect(() => {
     if (!loc && locState === 'idle') onLocate();
   }, []);
-  const t = POI_TYPES[poi.type];
+  const etiket = poi.type ? POI_TYPES[poi.type].label : poi.label ?? '';
   return (
     <Sheet title={`Yön: ${poi.name}`} testid="map-dir-panel" onClose={onClose}>
       {!loc ? (
@@ -1087,7 +1204,7 @@ function YonPanel({ poi, loc, locState, onLocate, onClose, durum, baslangic }: {
           return (
             <div class="col center">
               <div class="row">
-                <TypeBadge type={poi.type} /> <span class="label">{t.label}</span>
+                {poi.type && <TypeBadge type={poi.type} />} <span class="label">{etiket}</span>
               </div>
               <svg class="dir-arrow" viewBox="0 0 100 100" width="180" height="180" role="img" aria-label={`Yön ${compassLong(b)}`}>
                 <circle cx="50" cy="50" r="46" fill="none" stroke="#34507A" stroke-width="2" />

@@ -26,6 +26,7 @@ import { Art } from '../art';
 import { guideThumb } from '../content/guide-art';
 import { ModelPanel } from './FenerModels';
 import { copyText, formatLines, plainText } from '../lib/fener/format';
+import { sohbetiYaz, sohbetiYukle, type BotMsg, type Msg, type UserMsg } from '../lib/fener/sohbet-kayit';
 import './fener.css';
 import { useGeriKapat } from '../gecmis';
 
@@ -37,43 +38,42 @@ export const QUICK_QUESTIONS = [
 ];
 
 // --- Modül düzeyinde konuşma deposu -------------------------------------------------
-type Phase = 'search' | 'load' | 'write' | 'done';
-interface UserMsg {
-  id: number;
-  role: 'user';
-  text: string;
-  contextTitle?: string;
-}
-interface BotMsg {
-  id: number;
-  role: 'bot';
-  text: string;
-  phase: Phase;
-  progress: number | null;
-  sources: FenerSource[];
-  critical: boolean;
-  topGuideId: string | null;
-  topGuideTitle: string | null;
-  /** Rehber modu etiketi (model kullanılmadıysa) */
-  label?: string;
-  error?: string;
-  aborted?: boolean;
-  tps?: number | null;
-  fromModel?: boolean;
-  /** Kaynaksız, modelin kendi bilgisiyle verilen cevap */
-  free?: boolean;
-  /** Bu cevabın sorusu (kendi bilgisiyle yeniden sormak için) */
-  question: string;
-  questionContext?: PendingContext | null;
-}
-type Msg = UserMsg | BotMsg;
-
-let conv: Msg[] = [];
+// Sohbet ve yazılmakta olan soru localStorage'a da yazılır (sohbet-kayit.ts): Android arka
+// plandaki uygulamayı kapatıp yeniden açtığında sohbet kaldığı yerden sürer (12 saat).
+const kayit = sohbetiYukle();
+let conv: Msg[] = kayit?.msgs ?? [];
+/** Giriş kutusundaki yazı (bileşen yeniden kurulsa da, uygulama kapansa da korunur) */
+let draft = kayit?.input ?? '';
 let busy = false;
 let abortCtl: AbortController | null = null;
-let nextId = 1;
+let nextId = conv.reduce((n, m) => Math.max(n, m.id), 0) + 1;
 const convListeners = new Set<() => void>();
-const emit = () => convListeners.forEach((l) => l());
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveNow() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  sohbetiYaz(conv, draft);
+}
+/** Akış sırasında her token yazılmasın: en geç ~1 sn'de bir */
+function scheduleSave() {
+  if (!saveTimer) saveTimer = setTimeout(saveNow, 1000);
+}
+// Arka plana geçerken hemen yaz: Android süreci bu andan sonra uyarmadan kapatabilir
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveNow();
+  });
+  window.addEventListener('pagehide', saveNow);
+}
+const emit = () => {
+  scheduleSave();
+  convListeners.forEach((l) => l());
+};
+function setDraft(v: string) {
+  if (v === draft) return;
+  draft = v;
+  scheduleSave();
+}
 
 function patchBot(id: number, p: Partial<BotMsg>) {
   conv = conv.map((m) => (m.id === id && m.role === 'bot' ? { ...m, ...p } : m));
@@ -84,7 +84,7 @@ function historyForModel(): ChatMsg[] {
   const out: ChatMsg[] = [];
   for (const m of conv) {
     if (m.role === 'user') out.push({ role: 'user', content: m.text });
-    else if (m.phase === 'done' && m.text && m.fromModel) out.push({ role: 'assistant', content: m.text });
+    else if (m.phase === 'done' && m.text && m.fromModel && !m.interrupted) out.push({ role: 'assistant', content: m.text });
   }
   return out;
 }
@@ -93,6 +93,22 @@ export function resetConversation() {
   abortCtl?.abort();
   conv = [];
   emit();
+  // Kayıt hemen silinsin (yazılmakta olan soru kalır)
+  saveNow();
+}
+
+/** Yarım kalan cevabı yeniden sor: yarım soru-cevap çıkarılır, soru yeniden gönderilir */
+function retryInterrupted(id: number) {
+  if (busy) return;
+  const i = conv.findIndex((m) => m.id === id);
+  const m = conv[i];
+  if (!m || m.role !== 'bot') return;
+  const prev = conv[i - 1];
+  const drop = new Set([m.id]);
+  if (prev?.role === 'user' && prev.text === m.question) drop.add(prev.id);
+  conv = conv.filter((x) => !drop.has(x.id));
+  emit();
+  void send(m.question, m.questionContext ?? null, { free: !!m.freeAsked });
 }
 
 export function stopGeneration() {
@@ -124,6 +140,7 @@ async function send(text: string, context?: PendingContext | null, opts: { free?
     topGuideTitle: null,
     question: q,
     questionContext: context ?? null,
+    freeAsked: !!opts.free || undefined,
   };
   conv = [...conv, userMsg, bot];
   emit();
@@ -374,12 +391,22 @@ function BotBubbleView({ m, eng, canFree, busyNow, ttsState }: { m: BotMsg; eng:
           </div>
         ) : null}
         {streaming && <Thinking m={m} eng={eng} />}
+        {m.interrupted && (
+          <div class="fener-yarim" data-testid="fener-interrupted" role="status">
+            <span class="grow">
+              {m.text ? 'Cevap yarım kaldı' : 'Cevap yazılamadı'}: uygulama arka plandayken kapandı.
+            </span>
+            <button type="button" class="btn fener-retry" data-testid="fener-retry" disabled={busyNow} onClick={() => retryInterrupted(m.id)}>
+              Yeniden sor
+            </button>
+          </div>
+        )}
         {m.aborted && <div class="warn">(durduruldu)</div>}
         {m.error && <div class="fener-error">{m.error}</div>}
         {m.phase === 'done' && <SourceTags sources={m.sources} />}
         {m.phase === 'done' && (
           <div class="row fener-foot">
-            {canFree && !m.free ? (
+            {canFree && !m.free && !m.interrupted ? (
               <button type="button" class="btn fener-free" data-testid="fener-free" disabled={busyNow} onClick={() => void send(m.question, m.questionContext ?? null, { free: true })}>
                 Fener kendi bilgisiyle cevaplasın
               </button>
@@ -610,7 +637,14 @@ export function FenerTab() {
   const eng = useEngineState();
   const vs = useVoiceState();
   const ttsState = useTtsState();
-  const [input, setInput] = useState('');
+  const [input, setInputState] = useState(draft);
+  // Yazı modül düzeyinde de tutulur ve kaydedilir (uygulama kapanınca kaybolmasın)
+  const setInput = (v: string | ((cur: string) => string)) =>
+    setInputState((cur) => {
+      const n = typeof v === 'function' ? v(cur) : v;
+      setDraft(n);
+      return n;
+    });
   const [mode, setMode] = useState<Mode>({ kind: 'checking' });
   const [panel, setPanel] = useState(false);
   // Model paneli açıkken geri tuşu önce paneli kapatır

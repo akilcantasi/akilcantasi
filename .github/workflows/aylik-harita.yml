@@ -5,12 +5,18 @@
 #  2) Bundan genel haritayı (z0–10) üretir
 #  3) Afet noktalarını OpenStreetMap'ten (Overpass) toplar
 #  4) Hava ve iklim paketini üretir (ECMWF SEAS5 mevsimsel tahmini + NASA POWER iklim normalleri)
-#  5) Hepsini akilcantasi/paketler (Hugging Face) deposuna yükler, kataloğu günceller
-#  6) Güncellenen public/packs-manifest.json'ı bu depoya geri işler (sonraki derlemeye girsin)
+#  5) Katalogda eksik SHA-256 özetlerini yayımcının özetleriyle doldurur (Kiwix .sha256, HF LFS)
+#  6) Hepsini akilcantasi/paketler (Hugging Face) deposuna yükler; kataloğu Ed25519 ile imzalayıp
+#     packs-manifest.json ve packs-manifest.json.sig'i birlikte yükler
+#  7) Güncellenen public/packs-manifest.json'ı ve imzasını bu depoya geri işler (sonraki derlemeye girsin)
 #
 # SEAS5 her ayın 5'inde yenilendiği için iş ayın 6'sında çalışır.
 #
-# Gereken gizli değişken: HF_TOKEN (Hugging Face, "Write" yetkili).
+# Gereken gizli değişkenler:
+#   HF_TOKEN               Hugging Face, "Write" yetkili
+#   KATALOG_IMZA_ANAHTARI  katalog imza anahtarı (Ed25519; base64 PKCS8 ya da 32 baytlık tohum).
+#                          Yoksa iş en başta durur: imzasız katalog uygulamalarca yok sayılır.
+#                          Ayrıntı: docs/PAKET_GUVENLIGI.md
 # Elle çalıştırmak için: Actions → "Aylık harita ve afet noktaları" → Run workflow.
 name: Aylık harita, afet noktaları ve hava
 
@@ -24,7 +30,7 @@ on:
         default: '14'
         required: true
       sadece:
-        description: 'Yalnız bunları üret ve yükle (boş = aylık olanların hepsi): harita-tr-genel,harita-tr-detay,poi-tr-afet,hava-tr; rehber paketi için kendine-yetmek'
+        description: 'Yalnız bunları üret ve yükle (boş = aylık olanların hepsi): harita-tr-genel,harita-tr-detay,poi-tr-afet,hava-tr; rehber paketi için kendine-yetmek; yalnız kataloğu imzalayıp yüklemek için katalog'
         default: ''
         required: false
 
@@ -48,6 +54,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Katalog imza anahtarını denetle
+        # Saatler süren harita üretiminden önce: anahtar yoksa ya da uygulamadakiyle eşleşmiyorsa dur
+        env:
+          KATALOG_IMZA_ANAHTARI: ${{ secrets.KATALOG_IMZA_ANAHTARI }}
+        run: |
+          if [ -z "$KATALOG_IMZA_ANAHTARI" ]; then
+            echo "::error title=Katalog imza anahtarı yok::KATALOG_IMZA_ANAHTARI gizli değişkeni tanımlı değil (Settings → Secrets and variables → Actions). İmzasız katalog uygulamalarca kabul edilmez; bkz. docs/PAKET_GUVENLIGI.md"
+            exit 1
+          fi
+          node tools/katalog-imzala.mjs --denetle
 
       - name: go-pmtiles
         if: env.SADECE == '' || contains(env.SADECE, 'harita')
@@ -77,6 +94,20 @@ jobs:
       - name: Genel harita (z0–10)
         if: env.SADECE == '' || contains(env.SADECE, 'harita')
         run: pmtiles extract data/maps/turkiye.pmtiles data/maps/turkiye-genel-z10.pmtiles --maxzoom=10
+
+      - name: Yer adı araması denetimi
+        # Uygulama yer adlarını (il, ilçe, mahalle, köy) haritanın "places" katmanından cihazda
+        # çıkarır (src/lib/map/yer-dizini.ts). Protomaps şeması değişirse arama sessizce boşalmasın:
+        # burada uyarı verilir; haritanın yüklenmesi durmaz.
+        if: env.SADECE == '' || contains(env.SADECE, 'harita')
+        continue-on-error: true
+        env:
+          YER_GERCEK_OLC: '1'
+          YER_GERCEK: data/maps/turkiye.pmtiles
+        run: |
+          [ -d node_modules ] || npm ci --no-audit --no-fund --loglevel=error
+          npx vitest run tests/yer-arama.test.ts -t "gerçek harita" \
+            || { echo "::warning::Yer adı dizini Türkiye haritasından kurulamadı (places katmanı değişmiş olabilir)"; exit 1; }
 
       - name: Afet noktaları
         id: noktalar
@@ -117,9 +148,16 @@ jobs:
             echo "Merkezi katalog alınamadı; depodaki kopya kullanılacak"
           fi
 
+      - name: Eksik SHA-256 özetlerini doldur
+        # Kiwix'in her ZIM'in yanında yayımladığı .sha256 dosyası ve Hugging Face LFS özetleri.
+        # Ulaşılamayan kaynak işi durdurmaz; o paket bir sonraki ay yeniden denenir.
+        continue-on-error: true
+        run: node tools/hf/sha-doldur.mjs public/packs-manifest.json
+
       - name: Hugging Face'e yükle
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          KATALOG_IMZA_ANAHTARI: ${{ secrets.KATALOG_IMZA_ANAHTARI }}
         run: |
           set -e
           liste="$SADECE"
@@ -131,8 +169,10 @@ jobs:
           node tools/hf/hf-yukle.mjs --kok . --sadece "$liste"
 
       - name: Kataloğu depoya işle
+        env:
+          KATALOG_IMZA_ANAHTARI: ${{ secrets.KATALOG_IMZA_ANAHTARI }}
         run: |
-          if git diff --quiet -- public/packs-manifest.json; then echo "Katalog değişmedi"; exit 0; fi
+          if [ -z "$(git status --porcelain -- public/packs-manifest.json public/packs-manifest.json.sig)" ]; then echo "Katalog değişmedi"; exit 0; fi
           git config user.name "akilcantasi-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # İş sürerken depoya yeni değişiklik gelmiş olabilir: güncel dalın üstüne yalnız katalog yazılır
@@ -141,8 +181,10 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             node tools/hf/katalog-birlestir.mjs /tmp/katalog.json public/packs-manifest.json
-            git diff --quiet -- public/packs-manifest.json && { echo "Katalog zaten güncel"; exit 0; }
-            git add public/packs-manifest.json
+            # Birleştirilen katalog yeniden imzalanır (imza dosyanın baytları üzerinedir)
+            node tools/katalog-imzala.mjs public/packs-manifest.json
+            [ -z "$(git status --porcelain -- public/packs-manifest.json public/packs-manifest.json.sig)" ] && { echo "Katalog zaten güncel"; exit 0; }
+            git add public/packs-manifest.json public/packs-manifest.json.sig
             git commit -m "Katalog: aylık paketler ($(date -u +%Y-%m-%d))"
             git push origin HEAD:main && exit 0
             sleep 10

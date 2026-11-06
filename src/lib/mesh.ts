@@ -24,6 +24,15 @@ export interface MeshMessage {
   lon?: number;
   /** kaç cihaz üzerinden aktarıldı */
   hops?: number;
+  /** İmza alanları (src/iletisim/imza.ts). Eski sürümler bunları atar; yeni sürümler bilmedikleri alanları yok sayar. */
+  pub?: string;
+  sig?: string;
+  /** imza zamanı (ms) */
+  ts?: number;
+  /** kayıp ilanı durum güncellemesi: yeni durum, zamanı, imzası */
+  ust?: 'araniyor' | 'bulundu';
+  uts?: number;
+  usig?: string;
 }
 
 export interface Mesh {

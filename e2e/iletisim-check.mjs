@@ -126,7 +126,7 @@ try {
   check(await A.p.waitForSelector('[data-testid="board-item"][data-kind="iyiyim"][data-status="yardim"]', { timeout: 10000 }).then(() => true, () => false), "A, B'nin 'Yardım lazım' bildirimini görüyor");
   check(await waitText(A.p, '[data-testid="board-item"][data-kind="iyiyim"]', 'Konum: 39.92080, 32.85410'), 'konum bildirimde görünüyor');
 
-  // --- Kayıp kişi: A ilan verir, B bulundu olarak işaretler
+  // --- Kayıp kişi: A ilan verir; yalnız A (ilan sahibi) "bulundu" yapabilir
   await A.p.click(tid('comm-back'));
   await A.p.click(tid('comm-card-kayip'));
   await A.p.fill(tid('missing-name'), 'Mehmet Demir');
@@ -135,15 +135,22 @@ try {
   await A.p.fill(tid('missing-lastSeen'), 'Çarşı camii önü, 09.30');
   await A.p.click(tid('missing-send'));
   check(await waitText(A.p, tid('missing-item-name'), 'Mehmet Demir'), 'A kayıp ilanı verdi');
+  await A.p.waitForSelector('[data-testid="board-item"][data-kind="kayip"][data-imza="gecerli"]', { timeout: 10000 }).catch(() => {});
   await shot(A.p, '04-kayip');
   await B.p.goto(base + '?comm=kayip', { waitUntil: 'networkidle' });
   check(await waitText(B.p, tid('missing-item-name'), 'Mehmet Demir'), 'B ilanı görüyor');
-  const foundBtn = await B.p.$('[data-testid^="missing-found-"]:not([data-testid="missing-found-confirm"]):not([data-testid="missing-found-cancel"]):not([data-testid="missing-found-result"])');
-  await foundBtn.click();
-  await shot(B.p, '05-kayip-onay');
-  await B.p.click(tid('missing-found-confirm'));
-  await A.p.click(tid('missing-show-all'));
-  check(await A.p.waitForSelector('[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"]', { timeout: 12000 }).then(() => true, () => false), "A, ilanın 'Bulundu' olduğunu görüyor");
+  check(await B.p.waitForSelector('[data-testid="board-item"][data-kind="kayip"][data-imza="gecerli"] [data-testid="item-verified"]', { timeout: 10000 }).then(() => true, () => false), 'B: ilan "doğrulandı" işaretli');
+  check(await waitText(B.p, tid('missing-owner-note'), 'yalnızca ilanı veren telefon'), 'B: durumu kimin değiştirebileceği yazıyor');
+  check((await B.p.$$('[data-testid^="missing-found-"]:not([data-testid="missing-found-result"])')).length === 0, 'B: "Bulundu olarak işaretle" düğmesi yok');
+  const kid = await B.p.getAttribute('[data-testid="board-item"][data-kind="kayip"]', 'data-id');
+  const sahte = await fetch(base + 'api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: kid, kind: 'kayip', from: 'Bora', text: 'x', status: 'bulundu' }) });
+  check(sahte.status === 403, 'sahte "bulundu" isteği 403: ' + sahte.status);
+  await shot(B.p, '05-kayip-baskasi');
+  await A.p.click(tid('missing-found-' + kid));
+  await shot(A.p, '05-kayip-onay');
+  await A.p.click(tid('missing-found-confirm'));
+  await B.p.click(tid('missing-show-all'));
+  check(await B.p.waitForSelector('[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"][data-imza="gecerli"]', { timeout: 12000 }).then(() => true, () => false), "B, ilanın 'Bulundu' olduğunu görüyor (imzalı güncelleme)");
 
   // --- Duyuru
   await A.p.goto(base + '?comm=duyuru', { waitUntil: 'networkidle' });
@@ -152,7 +159,23 @@ try {
   await A.p.click(tid('ann-send'));
   await B.p.goto(base + '?comm=duyuru', { waitUntil: 'networkidle' });
   check(await waitText(B.p, tid('board-text'), 'belediye önünde su'), 'B duyuruyu görüyor');
-  check(await waitText(B.p, '[data-testid="board-item"][data-kind="duyuru"]', 'bilgi noktasından'), 'yerel (bilgi noktası) duyurusu etiketli');
+  check(await B.p.waitForSelector('[data-testid="board-item"][data-kind="duyuru"][data-bn="gecerli"] [data-testid="item-bn"]', { timeout: 10000 }).then(() => true, () => false), 'yerel duyuru "bu bilgi noktasından" (bilgi noktası imzası doğrulandı, anahtar sabitlendi)');
+  // TOFU: aynı adreste başka anahtar görülürse etiket gösterilmez ve uyarı çıkar
+  await B.p.evaluate(() => {
+    const p = JSON.parse(localStorage.getItem('ac.comm.bnpin') || '{}');
+    for (const k of Object.keys(p)) p[k] = 'A'.repeat(43);
+    localStorage.setItem('ac.comm.bnpin', JSON.stringify(p));
+  });
+  await B.p.reload({ waitUntil: 'networkidle' });
+  check(await B.p.waitForSelector('[data-testid="board-item"][data-kind="duyuru"][data-bn="gecersiz"] [data-testid="item-unverified"]', { timeout: 10000 }).then(() => true, () => false), 'anahtar değişince "doğrulanamadı" (kehribar) gösterilir');
+  check(await B.p.waitForSelector(tid('bn-key-changed'), { timeout: 10000 }).then(() => true, () => false), 'bağlantı kartında anahtar değişti uyarısı');
+  const uyariRenk = await B.p.$eval('[data-testid="item-unverified"]', (e) => getComputedStyle(e).color);
+  check(!/rgb\(229, 72, 77\)/.test(uyariRenk), 'uyarı kırmızı değil: ' + uyariRenk);
+  await shot(B.p, '06b-duyuru-anahtar-degisti');
+  await B.p.goto(base + '?comm=baglan', { waitUntil: 'networkidle' });
+  await B.p.click(tid('bn-key-accept'));
+  await B.p.goto(base + '?comm=duyuru', { waitUntil: 'networkidle' });
+  check(await B.p.waitForSelector('[data-testid="board-item"][data-kind="duyuru"][data-bn="gecerli"]', { timeout: 10000 }).then(() => true, () => false), 'yeni anahtar kabul edilince etiket geri geldi');
   await shot(B.p, '06-duyuru');
 
   // --- Giden kutusu: C'nin bağlantısı kesik; mesaj bekler, bağlantı gelince gider

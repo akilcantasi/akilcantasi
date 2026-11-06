@@ -1,5 +1,7 @@
 // Mesaj panosu: veri modeli, doğrulama ve birleştirme (saf mantık, test edilir).
 // Sunucu tarafı (server/server.mjs, InfoPointServer.java) aynı kuralları uygular.
+// İmza alanları (pub, sig, ts, upd) ve kanonik biçim: server/imza-kanonik.mjs, src/iletisim/imza.ts
+import { bnAlanlari, imzaAlanlari, type DurumGuncelleme } from '../../server/imza-kanonik.mjs';
 
 export type BoardKind = 'mesaj' | 'iyiyim' | 'kayip' | 'duyuru';
 export type CheckinStatus = 'iyiyim' | 'yardim' | 'yarali';
@@ -41,6 +43,14 @@ export interface BoardDraft {
   lat?: number;
   lon?: number;
   status?: BoardStatus;
+  /** İmzalayan cihazın Ed25519 açık anahtarı (base64url). Eski kayıtlarda yok. */
+  pub?: string;
+  /** İlanın değişmez alanları üzerine imza (kanonikIlan) */
+  sig?: string;
+  /** İmza zamanı (ms, gönderen telefonun saati) */
+  ts?: number;
+  /** Kayıp ilanının son imzalı durum güncellemesi (aynı anahtarla) */
+  upd?: DurumGuncelleme;
 }
 
 /** Sunucudan gelen kayıt */
@@ -51,6 +61,9 @@ export interface BoardItem extends BoardDraft {
   rev: number;
   /** bilgi noktası cihazının kendisinden gönderildi */
   local?: boolean;
+  /** bilgi noktasının anahtarı ve local kayda attığı imza (kanonikBilgiNoktasi) */
+  bpub?: string;
+  bsig?: string;
   /** yalnızca istemci: henüz gönderilmedi (giden kutusunda) */
   pending?: boolean;
   /** yalnızca istemci: mesh üzerinden geldi */
@@ -110,6 +123,10 @@ export function validateDraft(raw: any): ValidateResult {
   } else if (raw.status != null && raw.status !== '') {
     return { ok: false, error: 'Bu türde durum olmaz' };
   }
+  // İmza alanları biçim olarak denetlenir; imzanın kendisini imza.ts doğrular
+  const imz = imzaAlanlari(raw, kind);
+  if (!imz.ok) return { ok: false, error: imz.error };
+  if (imz.f) Object.assign(item, imz.f);
   return { ok: true, item };
 }
 
@@ -122,6 +139,15 @@ export function newId(now = Date.now()): string {
 }
 
 /**
+ * Durum güncellemesinin imzasını eşzamanlı doğrulayan işlev (src/iletisim/imza.ts koyar; döngüsel
+ * içe aktarma olmasın diye buradan kaydedilir). Yoksa (ör. birim testi) güncellemeler doğrulanmış sayılır.
+ */
+let updGecerli: ((it: BoardItem) => boolean) | null = null;
+export function updDogrulayiciKoy(f: ((it: BoardItem) => boolean) | null) {
+  updGecerli = f;
+}
+
+/**
  * Kayıtları kimliğe göre birleştirir; aynı kimlikte rev'i büyük olan (eşitse
  * sunucudan gelen, yani pending olmayan) kazanır. Sonuç yeniden eskiye sıralı.
  */
@@ -131,6 +157,23 @@ export function mergeItems(a: BoardItem[], b: BoardItem[]): BoardItem[] {
     const cur = map.get(it.id);
     if (!cur) map.set(it.id, it);
     else {
+      // İmzalı kaydın anahtarı değişmez: imzasız ya da başka anahtarlı kopya onun yerine geçemez
+      // (imzayı silip "eski kayıt" gibi gösterme ve kimlik kapma girişimleri)
+      if (cur.pub && it.pub !== cur.pub) continue;
+      if (cur.pub && (cur.upd || it.upd) && updGecerli) {
+        // Doğrulanamayan güncelleme (ör. imzayı doğrulayamayan eski Android bilgi noktasından gelen,
+        // ileri tarihli sahte "bulundu") doğrulanmış olanın ya da ilk halin yerine geçmez;
+        // doğrulanmış güncelleme ise doğrulanamayanın yerine zamanına bakılmadan geçer.
+        const curOk = !cur.upd || updGecerli(cur);
+        const itOk = !it.upd || updGecerli(it);
+        if (it.upd && !itOk) continue;
+        if (cur.upd && !curOk && it.upd && itOk) {
+          map.set(it.id, { ...it, viaMesh: it.viaMesh || cur.viaMesh });
+          continue;
+        }
+      }
+      // Aynı anahtarın daha eski durumu (ya da güncellemesiz ilk hali) yenisinin önüne geçmez
+      if (cur.pub && cur.upd && (!it.upd || it.upd.ts < cur.upd.ts)) continue;
       const better = it.rev > cur.rev || (it.rev === cur.rev && cur.pending && !it.pending);
       if (better) map.set(it.id, { ...it, viaMesh: it.viaMesh || cur.viaMesh });
     }
@@ -186,6 +229,31 @@ export function parseMissing(text: string): MissingFields {
 
 /** Mesh'te "bulundu" güncellemesinin kimlik eki (mesh aynı kimliği ikinci kez taşımaz) */
 export const FOUND_SUFFIX = '_bulundu';
+/**
+ * İmzalı durum güncellemesinin mesh kimlik eki: `<ilan>_d<zaman36>`. Her değişiklik ayrı kimlik
+ * alır (bulundu → aranıyor → bulundu). Metni boştur; eski sürümler onu geçersiz sayıp yok sayar
+ * ama yine de taşır.
+ */
+export const DURUM_EKI = '_d';
+const DURUM_EKI_RE = /_d[0-9a-z]{1,12}$/;
+
+/** Mesh mesajının pano ile ilgili alanları (src/lib/mesh.ts MeshMessage ile uyumlu) */
+export interface MeshLike {
+  id: string;
+  kind: string;
+  from: string;
+  text: string;
+  time: number;
+  lat?: number;
+  lon?: number;
+  pub?: string;
+  sig?: string;
+  ts?: number;
+  /** durum güncellemesi: yeni durum, zamanı, imzası */
+  ust?: string;
+  uts?: number;
+  usig?: string;
+}
 
 const TAG_RE = /^\[(iyiyim|yardim|yarali|araniyor|bulundu)\] ?/;
 
@@ -204,11 +272,43 @@ export function fromServer(raw: any): BoardItem | null {
   const time = Number(raw.time), rev = Number(raw.rev);
   if (!Number.isFinite(time) || !Number.isFinite(rev) || rev < 0 || rev > 1e15 || time < 0 || time > 1e15) return null;
   const it: BoardItem = { ...v.item, time, rev };
-  if (raw.local === true) it.local = true;
+  if (raw.local === true) {
+    it.local = true;
+    const bn = bnAlanlari(raw);
+    if (bn) Object.assign(it, bn);
+  }
   return it;
 }
 
-export function fromMesh(m: { id: string; kind: string; from: string; text: string; time: number; lat?: number; lon?: number }): BoardItem | null {
+/** Pano kaydını mesh'e gönderilecek mesaj(lar)a çevirir. */
+export function toMeshMessages(d: BoardDraft, now = Date.now()): MeshLike[] {
+  const base: MeshLike = { id: d.id, kind: d.kind, from: d.from, text: toMeshText(d), time: now };
+  if (d.lat != null && d.lon != null) Object.assign(base, { lat: d.lat, lon: d.lon });
+  if (d.pub && d.sig && d.ts) Object.assign(base, { pub: d.pub, sig: d.sig, ts: d.ts });
+  const out: MeshLike[] = [];
+  if (d.pub && d.upd) {
+    const u = { ust: d.upd.st, uts: d.upd.ts, usig: d.upd.sig };
+    // Yeni sürümler için: metinsiz, her değişiklikte ayrı kimlik
+    out.push({ ...base, ...u, id: d.id + DURUM_EKI + d.upd.ts.toString(36), text: '' });
+    // Eski sürümler "bulundu"yu yalnız bu biçimde anlar
+    if (d.upd.st === 'bulundu') out.push({ ...base, ...u, id: d.id + FOUND_SUFFIX });
+  } else if (d.status === 'bulundu') out.push({ ...base, id: d.id + FOUND_SUFFIX });
+  else out.push(base);
+  return out.filter((m) => m.id.length <= 64);
+}
+
+/** Mesh mesajındaki imzalı durum güncellemesi (ilan kimliği ve anahtarıyla); yoksa null */
+export function meshDurum(m: MeshLike): { id: string; pub: string; upd: DurumGuncelleme } | null {
+  if (m.kind !== 'kayip' || m.usig == null) return null;
+  let id = String(m.id ?? '');
+  if (id.endsWith(FOUND_SUFFIX)) id = id.slice(0, -FOUND_SUFFIX.length);
+  else if (DURUM_EKI_RE.test(id)) id = id.replace(DURUM_EKI_RE, '');
+  const f = imzaAlanlari({ pub: m.pub, sig: m.sig, ts: m.ts, upd: { st: m.ust, ts: m.uts, sig: m.usig } }, 'kayip');
+  if (!f.ok || !f.f?.upd || !ID_RE.test(id)) return null;
+  return { id, pub: f.f.pub, upd: f.f.upd };
+}
+
+export function fromMesh(m: MeshLike): BoardItem | null {
   let kind = m.kind;
   let id = String(m.id ?? '');
   let text = String(m.text ?? '');
@@ -218,12 +318,20 @@ export function fromMesh(m: { id: string; kind: string; from: string; text: stri
     status = tag[1];
     text = text.slice(tag[0].length);
   }
-  if (status === 'bulundu' && id.endsWith(FOUND_SUFFIX)) id = id.slice(0, -FOUND_SUFFIX.length);
+  const durum = meshDurum(m);
+  if (durum) id = durum.id;
+  else if (status === 'bulundu' && id.endsWith(FOUND_SUFFIX)) id = id.slice(0, -FOUND_SUFFIX.length);
+  let imza: Record<string, unknown> = {};
   if (kind === 'sos') {
     kind = 'iyiyim';
     status = 'yardim';
+  } else if (m.pub != null || m.sig != null) {
+    imza = { pub: m.pub, sig: m.sig, ts: m.ts };
+    if (durum) imza.upd = durum.upd;
+    // İmzalı kayıp ilanının durumunu metindeki etiket değil, imzalı güncelleme belirler
+    if (kind === 'kayip') status = durum ? durum.upd.st : 'araniyor';
   }
-  const v = validateDraft({ id, kind, from: m.from, text, lat: m.lat, lon: m.lon, status });
+  const v = validateDraft({ id, kind, from: m.from, text, lat: m.lat, lon: m.lon, status, ...imza });
   if (!v.ok) return null;
   const time = Number.isFinite(m.time) ? m.time : Date.now();
   return { ...v.item, time, rev: time, viaMesh: true };

@@ -79,7 +79,7 @@ Kapsam: Araçlar sekmesindeki tüm araçlar (enkaz ve enkaz arama İletişim rap
 11. Test kararlılığı: kaynak-check'teki `body.saver` denetimi, sınıf çizimden sonra eklendiği için yük altında yanlış hata veriyordu; bekleme eklendi.
 
 ### Kalanlar
-- **Radyo yalnız 13 il içeriyor, 81 değil.** Diğer iller için tarama yöntemi anlatılıyor. TRT frekans sayfası (radyo.trt.net.tr/frekanslar) bu oturumda erişim izni alamadı; doğrulanmamış frekans eklenmedi.
+- ~~Radyo yalnız 13 il içeriyor~~ → Öneriler 2026-11'de 81 ile tamamlandı (aşağıya bakın).
 - Android "büyük yazı"da alt gezinme çubuğunda "Kütüphane" ve "Araçlar" etiketleri birbirine değiyor (src/styles/app.css, kapsam dışı).
 - qa-araclar'ın indirme bölümü (iptalden sonra yeniden indirme) tam çalıştırmada bir kez zaman aşımına uğradı; tek başına çalıştırınca geçiyor. İndirme kodu kapsam dışı (src/lib).
 - Pusula gülünde kuzey kırmızı (pusula geleneği); bilerek bırakıldı.
@@ -90,3 +90,25 @@ node e2e/qa-araclar.mjs http://localhost:5199/   # 239 denetim, tümü OK; "9) D
 node e2e/guncelleme-check.mjs                    # 10 adım (2'si yeni)
 node e2e/ayarlar-check.mjs ; node e2e/kaynak-check.mjs ; node e2e/eglence-check.mjs ; node e2e/sunucu-indirme-check.mjs
 ```
+
+## Öneriler 2026-11: Radyo, 81 il
+
+- `src/tools/radyo/frekanslar.ts` 13 ilden 81 ile çıktı. Kaynak: TRT'nin kendi frekans sayfaları
+  (`radyo.trt.net.tr/frekanslar/<il>-<ilçe>`), her il sayfası 7 Kasım 2026'da tek tek okundu; slug'lar
+  kod yorumlarında. Van sayfası yeniden okunup eski kayıtla karşılaştırıldı (aynı). Hiçbir frekans tahmin edilmedi.
+- İl seçici Türkçe alfabe sırasında; seçim davranışı ve `akil.radyo.city` anahtarı aynı (eski seçimler geçerli).
+- Radyo 1 ve Radyo Haber satırı her ilde görünür; TRT sayfasında yoksa "doğrulanmadı · tarama yapın" yazar.
+  Eksik ya da merkez dışı kayıtlarda kehribar kenarlı kısa not (`rd-note`) çıkar. Kaynak satırı: "erişim 1 ve 7 Kasım 2026".
+- **Boşluklar (TRT sayfasında il merkezi kaydı yok):**
+  - Hiç kayıt yok → boş, "doğrulanmadı": Bayburt, Kayseri, Kilis, Kırklareli, Tunceli, Yalova.
+  - Komşu/merkez dışı ilçe vericisi gösteriliyor (notla): Adıyaman/Kâhta, Ağrı/Tutak, Batman/Beşiri, Siirt/Aydınlar, Şırnak/Cizre.
+  - Merkez ilçe (merkez sayılır): Adana/Yüreğir, Gaziantep/Şehitkamil, Konya/Meram.
+  - Merkezde yalnız TRT FM: Balıkesir, Burdur, Giresun. Yalnız TRT Nağme: Sakarya.
+  - Radyo Haber yok (Radyo 1 var): Adıyaman, Ağrı, Bartın, Bilecik, Çanakkale, Edirne, Gümüşhane, Hatay (İskenderun'da 93.0, notta), Iğdır, Kocaeli, Muğla, Sinop, Tekirdağ, Uşak, Zonguldak.
+  - Çelişki: Ardahan sayfasında Radyo Haber ve TRT Kurdî ikisi de 99.3; aynen aktarıldı, notla uyarılıyor.
+- Test: `tests/eglence.test.ts` (81 il, benzersiz, FM bandı, eksik kayıtta not zorunlu, örnek değerler);
+  `e2e/qa-araclar.mjs` 8. bölüm (81 seçenek, alfabe sırası, her ilde satırlar, Kayseri "doğrulanmadı", büyük yazıda taşma yok).
+  Sonuç: radyo bölümü 13/13 OK; `eglence-check` TÜMÜ OK.
+- Not: qa-araclar'ın 1–7. bölümleri geliştirme sunucusunda çevrimiçi katalog isteği (`ERR_TUNNEL_CONNECTION_FAILED`)
+  ve indirme zaman aşımı yüzünden düşebiliyor (kapsam dışı; derlenmiş `dist` + server.mjs ile çalıştırın).
+

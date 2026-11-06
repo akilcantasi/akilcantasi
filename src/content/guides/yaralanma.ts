@@ -662,7 +662,7 @@ export const GUIDES: Guide[] = [
       "Cismi çekip çıkarmayın.",
       "Cismi oynatmayın, kırmayın.",
       "Cismin üstüne bastırmayın.",
-      "Göze batan cisimde göze bastırmayın; \"Göz yaralanması\" rehberine bakın."
+      "Göze batan cisimde göze bastırmayın; [[yaralanma-goz|\"Göz yaralanması\" rehberine]] bakın."
     ],
     "callEmergency": true,
     "critical": true,

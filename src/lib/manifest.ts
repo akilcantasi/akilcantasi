@@ -264,6 +264,8 @@ export function onlyAllowedUrls(m: Manifest): Manifest {
 
 /** Merkezi katalog: hf-yukle.cmd her yüklemede günceller (yeni harita/nokta sürümleri, boyutlar) */
 export const REMOTE_MANIFEST_URL = 'https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/packs-manifest.json';
+/** Merkezi kataloğun ayrık Ed25519 imzası (base64); katalogla aynı commit'te yüklenir (tools/hf) */
+export const REMOTE_MANIFEST_SIG_URL = REMOTE_MANIFEST_URL + '.sig';
 export const BUNDLED_MANIFEST: Manifest = validateManifest(bundled).manifest;
 
 let current: Manifest | null = null;
@@ -327,9 +329,50 @@ export function refreshRemoteManifest(): Promise<Manifest | null> {
 
 const UZAK_HATA = Symbol('uzak-hata');
 
+async function fetchBytes(url: string, timeoutMs: number): Promise<Uint8Array | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: ctrl.signal });
+    // 404: imza yok (ağ hatası değil) → null; diğer durumlar ağ sorunu sayılır
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(String(res.status));
+    return new Uint8Array(await res.arrayBuffer());
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/**
+ * Uzak katalog baytlarını imzasıyla birlikte denetler ve çözer. İmza yoksa ya da tutmazsa
+ * null (uyarı konsola yazılır, gömülü katalogla devam edilir). Ağ hatası fırlatılır.
+ */
+export async function imzaliKatalogAl(
+  getir: (url: string, ms: number) => Promise<Uint8Array | null> = fetchBytes,
+  acikAnahtar?: string,
+): Promise<unknown | null> {
+  const [govde, imza] = await Promise.all([getir(REMOTE_MANIFEST_URL, 5000), getir(REMOTE_MANIFEST_SIG_URL, 5000)]);
+  if (!govde) return null;
+  const { katalogImzasiGecerli } = await import('./katalog-imza');
+  const imzaMetni = imza ? new TextDecoder().decode(imza) : null;
+  if (!katalogImzasiGecerli(govde, imzaMetni, acikAnahtar)) {
+    console.warn('[katalog] internetteki katalogun imzası ' + (imzaMetni ? 'geçersiz' : 'yok') + '; uygulamayla gelen katalog kullanılıyor');
+    return null;
+  }
+  const text = new TextDecoder().decode(govde);
+  if (!/^\s*[\[{]/.test(text)) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 async function uzakKatalog(): Promise<Manifest | null | typeof UZAK_HATA> {
   try {
-    const r = validateManifest(await fetchJson(REMOTE_MANIFEST_URL, 5000));
+    const ham = await imzaliKatalogAl();
+    if (ham === null) return null;
+    const r = validateManifest(ham);
     const remote = onlyAllowedUrls(r.manifest);
     const base = current ?? BUNDLED_MANIFEST;
     if (remote.packs.length && newer(remote, base)) {

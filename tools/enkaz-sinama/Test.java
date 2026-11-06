@@ -80,7 +80,39 @@ public class Test {
         ok((r & 2) == 0 && m.asama().equals("BEKLE"), "sarsıntıdan sonra sürekli hareket (kişi ayakta) → sorulmaz, sıfırlanır");
     }
 
+    /** Kurtarıcı mesajı uyarı sınırı (sahte mesaj yağmuru pili bitirmesin) */
+    static void uyariSiniri() {
+        org.akilcantasi.app.MesajUyariSiniri u = new org.akilcantasi.app.MesajUyariSiniri();
+        long t0 = 1_000_000L;
+        ok(u.izinVer(t0, 1), "ilk mesaj uyarır");
+        ok(!u.izinVer(t0 + 5_000, 2), "20 sn dolmadan farklı mesaj da uyarmaz");
+        ok(u.izinVer(t0 + 20_000, 2), "20 sn sonra yeni mesaj uyarır");
+        ok(!u.izinVer(t0 + 45_000, 2), "aynı mesaj 1 dk içinde yeniden duyurulmaz");
+        ok(u.izinVer(t0 + 45_000, 3), "farklı mesaj 20 sn sonra uyarır");
+        ok(u.izinVer(t0 + 90_000, 2), "aynı mesaj 1 dk sonra yeniden duyurulur");
+        // Yağmur: her 1 sn'de farklı kodlu mesaj, 10 dk boyunca → en çok 6 uyarı
+        org.akilcantasi.app.MesajUyariSiniri y = new org.akilcantasi.app.MesajUyariSiniri();
+        int n = 0;
+        for (int i = 0; i < 600; i++) if (y.izinVer(t0 + i * 1000L, i % 13)) n++;
+        ok(n == 6, "10 dk'lık sahte mesaj yağmurunda en çok 6 uyarı: " + n);
+        // Pencere kayınca yeniden izin
+        int m = 0;
+        for (int i = 600; i < 1200; i++) if (y.izinVer(t0 + i * 1000L, i % 13)) m++;
+        ok(m >= 1 && m <= 6, "sonraki 10 dk'da yine en çok 6: " + m);
+        // 10 dk'da 6'dan fazla izin hiçbir pencerede yok (kayan pencere)
+        org.akilcantasi.app.MesajUyariSiniri k = new org.akilcantasi.app.MesajUyariSiniri();
+        java.util.ArrayList<Long> izinler = new java.util.ArrayList<>();
+        for (int i = 0; i < 3600; i++) { long z = t0 + i * 1000L; if (k.izinVer(z, i)) izinler.add(z); }
+        boolean kayanOk = true;
+        for (int i = 6; i < izinler.size(); i++) if (izinler.get(i) - izinler.get(i - 6) < 600_000L) kayanOk = false;
+        ok(kayanOk, "kayan 10 dk pencerede hiçbir zaman 6'dan fazla uyarı (" + izinler.size() + " uyarı / 1 saat)");
+        // Saat geri giderse kilitlenmez
+        org.akilcantasi.app.MesajUyariSiniri g = new org.akilcantasi.app.MesajUyariSiniri();
+        ok(g.izinVer(t0, 1) && g.izinVer(t0 - 500_000, 2), "saat geri giderse sınır sıfırlanır, kilitlenmez");
+    }
+
     public static void main(String[] a) {
+        uyariSiniri();
         EnkazIsareti e = new EnkazIsareti();
         e.kimlik = 0x1234ABCD; e.lat = 39.9208; e.lon = 32.8541; e.yasDk = 42; e.pil = 67; e.kat = 3; e.dogruluk = 9; e.guc = 3; e.otomatik = true;
         byte[] b = e.kodla();

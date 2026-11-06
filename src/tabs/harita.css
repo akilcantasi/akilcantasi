@@ -178,3 +178,33 @@ html.reduce-motion .ka-tarama { display: none; }
 .ka.kompakt .ka-cubuklar { min-height: 44px; }
 .ka.kompakt .ka-ipucu { font-size: 12.5px; }
 .ka-adim.simdiki { font-size: 13px; }
+
+/* ---- Yer adı araması (YerArama) ---- */
+.yer-ara { position: relative; flex-shrink: 0; z-index: 20; }
+.yer-ara-alan { position: relative; display: flex; align-items: center; }
+.yer-ara-ikon { position: absolute; left: 14px; color: var(--muted); pointer-events: none; }
+.yer-ara-input { height: 44px; padding-left: 42px; padding-right: 48px; font-size: 16px; -webkit-appearance: none; appearance: none; }
+.yer-ara-input::-webkit-search-cancel-button { display: none; }
+.yer-ara-sil { position: absolute; right: 2px; width: 44px; height: 44px; background: transparent; border: none; color: var(--muted); font-size: 24px; line-height: 1; }
+.yer-ara-liste { position: absolute; left: 0; right: 0; top: calc(100% + 6px); max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; padding: 6px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); border-color: var(--line3); }
+.yer-sonuc-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.yer-sonuc { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 6px 8px; border: none; border-radius: 10px; background: transparent; color: var(--text); text-align: left; }
+.yer-sonuc:hover, .yer-sonuc:focus-visible { background: var(--bg2); }
+.yer-sonuc-metin { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.yer-sonuc-ad { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.yer-sonuc-alt { font-size: 12.5px; color: var(--text2); }
+.yer-tur { color: var(--accent2, var(--accent)); font-weight: 600; }
+.yer-sonuc-uz { font-size: 12px; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+.yer-rozet { flex-shrink: 0; }
+.yer-rozet-yer { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--bg2); border: 1.5px solid var(--accent); color: var(--accent); }
+.yer-rozet-yer.t-il, .yer-rozet-yer.t-ilce { background: var(--accent); color: var(--on-accent); }
+.yer-mk-ic { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.yer-not { margin: 0; padding: 8px 10px; font-size: 13px; line-height: 1.45; color: var(--text2); }
+.yer-hazirlik { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; font-size: 13px; color: var(--text2); }
+.yer-cubuk { display: block; height: 4px; border-radius: 2px; background: var(--line2); overflow: hidden; }
+.yer-cubuk > span { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
+html.reduce-motion .yer-cubuk > span { transition: none; }
+/* Haritada seçilen yer: kehribar halka (noktalardan ve yer işaretlerinden ayrışır) */
+.yer-mk { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--accent); background: rgba(245, 165, 36, 0.18); box-shadow: 0 0 0 4px rgba(14, 27, 44, 0.65); display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.yer-mk > span { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.maplibregl-marker:has(.yer-mk) { z-index: 1; }

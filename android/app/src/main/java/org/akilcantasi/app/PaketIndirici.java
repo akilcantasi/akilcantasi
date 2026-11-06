@@ -40,7 +40,8 @@ import java.util.regex.Pattern;
  *   2) Dosyayı birkaç paralel bağlantıyla (bölüm bölüm) indirir
  *   3) Takılan bağlantıyı yeniler, gerekirse başka aynaya geçer
  *   4) Yarım kalan indirme kaldığı yerden sürer (.part + .durum dosyaları)
- *   5) Bitince boyut (ve varsa SHA-256) doğrulanır, dosya paket klasörüne taşınır
+ *   5) Bitince boyut (ve varsa SHA-256) doğrulanır, dosya paket klasörüne taşınır ve bütünlük
+ *      kaydı (boyut, zaman, kısmi özet) iç depoya yazılır (PaketButunlugu)
  * İndirme sürerken IndirmeServisi bildirim göstererek işlemin arka planda da sürmesini sağlar.
  */
 public final class PaketIndirici {
@@ -433,6 +434,11 @@ public final class PaketIndirici {
             if (target.exists()) target.delete();
             if (!part.renameTo(target)) throw new IOException("Dosya paket klasörüne taşınamadı");
             durum.delete();
+            // Bütünlük kaydı (iç depoda): açılmadan önce dosyanın başka bir uygulamaca
+            // değiştirilmediği denetlenir (PaketButunlugu). Kayıt yazılamazsa indirme yine biter.
+            try {
+                new PaketButunlugu(ctx.getFilesDir()).kaydet(target, j.sha256);
+            } catch (Exception ignored) {}
             j.received.set(total);
             j.status = "done";
             changed();

@@ -39,8 +39,9 @@ import java.util.concurrent.TimeUnit;
 /**
  * Enkaz işaretlerini dinler.
  *
- *  • Arama modu (kurtarıcı): uygulama açıkken hızlı tarama; her duyuluş JS'e gider
- *    (sinyal gücü → sıcak-soğuk göstergesi).
+ *  • Arama modu (kurtarıcı): uygulama öndeyken hızlı tarama; her duyuluş JS'e gider
+ *    (sinyal gücü → sıcak-soğuk göstergesi). Uygulama arka plana geçince tarama dengeli
+ *    (BALANCED) kipe iner: işaretler yine duyulur, pil daha az gider; öne gelince hızlıya döner.
  *  • Nöbet (isteğe bağlı, varsayılan kapalı): uygulama kapalıyken bile sistemin düşük güçlü
  *    taraması (PendingIntent). Bir işaret duyulunca bildirim çıkar ("Arama modunu aç",
  *    "112'yi ara") ve duyuluş kaydedilir. Kendiliğinden kimseye bir şey gönderilmez:
@@ -100,13 +101,79 @@ public final class EnkazTarayici {
                 d.duyuldu(o);
             }
         };
-        ScanSettings ayar = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
+        yasamDinle(ac);
+        aramaArkada = false;
         try {
-            t.startScan(suzgec(), ayar, aramaCb);
+            t.startScan(suzgec(), aramaAyari(false), aramaCb);
             return null;
         } catch (Exception e) {
             aramaCb = null;
             return "hata";
+        }
+    }
+
+    // --- Arka planda dengeli tarama ------------------------------------------------------
+    /** Arama taraması şu an arka plan (dengeli) kipinde mi */
+    private static boolean aramaArkada = false;
+    /** Uygulama arka planda mı (son etkinlik durdu) */
+    private static volatile boolean arkada = false;
+    private static boolean yasamDinleniyor = false;
+    private static final Runnable KIP_UYGULA = () -> kipUygula();
+
+    static ScanSettings aramaAyari(boolean arka) {
+        return new ScanSettings.Builder()
+                .setScanMode(arka ? ScanSettings.SCAN_MODE_BALANCED : ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build();
+    }
+
+    /**
+     * Etkinlik öne gelince/arka plana geçince arama kipini değiştirir. Uygulamada tek etkinlik
+     * (MainActivity) var. Tek seferlik kaydedilir; arama başlatıldığında uygulama öndedir.
+     */
+    private static synchronized void yasamDinle(Context ac) {
+        if (yasamDinleniyor || !(ac instanceof android.app.Application)) return;
+        yasamDinleniyor = true;
+        arkada = false;
+        ((android.app.Application) ac).registerActivityLifecycleCallbacks(new android.app.Application.ActivityLifecycleCallbacks() {
+            @Override public void onActivityStarted(@NonNull android.app.Activity a) { kipDegisti(false); }
+            @Override public void onActivityStopped(@NonNull android.app.Activity a) { kipDegisti(true); }
+            @Override public void onActivityCreated(@NonNull android.app.Activity a, android.os.Bundle b) {}
+            @Override public void onActivityResumed(@NonNull android.app.Activity a) {}
+            @Override public void onActivityPaused(@NonNull android.app.Activity a) {}
+            @Override public void onActivitySaveInstanceState(@NonNull android.app.Activity a, @NonNull android.os.Bundle b) {}
+            @Override public void onActivityDestroyed(@NonNull android.app.Activity a) {}
+        });
+        yasamBaglam = ac;
+    }
+    private static Context yasamBaglam;
+
+    /**
+     * Kip değişimi 2 sn ertelenir: kısa arka plan geçişlerinde (izin penceresi, bildirim
+     * perdesi) tarama durup başlamasın; Android 30 sn'de 5'ten çok tarama başlatmayı engeller.
+     */
+    private static void kipDegisti(boolean arka) {
+        arkada = arka;
+        ANA.removeCallbacks(KIP_UYGULA);
+        ANA.postDelayed(KIP_UYGULA, 2000);
+    }
+
+    @SuppressLint("MissingPermission")
+    private static synchronized void kipUygula() {
+        Context c = yasamBaglam;
+        boolean arka = arkada;
+        if (aramaCb == null || c == null || arka == aramaArkada) return;
+        BluetoothLeScanner t = tarayici(c);
+        if (t == null || !izin(c)) return;
+        try {
+            t.stopScan(aramaCb);
+            t.startScan(suzgec(), aramaAyari(arka), aramaCb);
+            aramaArkada = arka;
+        } catch (Exception e) {
+            // Yeniden başlatılamadıysa hızlı kipte sürmeye çalış (tarama kesilmesin)
+            try {
+                t.startScan(suzgec(), aramaAyari(false), aramaCb);
+                aramaArkada = false;
+            } catch (Exception ignored) {}
         }
     }
 

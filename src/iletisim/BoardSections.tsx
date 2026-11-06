@@ -2,10 +2,11 @@
 import { useState } from 'preact/hooks';
 import { go } from '../lib/store';
 import { native } from '../lib/native';
-import { KIND_LABEL, LIMITS, missingToText, newId, type BoardDraft, type BoardKind, type CheckinStatus } from './board';
+import { KIND_LABEL, LIMITS, missingToText, newId, type BoardDraft, type BoardItem, type BoardKind, type CheckinStatus, type MissingStatus } from './board';
 import { board, useBoard } from './client';
 import { mesh } from '../lib/mesh';
-import { ConnCard, Empty, GeoButton, ItemCard, NameField, Section, useGeo, useNow, useProfile } from './common';
+import { ConnCard, Empty, GeoButton, gorunenDurum, ItemCard, NameField, Section, useGeo, useNow, useProfile } from './common';
+import { bnPinSifirla, useDogrulama } from './imza';
 import { cleanPhone, normalizeServer } from './outbox';
 import { buildTemplate, isIOS, smsHref } from './sms';
 import { useYakinlar } from './HizliSms';
@@ -21,7 +22,14 @@ function useSender() {
     set(r.ok ? { kind: 'ok', queued: !!r.queued, reason: r.reason } : { kind: 'error', msg: r.error ?? 'Gönderilemedi' });
     return r.ok;
   };
-  return { st, send, reset: () => set({ kind: 'idle' }) };
+  /** Kayıp ilanının durumunu değiştirir (imzalı ilanda yalnız sahibi) */
+  const sendStatus = async (it: BoardItem, durum: MissingStatus) => {
+    set({ kind: 'busy' });
+    const r = await board.setMissingStatus(it, durum);
+    set(r.ok ? { kind: 'ok', queued: !!r.queued, reason: r.reason } : { kind: 'error', msg: r.error ?? 'Gönderilemedi' });
+    return r.ok;
+  };
+  return { st, send, sendStatus, reset: () => set({ kind: 'idle' }) };
 }
 
 function SendResult({ st, testid = 'send-result' }: { st: SendState; testid?: string }) {
@@ -203,11 +211,12 @@ export function Kayip() {
   const now = useNow();
   const [p] = useProfile();
   const [f, setF] = useState({ name: '', age: '', desc: '', lastSeen: '' });
-  const [confirm, setConfirm] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ id: string; st: MissingStatus } | null>(null);
   const [show, setShow] = useState<'araniyor' | 'hepsi'>('araniyor');
   const { st, send } = useSender();
   const marker = useSender();
-  const list = s.items.filter((i) => i.kind === 'kayip' && (show === 'hepsi' || i.status === 'araniyor'));
+  const dg = useDogrulama();
+  const list = s.items.filter((i) => i.kind === 'kayip' && (show === 'hepsi' || gorunenDurum(i, dg(i)) === 'araniyor'));
   const field = (k: keyof typeof f, label: string, ph: string, max = 120) => (
     <label class="cm-field">
       <span class="label">{label}</span>
@@ -217,8 +226,71 @@ export function Kayip() {
   const submit = async () => {
     if (await send({ kind: 'kayip', from: p.name, text: missingToText(f), status: 'araniyor' })) setF({ name: '', age: '', desc: '', lastSeen: '' });
   };
+  /** Onay kutusu: imzalı ilanda yalnız sahibi, eski ilanda herkes (eski davranış) */
+  const onay = (it: BoardItem, hedef: MissingStatus, eski: boolean) => (
+    <div class="cm-field">
+      <p class="cm-note">
+        {hedef === 'bulundu' ? 'Bu kişi bulundu mu? Herkes için “Bulundu” görünecek.' : 'Kişi yeniden aranıyor mu? İlan herkes için yeniden “Aranıyor” görünecek.'}
+      </p>
+      <div class="cm-btns">
+        <button
+          class="btn primary"
+          data-testid="missing-found-confirm"
+          disabled={eski && !p.name.trim()}
+          onClick={async () => {
+            // İlan sahibinin adı korunur (sunucu da güncellemede adı değiştirmez)
+            await marker.sendStatus(it, hedef);
+            setConfirm(null);
+          }}
+        >
+          {hedef === 'bulundu' ? 'Evet, bulundu' : 'Evet, yeniden aranıyor'}
+        </button>
+        <button class="btn" data-testid="missing-found-cancel" onClick={() => setConfirm(null)}>
+          Vazgeç
+        </button>
+      </div>
+      {eski && !p.name.trim() && <p class="cm-note">Önce yukarıya adınızı yazın.</p>}
+    </div>
+  );
+  const eylem = (it: BoardItem) => {
+    const d = dg(it);
+    const durum = gorunenDurum(it, d);
+    if (confirm?.id === it.id) return onay(it, confirm.st, !it.pub);
+    if (!it.pub) {
+      // Eski (imzasız) ilan: sahibi kanıtlanamaz, eskisi gibi herkes "bulundu" diyebilir
+      return (
+        durum === 'araniyor' && (
+          <button class="btn" data-testid={'missing-found-' + it.id} onClick={() => setConfirm({ id: it.id, st: 'bulundu' })}>
+            Bulundu olarak işaretle
+          </button>
+        )
+      );
+    }
+    if (!d) return null;
+    if (d.ilan !== 'gecerli')
+      return (
+        <p class="cm-note" data-testid="missing-owner-note">
+          İmzası doğrulanamadığı için bu ilanın durumu değiştirilemez.
+        </p>
+      );
+    if (board.isOwner(it))
+      return durum === 'araniyor' ? (
+        <button class="btn" data-testid={'missing-found-' + it.id} onClick={() => setConfirm({ id: it.id, st: 'bulundu' })}>
+          Bulundu olarak işaretle
+        </button>
+      ) : (
+        <button class="btn" data-testid={'missing-reopen-' + it.id} onClick={() => setConfirm({ id: it.id, st: 'araniyor' })}>
+          Yeniden “aranıyor” yap
+        </button>
+      );
+    return (
+      <p class="cm-note" data-testid="missing-owner-note">
+        Durumunu yalnızca ilanı veren telefon ({it.from}) değiştirebilir.{durum === 'araniyor' ? ' Kişiyi gördüyseniz ilan sahibine ya da ekiplere haber verin.' : ''}
+      </p>
+    );
+  };
   return (
-    <Section id="kayip" title="Kayıp kişi" sub="Aradığınız kişiyi panoya yazın. Bulunduğunda “Bulundu” olarak işaretleyin ki arama boşa sürmesin.">
+    <Section id="kayip" title="Kayıp kişi" sub="Aradığınız kişiyi panoya yazın. Bulunduğunda ilanı veren telefondan “Bulundu” olarak işaretleyin ki arama boşa sürmesin.">
       <ConnCard s={s} />
       <div class="card" style="display:flex;flex-direction:column;gap:10px">
         <span class="label">Yeni ilan</span>
@@ -230,6 +302,7 @@ export function Kayip() {
         <button class="btn primary" data-testid="missing-send" disabled={!p.name.trim() || !f.name.trim() || st.kind === 'busy'} onClick={submit}>
           İlanı panoya gönder
         </button>
+        <p class="cm-note">İlanın durumunu yalnızca bu telefon değiştirebilir; başkası ilanınızı “bulundu” yapamaz.</p>
         <SendResult st={st} />
       </div>
       <div class="cm-chips" role="group" aria-label="İlanlar">
@@ -242,43 +315,7 @@ export function Kayip() {
       </div>
       <div class="cm-list" data-testid="board-list">
         {list.length ? (
-          list.map((it) => (
-            <ItemCard
-              key={it.id}
-              it={it}
-              now={now}
-              actions={
-                it.status === 'araniyor' &&
-                (confirm === it.id ? (
-                  <div class="cm-field">
-                    <p class="cm-note">Bu kişi bulundu mu? Herkes için “Bulundu” görünecek.</p>
-                    <div class="cm-btns">
-                      <button
-                        class="btn primary"
-                        data-testid="missing-found-confirm"
-                        disabled={!p.name.trim()}
-                        onClick={async () => {
-                          // İlan sahibinin adı korunur (sunucu da güncellemede adı değiştirmez)
-                          await marker.send({ id: it.id, kind: 'kayip', from: it.from, text: it.text, status: 'bulundu' });
-                          setConfirm(null);
-                        }}
-                      >
-                        Evet, bulundu
-                      </button>
-                      <button class="btn" data-testid="missing-found-cancel" onClick={() => setConfirm(null)}>
-                        Vazgeç
-                      </button>
-                    </div>
-                    {!p.name.trim() && <p class="cm-note">Önce yukarıya adınızı yazın.</p>}
-                  </div>
-                ) : (
-                  <button class="btn" data-testid={'missing-found-' + it.id} onClick={() => setConfirm(it.id)}>
-                    Bulundu olarak işaretle
-                  </button>
-                ))
-              }
-            />
-          ))
+          list.map((it) => <ItemCard key={it.id} it={it} now={now} actions={eylem(it)} />)
         ) : (
           <Empty s={s} what={show === 'araniyor' ? 'açık kayıp ilanı' : 'kayıp ilanı'} />
         )}
@@ -299,7 +336,9 @@ export function Duyurular() {
   return (
     <Section id="duyuru" title="Duyurular" sub="Toplanma alanı, su/yemek dağıtımı, sağlık noktası gibi herkesi ilgilendiren bilgiler.">
       <ConnCard s={s} />
-      <p class="cm-note">“Bilgi noktasından” etiketi, duyurunun bilgi noktasını çalıştıran cihazdan yazıldığını gösterir. Diğer duyuruları herkes yazabilir; önemli kararlardan önce doğrulayın.</p>
+      <p class="cm-note">
+        “Bu bilgi noktasından” etiketi, duyurunun bilgi noktasını çalıştıran cihazdan yazıldığını ve o cihazın imzasının doğrulandığını gösterir. Diğer duyuruları herkes yazabilir; önemli kararlardan önce doğrulayın.
+      </p>
       <div class="cm-list" data-testid="board-list">
         {list.length ? list.map((it) => <ItemCard key={it.id} it={it} now={now} />) : <Empty s={s} what="duyuru" />}
       </div>
@@ -423,6 +462,21 @@ export function Baglan() {
         {err && <p class="cm-err">{err}</p>}
         {saved && !err && <p class="cm-note" data-testid="server-saved">Kaydedildi. {s.conn === 'connected' ? 'Bağlantı kuruldu.' : 'Bağlantı deneniyor…'}</p>}
         <p class="cm-note">Boş bırakırsanız, uygulamayı açtığınız bilgi noktası ya da bu telefonun kendi bilgi noktası kullanılır.</p>
+        {s.conn === 'connected' && s.bnPin === 'farkli' && (
+          <div class="cm-field">
+            <p class="cm-uyari">Bu adresteki bilgi noktasının imza anahtarı değişmiş. Bilgi noktası cihazı yeniden kurulduysa yeni anahtarı kabul edebilirsiniz.</p>
+            <button
+              class="btn"
+              data-testid="bn-key-accept"
+              onClick={() => {
+                bnPinSifirla(s.base);
+                board.refreshNow();
+              }}
+            >
+              Yeni anahtarı kabul et
+            </button>
+          </div>
+        )}
       </div>
       <div class="card" style="display:flex;flex-direction:column;gap:10px">
         <span class="label">Bilgileriniz (yalnızca bu telefonda)</span>

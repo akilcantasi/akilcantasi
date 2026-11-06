@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { go, useAppState } from '../lib/store';
 import { formatSize, type InstalledPack } from '../lib/packs';
-import { deviceProfile, engine, fitFor, fitForGroup, getModelOverride, getNativeInfo, listModels, loadNativeInfo, setModelOverride, type ModelGroup } from '../lib/fener/engine';
+import { deviceProfile, engine, fitFor, fitForGroup, getModelOverride, getNativeInfo, listModels, loadNativeInfo, resetGpu, setModelOverride, type ModelGroup } from '../lib/fener/engine';
 import { chooseModel, FIT_LABEL } from '../lib/fener/models';
 import { loadManifest, matchInstalled, type ManifestPack } from '../lib/manifest';
 import { isActive, pauseDownload, startDownload, useDownloads, type DlState } from '../lib/downloader';
@@ -77,6 +77,14 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
   const [installed, setInstalled] = useState<InstalledPack[]>([]);
 
   const [nat, setNat] = useState(getNativeInfo());
+  // "GPU'yu yeniden dene": null = basılmadı
+  const [gpuSonuc, setGpuSonuc] = useState<null | 'calisiyor' | 'yeniden-ac' | 'hemen' | 'hata'>(null);
+  const gpuDene = async () => {
+    setGpuSonuc('calisiyor');
+    const r = await resetGpu().catch(() => ({ ok: false, yenidenBaslat: false }));
+    setNat(getNativeInfo());
+    setGpuSonuc(!r.ok ? 'hata' : r.yenidenBaslat ? 'yeniden-ac' : 'hemen');
+  };
   useEffect(() => {
     let alive = true;
     // Yerel motor varsa gerçek RAM'e göre uygunluk hesaplanır
@@ -153,6 +161,26 @@ export function ModelPanel({ onClose, onChange, batterySaver }: { onClose: () =>
                   <span class="fener-active-meta" data-testid="fener-native">
                     Hızlı yerel motor: {Math.round(nat.ram / 1e9)} GB RAM, {nat.threads} iş parçacığı{nat.arkaUclar?.gpu && !nat.gpuKapali ? ', GPU var' : ''}
                   </span>
+                )}
+                {nat && (nat.gpuKapali || (gpuSonuc && gpuSonuc !== 'calisiyor')) && (
+                  <div class="fener-gpu" data-testid="fener-gpu-note" data-state={gpuSonuc ?? 'kapali'} role="status">
+                    {gpuSonuc === 'yeniden-ac' ? (
+                      <span>Tamam. Uygulamayı kapatıp yeniden açınca GPU denenecek. Yine sorun çıkarsa kendiliğinden kapanır.</span>
+                    ) : gpuSonuc === 'hemen' ? (
+                      <span>Tamam. Model bir sonraki yüklenişinde GPU denenecek. Yine sorun çıkarsa kendiliğinden kapanır.</span>
+                    ) : (
+                      <>
+                        <span>
+                          {gpuSonuc === 'hata'
+                            ? 'GPU ayarı değiştirilemedi. Fener işlemciyle çalışmaya devam ediyor.'
+                            : 'GPU bu cihazda daha önce sorun çıkardığı için kapatıldı; Fener işlemciyle sorunsuz çalışıyor.'}
+                        </span>
+                        <button type="button" class="btn fener-gpu-btn" data-testid="fener-gpu-retry" disabled={gpuSonuc === 'calisiyor'} onClick={() => void gpuDene()}>
+                          GPU'yu yeniden dene
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </>
             ) : (

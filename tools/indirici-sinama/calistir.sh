@@ -1,7 +1,8 @@
 #!/bin/sh
 # Android yerel indiricisinin (PaketIndirici.java) mantığını Android SDK olmadan sınar:
 # android.* ve org.json için küçük taklitlerle derlenir, yerel bir HTTPS sunucusuna karşı
-# paralel bölümlü indirme, duraklat/sürdür, yeniden açılışta kurtarma, SHA-256 ve iptal denenir.
+# paralel bölümlü indirme, duraklat/sürdür, yeniden açılışta kurtarma, SHA-256, iptal ve
+# paket bütünlük kaydı (PaketButunlugu: boyut, zaman, kısmi özet; model açılmadan önce denetim) denenir.
 #
 # İndirici yalnız https ve izinli alan adlarına gider (PaketIndirici.izinliAdres). Sınama bu yüzden
 # izinli bir adı (akilcantasi.com) bir hosts dosyasıyla 127.0.0.1'e yönlendirir ve bu ad için
@@ -10,7 +11,7 @@ set -e
 cd "$(dirname "$0")"
 OUT=$(mktemp -d)
 # erisim/: paket içi yöntemlere erişim (org/ altında değil; sms-sinama org/ taklitlerini paylaşır)
-javac -d "$OUT" $(find android org -name '*.java') erisim/SinamaErisim.java ../../android/app/src/main/java/org/akilcantasi/app/PaketIndirici.java Test.java
+javac -d "$OUT" $(find android org -name '*.java') erisim/SinamaErisim.java ../../android/app/src/main/java/org/akilcantasi/app/PaketIndirici.java ../../android/app/src/main/java/org/akilcantasi/app/PaketButunlugu.java Test.java
 keytool -genkeypair -alias sinama -keyalg RSA -keysize 2048 -validity 2 -dname "CN=akilcantasi.com" \
   -ext "SAN=dns:akilcantasi.com" -storetype PKCS12 -keystore "$OUT/sunucu.p12" -storepass sinama -keypass sinama >/dev/null 2>&1
 keytool -exportcert -alias sinama -keystore "$OUT/sunucu.p12" -storepass sinama -file "$OUT/sunucu.cer" >/dev/null 2>&1

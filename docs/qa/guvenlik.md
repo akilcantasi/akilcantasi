@@ -169,3 +169,26 @@ node e2e/download-check.mjs --dist /tmp/guv-dist  # 15/15
 AKIL_DIST=/tmp/guv-dist node e2e/sunucu-indirme-check.mjs
 node e2e/qa-kutuphane.mjs                         # dört bilgi noktası kurulumu: dosyanın başına bakın
 ```
+
+## Öneriler turu 2026-11: paket bütünlüğü
+
+Ayrıntılı tasarım: [docs/PAKET_GUVENLIGI.md](../PAKET_GUVENLIGI.md).
+
+- **Eksik SHA-256'lar:** kalan 31 özet bu ortamda yine alınamadı (`download.kiwix.org/...sha256`
+  okunamadı; Whisper tar'larının yayımlanmış özeti yok). Mevcut 21 Hugging Face ZIM özeti depo
+  ağacındaki LFS özetleriyle yeniden karşılaştırıldı, hepsi (özet + boyut) tutuyor. Bundan sonrası
+  otomatik: `tools/hf/sha-doldur.mjs` (Kiwix `.sha256` dosyası yalnız aynı dosya adı için; HF LFS
+  özeti yalnız aynı boyut için) aylık işte çalışır; `hf-yukle` özeti eksik paketi yüklerken
+  özetini kendisi hesaplar.
+- **İmzalı katalog:** internetteki merkezi katalog yalnız geçerli Ed25519 imzasıyla
+  (`packs-manifest.json.sig`) kabul edilir; imzasız/bozuk katalog sessizce yok sayılır
+  (`console.warn`). İmzalama: `tools/katalog-imzala.mjs`; yayımlama `hf-yukle` (katalog + imza tek
+  commit); aylık iş anahtar yoksa en başta durur.
+- **Model bütünlüğü (Android 7–10):** indirme sonunda boyut + zaman + kısmi SHA-256 iç depoya
+  yazılır (`PaketButunlugu.java`); `fenerYukle` modeli (bütün parçalarıyla) açmadan önce denetler,
+  tutmazsa "Model dosyası değişmiş görünüyor; yeniden indirin" der ve WebView motoruna da
+  düşmez. Kaydı olmayan eski paketler açılır, ilk açılışta kaydedilir.
+- Sınama: `tests/katalog-imza.test.ts`, `tests/sha-doldur.test.ts`, `tests/paket-butunlugu.test.ts`,
+  `e2e/katalog-imza-check.mjs`, `tools/indirici-sinama` (bütünlük bölümü).
+- Kalan: ZIM/PMTiles WebView'a parça parça sunulduğu için bütünlük denetimi şimdilik yalnız
+  modellerde; kısmi özet ortadaki baytları kapsamaz.

@@ -101,11 +101,11 @@ var init_sha256_wrapper_ITDNMKRK = __esm({
         var ENVIRONMENT_IS_NODE = typeof process == "object" && typeof process.versions == "object" && typeof process.versions.node == "string";
         var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIRONMENT_IS_WORKER;
         var scriptDirectory = "";
-        function locateFile(path3) {
+        function locateFile(path4) {
           if (Module2["locateFile"]) {
-            return Module2["locateFile"](path3, scriptDirectory);
+            return Module2["locateFile"](path4, scriptDirectory);
           }
-          return scriptDirectory + path3;
+          return scriptDirectory + path4;
         }
         var read_, readAsync, readBinary;
         if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
@@ -525,18 +525,18 @@ var init_FileBlob_UNXOJWFM = __esm({
        *
        * @param path Path to the file to be lazy readed
        */
-      static async create(path3) {
-        path3 = path3 instanceof URL ? fileURLToPath(path3) : path3;
-        const { size } = await stat(path3);
-        const fileBlob = new FileBlob(path3, 0, size);
+      static async create(path4) {
+        path4 = path4 instanceof URL ? fileURLToPath(path4) : path4;
+        const { size } = await stat(path4);
+        const fileBlob = new FileBlob(path4, 0, size);
         return fileBlob;
       }
       path;
       start;
       end;
-      constructor(path3, start, end) {
+      constructor(path4, start, end) {
         super();
-        this.path = path3;
+        this.path = path4;
         this.start = start;
         this.end = end;
       }
@@ -610,15 +610,15 @@ __export(sub_paths_HFKHI55E_exports, {
 });
 import { readdir, stat as stat2 } from "fs/promises";
 import { fileURLToPath as fileURLToPath2, pathToFileURL } from "url";
-async function subPaths(path3, maxDepth = 10) {
-  const state = await stat2(path3);
+async function subPaths(path4, maxDepth = 10) {
+  const state = await stat2(path4);
   if (!state.isDirectory()) {
-    return [{ path: path3, relativePath: "." }];
+    return [{ path: path4, relativePath: "." }];
   }
-  const files = await readdir(path3, { withFileTypes: true });
+  const files = await readdir(path4, { withFileTypes: true });
   const ret = [];
   for (const file of files) {
-    const filePath = pathToFileURL(fileURLToPath2(path3) + "/" + file.name);
+    const filePath = pathToFileURL(fileURLToPath2(path4) + "/" + file.name);
     if (file.isDirectory()) {
       ret.push(
         ...(await subPaths(filePath, maxDepth - 1)).map((subPath) => ({
@@ -639,10 +639,10 @@ var init_sub_paths_HFKHI55E = __esm({
 });
 
 // tools/hf/_src/hf-yukle.ts
-import fs2 from "node:fs";
+import fs3 from "node:fs";
 import fsp2 from "node:fs/promises";
-import path2 from "node:path";
-import crypto2 from "node:crypto";
+import path3 from "node:path";
+import crypto3 from "node:crypto";
 import { pathToFileURL as pathToFileURL2 } from "node:url";
 
 // node_modules/gearhash-jit/dist/esm/table.js
@@ -8998,6 +8998,40 @@ function uploadFile(params) {
     rangeEditCache: params.rangeEditCache
   });
 }
+function uploadFiles(params) {
+  const operations = params.files.map((file) => {
+    const path22 = file instanceof URL ? file.pathname.split("/").at(-1) ?? "file" : "path" in file ? file.path : file.name;
+    if (typeof file === "object" && "edits" in file) {
+      return {
+        operation: "edit",
+        path: path22,
+        originalContent: file.originalContent,
+        edits: file.edits
+      };
+    }
+    return {
+      operation: "addOrUpdate",
+      path: path22,
+      content: "content" in file ? file.content : file
+    };
+  });
+  return commit({
+    ...params.accessToken ? { accessToken: params.accessToken } : { credentials: params.credentials },
+    repo: params.repo,
+    operations,
+    title: params.commitTitle ?? `Add ${params.files.length} files`,
+    description: params.commitDescription,
+    hubUrl: params.hubUrl,
+    branch: params.branch,
+    isPullRequest: params.isPullRequest,
+    parentCommit: params.parentCommit,
+    fetch: params.fetch,
+    useWebWorkers: params.useWebWorkers,
+    abortSignal: params.abortSignal,
+    useXet: params.useXet,
+    rangeEditCache: params.rangeEditCache
+  });
+}
 var multipartUploadTracking = /* @__PURE__ */ new WeakMap();
 async function* uploadFilesWithProgress(params) {
   const operations = params.files.map((file) => {
@@ -9128,11 +9162,136 @@ async function whoAmI(params) {
 // node_modules/@huggingface/hub/dist/index.mjs
 init_chunk_FFYIGW52();
 
-// server/fetcher.mjs
+// tools/katalog-imzala.mjs
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+var KOK = path.resolve(path.dirname(fileURLToPath3(import.meta.url)), "..");
+var PKCS8_ON_EK = Buffer.from("302e020100300506032b657004220420", "hex");
+var SPKI_ON_EK = Buffer.from("302a300506032b6570032100", "hex");
+function gizliAnahtarOku(metin) {
+  const temiz = String(metin ?? "").split(/\r?\n/).filter((s) => !s.trim().startsWith("#")).join("\n").trim();
+  if (!temiz) throw new Error("imza anahtar\u0131 bo\u015F");
+  if (temiz.includes("-----BEGIN")) return crypto.createPrivateKey({ key: temiz, format: "pem" });
+  const tek = temiz.replace(/\s+/g, "");
+  let ham;
+  if (/^[0-9a-fA-F]{64}$/.test(tek)) ham = Buffer.from(tek, "hex");
+  else if (/^[A-Za-z0-9+/=_-]+$/.test(tek)) ham = Buffer.from(tek.replace(/-/g, "+").replace(/_/g, "/"), "base64");
+  else throw new Error("imza anahtar\u0131 tan\u0131nmad\u0131 (base64 PKCS8, PEM ya da 32 baytl\u0131k tohum olmal\u0131)");
+  const der = ham.length === 32 ? Buffer.concat([PKCS8_ON_EK, ham]) : ham;
+  let k;
+  try {
+    k = crypto.createPrivateKey({ key: der, format: "der", type: "pkcs8" });
+  } catch {
+    throw new Error("imza anahtar\u0131 \xE7\xF6z\xFClemedi (base64 PKCS8 ya da 32 baytl\u0131k tohum olmal\u0131)");
+  }
+  if (k.asymmetricKeyType !== "ed25519") throw new Error("imza anahtar\u0131 Ed25519 de\u011Fil");
+  return k;
+}
+function acikAnahtarB64(k) {
+  const pub = k.type === "private" ? crypto.createPublicKey(k) : k;
+  const der = pub.export({ format: "der", type: "spki" });
+  return Buffer.from(der.subarray(der.length - 32)).toString("base64");
+}
+function imzala(bytes, gizli) {
+  return crypto.sign(null, Buffer.from(bytes), gizli).toString("base64");
+}
+function dogrula(bytes, imzaB64, acikB64) {
+  try {
+    const ham = Buffer.from(String(acikB64).trim(), "base64");
+    const imza = Buffer.from(String(imzaB64 ?? "").trim(), "base64");
+    if (ham.length !== 32 || imza.length !== 64) return false;
+    const pub = crypto.createPublicKey({ key: Buffer.concat([SPKI_ON_EK, ham]), format: "der", type: "spki" });
+    return crypto.verify(null, Buffer.from(bytes), pub, imza);
+  } catch {
+    return false;
+  }
+}
+function uygulamaAcikAnahtari(kok = KOK) {
+  const ts = fs.readFileSync(path.join(kok, "src", "lib", "katalog-imza.ts"), "utf8");
+  const m = ts.match(/KATALOG_ACIK_ANAHTAR\s*=\s*'([A-Za-z0-9+/=]{43,44})'/);
+  if (!m) throw new Error("src/lib/katalog-imza.ts i\xE7inde KATALOG_ACIK_ANAHTAR bulunamad\u0131");
+  return m[1];
+}
+function gizliAnahtarBul({ dosya, env = process.env, kok = KOK } = {}) {
+  if (dosya) return gizliAnahtarOku(fs.readFileSync(dosya, "utf8"));
+  if (env.KATALOG_IMZA_ANAHTARI && env.KATALOG_IMZA_ANAHTARI.trim()) return gizliAnahtarOku(env.KATALOG_IMZA_ANAHTARI);
+  if (env.KATALOG_IMZA_ANAHTARI_DOSYASI) return gizliAnahtarOku(fs.readFileSync(env.KATALOG_IMZA_ANAHTARI_DOSYASI, "utf8"));
+  const yerel = path.join(kok, "_gizli", "katalog-imza-anahtari.txt");
+  if (fs.existsSync(yerel)) return gizliAnahtarOku(fs.readFileSync(yerel, "utf8"));
+  return null;
+}
+function dosyaImzala(dosya, gizli, acik = uygulamaAcikAnahtari()) {
+  if (acikAnahtarB64(gizli) !== acik)
+    throw new Error("imza anahtar\u0131 uygulamadaki a\xE7\u0131k anahtarla e\u015Fle\u015Fmiyor (src/lib/katalog-imza.ts); yanl\u0131\u015F anahtar");
+  const bytes = fs.readFileSync(dosya);
+  const imza = imzala(bytes, gizli);
+  if (!dogrula(bytes, imza, acik)) throw new Error("imza do\u011Frulanamad\u0131: " + dosya);
+  fs.writeFileSync(dosya + ".sig", imza + "\n");
+  return imza;
+}
+function main() {
+  const args2 = process.argv.slice(2);
+  const al = (k) => {
+    const i = args2.indexOf(k);
+    if (i < 0) return void 0;
+    const v = args2[i + 1];
+    args2.splice(i, 2);
+    return v;
+  };
+  const yeni = al("--yeni-anahtar");
+  if (yeni !== void 0) {
+    if (!yeni) throw new Error("--yeni-anahtar <dosya> gerekli");
+    if (fs.existsSync(yeni)) throw new Error("dosya zaten var, \xFCzerine yaz\u0131lmaz: " + yeni);
+    const { privateKey } = crypto.generateKeyPairSync("ed25519");
+    const pkcs8 = privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
+    fs.mkdirSync(path.dirname(path.resolve(yeni)), { recursive: true });
+    fs.writeFileSync(
+      yeni,
+      "# Ak\u0131l \xC7antas\u0131 katalog imza anahtar\u0131 (Ed25519, base64 PKCS8). G\u0130ZL\u0130D\u0130R: payla\u015Fmay\u0131n, depoya koymay\u0131n.\n# GitHub: Settings \u2192 Secrets and variables \u2192 Actions \u2192 KATALOG_IMZA_ANAHTARI = a\u015Fa\u011F\u0131daki tek sat\u0131r.\n" + pkcs8 + "\n",
+      { mode: 384 }
+    );
+    console.log("Gizli anahtar yaz\u0131ld\u0131: " + yeni);
+    console.log("A\xE7\u0131k anahtar (src/lib/katalog-imza.ts \u2192 KATALOG_ACIK_ANAHTAR): " + acikAnahtarB64(privateKey));
+    return;
+  }
+  const yalnizDogrula = args2.includes("--dogrula");
+  const anahtarDosyasi = al("--anahtar");
+  const dosyalar = args2.filter((a) => !a.startsWith("--"));
+  if (!dosyalar.length) dosyalar.push(path.join(KOK, "public", "packs-manifest.json"));
+  const acik = uygulamaAcikAnahtari();
+  if (yalnizDogrula) {
+    let hata = 0;
+    for (const d of dosyalar) {
+      const sig = fs.existsSync(d + ".sig") ? fs.readFileSync(d + ".sig", "utf8") : "";
+      const ok = sig && dogrula(fs.readFileSync(d), sig, acik);
+      console.log((ok ? "\u0130MZA GE\xC7ERL\u0130  " : "\u0130MZA GE\xC7ERS\u0130Z ") + d);
+      if (!ok) hata++;
+    }
+    process.exit(hata ? 1 : 0);
+  }
+  const gizli = gizliAnahtarBul({ dosya: anahtarDosyasi });
+  if (!gizli) throw new Error("imza anahtar\u0131 yok: KATALOG_IMZA_ANAHTARI ortam de\u011Fi\u015Fkeni ya da --anahtar <dosya> gerekli");
+  for (const d of dosyalar) {
+    dosyaImzala(d, gizli, acik);
+    console.log("\u0130mzaland\u0131: " + path.relative(process.cwd(), d) + ".sig");
+  }
+}
+if (process.argv[1] && path.basename(process.argv[1]) === "katalog-imzala.mjs" && path.resolve(process.argv[1]) === fileURLToPath3(import.meta.url)) {
+  try {
+    main();
+  } catch (e) {
+    console.error("HATA: " + (e?.message ?? e));
+    process.exit(1);
+  }
+}
+
+// server/fetcher.mjs
+import fs2 from "node:fs";
+import fsp from "node:fs/promises";
+import path2 from "node:path";
+import crypto2 from "node:crypto";
 var KIWIX_MIRRORS = [
   "https://ftp.fau.de/kiwix/zim",
   "https://ftp.nluug.nl/pub/kiwix/zim",
@@ -9181,9 +9340,12 @@ function safeName(name) {
   return typeof name === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && !name.includes("..");
 }
 var sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function isNoSpace(e) {
+  return e?.code === "ENOSPC" || e?.code === "EDQUOT" || e?.code === "EFBIG";
+}
 function createFetcher(o) {
   const f = o.fetch ?? fetch;
-  const partDir = path.join(o.dataDir, PART_DIR);
+  const partDir = path2.join(o.dataDir, PART_DIR);
   const jobs = /* @__PURE__ */ new Map();
   const expand = o.mirrors ?? expandMirrors;
   const stallMs = o.stallMs ?? STALL_MS;
@@ -9280,7 +9442,7 @@ function createFetcher(o) {
       let segs = null;
       try {
         const prev = JSON.parse(await fsp.readFile(j.statePath, "utf8"));
-        if (prev.total === total && Array.isArray(prev.segments) && fs.existsSync(j.partPath)) segs = prev.segments;
+        if (prev.total === total && Array.isArray(prev.segments) && fs2.existsSync(j.partPath)) segs = prev.segments;
       } catch {
       }
       if (!segs || !canRange) {
@@ -9290,7 +9452,7 @@ function createFetcher(o) {
       j.total = total;
       j.segments = segs;
       j.received = total ? total - remaining(segs) : 0;
-      fh = await fsp.open(j.partPath, fs.existsSync(j.partPath) ? "r+" : "w+");
+      fh = await fsp.open(j.partPath, fs2.existsSync(j.partPath) ? "r+" : "w+");
       j.status = "downloading";
       o.onChange?.();
       const samples = [];
@@ -9305,14 +9467,26 @@ function createFetcher(o) {
         o.onChange?.();
       }, 1e3);
       const saver = setInterval(() => void saveState(j), SAVE_MS);
+      let fatal = null;
+      const stopAll = new AbortController();
+      const fail = (e) => {
+        fatal ??= e;
+        stopAll.abort();
+      };
       const worker = async (seg, k) => {
         let mi = k % Math.min(good, 3);
         let fails = 0;
-        while ((seg.end < 0 || seg.pos <= seg.end) && !ctl.signal.aborted) {
+        while ((seg.end < 0 || seg.pos <= seg.end) && !ctl.signal.aborted && !fatal) {
+          if (!canRange && seg.pos > seg.start) {
+            j.received -= seg.pos - seg.start;
+            seg.pos = seg.start;
+            await fh.truncate(0);
+          }
           const url = mirrors[mi % mirrors.length];
           const local = new AbortController();
           const onAbort = () => local.abort();
           ctl.signal.addEventListener("abort", onAbort);
+          stopAll.signal.addEventListener("abort", onAbort);
           let stallTimer = setTimeout(() => local.abort(), stallMs);
           const before = seg.pos;
           try {
@@ -9340,16 +9514,24 @@ function createFetcher(o) {
             }
             if (seg.end < 0) seg.end = seg.pos - 1;
           } catch (e) {
-            if (ctl.signal.aborted) break;
+            if (ctl.signal.aborted || fatal) break;
+            if (isNoSpace(e)) {
+              fail(new Error("Yer yetersiz: bilgi noktas\u0131n\u0131n diskinde yer kalmad\u0131. Yer a\xE7\u0131p yeniden ba\u015Flat\u0131n."));
+              break;
+            }
             if (seg.pos === before) {
               fails++;
               mi++;
-              if (fails > mirrors.length * 3) throw new Error("Ba\u011Flant\u0131 tekrar tekrar koptu: " + (e?.message ?? e));
+              if (fails > mirrors.length * 3) {
+                fail(new Error("Ba\u011Flant\u0131 tekrar tekrar koptu: " + (e?.message ?? e)));
+                break;
+              }
               await sleep(Math.min(8e3, 500 * fails));
             }
           } finally {
             clearTimeout(stallTimer);
             ctl.signal.removeEventListener("abort", onAbort);
+            stopAll.signal.removeEventListener("abort", onAbort);
           }
         }
       };
@@ -9361,19 +9543,24 @@ function createFetcher(o) {
         await saveState(j);
       }
       if (ctl.signal.aborted) throw Object.assign(new Error("durduruldu"), { aborted: true });
+      if (fatal) throw fatal;
       await fh.sync().catch(() => {
       });
       const size = (await fh.stat()).size;
       await fh.close();
       fh = null;
-      if (j.total && size !== j.total) throw new Error(`Boyut uyu\u015Fmuyor (${size} / ${j.total}).`);
+      if (j.total && size !== j.total) {
+        await fsp.rm(j.partPath, { force: true });
+        await fsp.rm(j.statePath, { force: true });
+        throw new Error(`Boyut uyu\u015Fmuyor (${size} / ${j.total}); yar\u0131m dosya silindi, yeniden indirin.`);
+      }
       j.total = size;
       j.received = size;
       if (j.sha256) {
         j.status = "verifying";
         o.onChange?.();
-        const h = crypto.createHash("sha256");
-        await new Promise((res, rej) => fs.createReadStream(j.partPath).on("data", (d) => h.update(d)).on("end", res).on("error", rej));
+        const h = crypto2.createHash("sha256");
+        await new Promise((res, rej) => fs2.createReadStream(j.partPath).on("data", (d) => h.update(d)).on("end", res).on("error", rej));
         if (h.digest("hex") !== j.sha256.toLowerCase()) {
           await fsp.rm(j.partPath, { force: true });
           await fsp.rm(j.statePath, { force: true });
@@ -9401,7 +9588,7 @@ function createFetcher(o) {
         } else j.status = "paused";
       } else {
         j.status = "error";
-        j.error = e?.message ?? String(e);
+        j.error = isNoSpace(e) ? "Yer yetersiz: bilgi noktas\u0131n\u0131n diskinde yer kalmad\u0131. Yer a\xE7\u0131p yeniden ba\u015Flat\u0131n." : e?.message ?? String(e);
       }
       o.onChange?.();
     } finally {
@@ -9415,9 +9602,9 @@ function createFetcher(o) {
       if (!e) return { ok: false, status: 404, error: "Paket katalogda yok" };
       if (!safeName(e.file)) return { ok: false, status: 400, error: "Ge\xE7ersiz dosya ad\u0131" };
       if (!(e.urls ?? []).some((u) => /^https?:\/\//.test(u))) return { ok: false, status: 400, error: "Bu paket sunucuda indirilemez" };
-      const finalPath = path.join(o.dataDir, e.file);
-      if (fs.existsSync(finalPath)) {
-        const have = fs.statSync(finalPath).size;
+      const finalPath = path2.join(o.dataDir, e.file);
+      if (fs2.existsSync(finalPath)) {
+        const have = fs2.statSync(finalPath).size;
         if (e.sizeApprox || !e.size || have === e.size) return { ok: true, job: { file: e.file, id: e.id, status: "done", received: have, total: have, speed: 0 } };
       }
       let j = jobs.get(e.file);
@@ -9434,8 +9621,8 @@ function createFetcher(o) {
         urls: expand(e.urls),
         expectedSize: e.sizeApprox ? 0 : e.size || 0,
         sha256: e.sha256 || "",
-        partPath: path.join(partDir, e.file + ".part"),
-        statePath: path.join(partDir, e.file + ".durum"),
+        partPath: path2.join(partDir, e.file + ".part"),
+        statePath: path2.join(partDir, e.file + ".durum"),
         finalPath,
         removeOnAbort: false,
         mirrorHost: null
@@ -9460,8 +9647,8 @@ function createFetcher(o) {
       } else {
         jobs.delete(file);
         if (safeName(file)) {
-          await fsp.rm(path.join(partDir, file + ".part"), { force: true });
-          await fsp.rm(path.join(partDir, file + ".durum"), { force: true });
+          await fsp.rm(path2.join(partDir, file + ".part"), { force: true });
+          await fsp.rm(path2.join(partDir, file + ".durum"), { force: true });
         }
       }
       o.onChange?.();
@@ -9478,7 +9665,7 @@ function createFetcher(o) {
       for (const n of names) {
         if (!n.endsWith(".durum")) continue;
         try {
-          const st = JSON.parse(await fsp.readFile(path.join(partDir, n), "utf8"));
+          const st = JSON.parse(await fsp.readFile(path2.join(partDir, n), "utf8"));
           if (!safeName(st.file) || jobs.has(st.file)) continue;
           const segs = Array.isArray(st.segments) ? st.segments : [];
           jobs.set(st.file, { file: st.file, id: st.id, status: "paused", total: st.total || 0, received: st.total ? st.total - remaining(segs) : 0, speed: 0 });
@@ -9501,11 +9688,13 @@ var arg = (k) => {
   const i = args.indexOf(k);
   return i >= 0 ? args[i + 1] : void 0;
 };
-var ROOT2 = path2.resolve(arg("--kok") ?? process.cwd());
-var DATA = path2.resolve(arg("--data") ?? path2.join(ROOT2, "data"));
+var ROOT2 = path3.resolve(arg("--kok") ?? process.cwd());
+var DATA = path3.resolve(arg("--data") ?? path3.join(ROOT2, "data"));
 var DRY = args.includes("--deneme");
-var ONLY = (arg("--sadece") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-var cfg = JSON.parse(fs2.readFileSync(path2.join(ROOT2, "tools", "hf", "paketler.json"), "utf8"));
+var ONLY_RAW = (arg("--sadece") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+var KATALOG_ONLY = args.includes("--katalog") || ONLY_RAW.includes("katalog");
+var ONLY = ONLY_RAW.filter((s) => s !== "katalog");
+var cfg = JSON.parse(fs3.readFileSync(path3.join(ROOT2, "tools", "hf", "paketler.json"), "utf8"));
 var ORG = arg("--org") ?? cfg.org;
 var REPO_NAME = arg("--repo") ?? cfg.repo;
 var REPO = { type: "dataset", name: `${ORG}/${REPO_NAME}` };
@@ -9513,21 +9702,21 @@ var HF_BASE = `https://huggingface.co/datasets/${ORG}/${REPO_NAME}/resolve/main/
 var log = (s) => console.log("  " + s);
 var gb = (n) => (n / 1024 ** 3).toFixed(2).replace(".", ",") + " GB";
 function manifestPaths() {
-  return [path2.join(ROOT2, "public", "packs-manifest.json"), path2.join(ROOT2, "dist", "packs-manifest.json")].filter((p) => fs2.existsSync(p));
+  return [path3.join(ROOT2, "public", "packs-manifest.json"), path3.join(ROOT2, "dist", "packs-manifest.json")].filter((p) => fs3.existsSync(p));
 }
 function findLocal(file) {
-  const direct = path2.join(DATA, file);
-  if (fs2.existsSync(direct)) return direct;
-  for (const d of fs2.existsSync(DATA) ? fs2.readdirSync(DATA, { withFileTypes: true }) : []) {
+  const direct = path3.join(DATA, file);
+  if (fs3.existsSync(direct)) return direct;
+  for (const d of fs3.existsSync(DATA) ? fs3.readdirSync(DATA, { withFileTypes: true }) : []) {
     if (!d.isDirectory() || d.name.startsWith("_")) continue;
-    const p = path2.join(DATA, d.name, file);
-    if (fs2.existsSync(p)) return p;
+    const p = path3.join(DATA, d.name, file);
+    if (fs3.existsSync(p)) return p;
   }
   return null;
 }
 async function sha256File(p) {
-  const h = crypto2.createHash("sha256");
-  await new Promise((res, rej) => fs2.createReadStream(p).on("data", (d) => h.update(d)).on("end", () => res()).on("error", rej));
+  const h = crypto3.createHash("sha256");
+  await new Promise((res, rej) => fs3.createReadStream(p).on("data", (d) => h.update(d)).on("end", () => res()).on("error", rej));
   return h.digest("hex");
 }
 async function fetchFromMirrors(e, manifest) {
@@ -9598,20 +9787,25 @@ ${rows}
 Harita ve nokta verileri \xA9 OpenStreetMap katk\u0131c\u0131lar\u0131, ODbL 1.0 (https://www.openstreetmap.org/copyright).
 `;
 }
-async function main() {
+async function main2() {
   console.log("\n  Ak\u0131l \xC7antas\u0131 \u2014 Hugging Face yans\u0131s\u0131");
   console.log("  " + "\u2500".repeat(52));
   const mpaths = manifestPaths();
   if (!mpaths.length) throw new Error("packs-manifest.json bulunamad\u0131 (public/ ya da dist/).");
   const manifest = JSON.parse(await fsp2.readFile(mpaths[0], "utf8"));
   const byId = new Map(manifest.packs.map((p) => [p.id, p]));
-  const ids = (ONLY.length ? ONLY : cfg.paketler).filter((id) => {
+  const ids = (KATALOG_ONLY && !ONLY.length ? [] : ONLY.length ? ONLY : cfg.paketler).filter((id) => {
     if (byId.has(id)) return true;
     log(`! katalogda yok, atland\u0131: ${id}`);
     return false;
   });
   const dirOf = (e) => cfg.dizin[e.kind] ?? e.kind;
   const token = process.env.HF_TOKEN ?? "";
+  let imzaAnahtari = null;
+  if (!DRY) {
+    imzaAnahtari = gizliAnahtarBul({ kok: ROOT2 });
+    if (!imzaAnahtari) throw new Error("Katalog imza anahtar\u0131 yok: KATALOG_IMZA_ANAHTARI ortam de\u011Fi\u015Fkenini ya da _gizli/katalog-imza-anahtari.txt dosyas\u0131n\u0131 ayarlay\u0131n (docs/PAKET_GUVENLIGI.md).");
+  }
   if (!DRY) {
     if (!token) throw new Error("HF_TOKEN yok. hf-yukle.cmd ile \xE7al\u0131\u015Ft\u0131r\u0131n; token sorulur.");
     const me = await whoAmI({ accessToken: token });
@@ -9683,6 +9877,13 @@ async function main() {
       patch.size = size;
       patch.sizeApprox = false;
       patch.sha256 = await sha256File(local);
+    } else if (!e.sha256 && (e.sizeApprox || !e.size || size === e.size)) {
+      log("  SHA-256 hesaplan\u0131yor\u2026");
+      patch.sha256 = await sha256File(local);
+      if (e.sizeApprox || !e.size) {
+        patch.size = size;
+        patch.sizeApprox = false;
+      }
     }
     updates.set(e.id, patch);
     done.push(e);
@@ -9699,6 +9900,8 @@ async function main() {
       file: { path: "README.md", content: new Blob([card(manifest.packs.filter((p) => updates.has(p.id) || p.urls.some((u) => u.startsWith(HF_BASE))), dirOf)]) },
       commitTitle: "Veri kart\u0131"
     });
+  }
+  if (done.length || KATALOG_ONLY) {
     for (const mp of mpaths) {
       const m = JSON.parse(await fsp2.readFile(mp, "utf8"));
       for (const p of m.packs) {
@@ -9709,24 +9912,31 @@ async function main() {
         Object.assign(p, u);
         if (p.kind === "poi") p.desc = p.desc.replace(/İnternet varken OpenStreetMap'ten doğrudan bu cihazda oluşturulur \(birkaç dakika sürer\)\./, "Haz\u0131r paket olarak h\u0131zl\u0131ca iner; gerekirse cihazda OpenStreetMap'ten yeniden olu\u015Fturulur.");
       }
-      m.updated = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-      await fsp2.writeFile(mp, JSON.stringify(m, null, 2) + "\n");
-      log(`Katalog g\xFCncellendi: ${path2.relative(ROOT2, mp)}`);
+      if (done.length) {
+        m.updated = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+        await fsp2.writeFile(mp, JSON.stringify(m, null, 2) + "\n");
+        log(`Katalog g\xFCncellendi: ${path3.relative(ROOT2, mp)}`);
+      }
+      dosyaImzala(mp, imzaAnahtari, uygulamaAcikAnahtari(ROOT2));
+      log(`Katalog imzaland\u0131: ${path3.relative(ROOT2, mp)}.sig`);
     }
-    await uploadFile({
+    await uploadFiles({
       repo: REPO,
       accessToken: token,
-      file: { path: "packs-manifest.json", content: new Blob([await fsp2.readFile(mpaths[0])], { type: "application/json" }) },
-      commitTitle: "Katalog"
+      files: [
+        { path: "packs-manifest.json", content: new Blob([await fsp2.readFile(mpaths[0])], { type: "application/json" }) },
+        { path: "packs-manifest.json.sig", content: new Blob([await fsp2.readFile(mpaths[0] + ".sig")], { type: "text/plain" }) }
+      ],
+      commitTitle: "Katalog (imzal\u0131)"
     });
-    log("Merkezi katalog y\xFCklendi: packs-manifest.json");
+    log("Merkezi katalog ve imzas\u0131 y\xFCklendi: packs-manifest.json, packs-manifest.json.sig");
   }
   console.log(`
   Bitti: ${done.length}/${ids.length} paket Hugging Face'te.
   https://huggingface.co/datasets/${REPO.name}
 `);
 }
-main().catch((e) => {
+main2().catch((e) => {
   console.error("\n  HATA: " + (e?.message ?? e) + "\n");
   process.exit(1);
 });

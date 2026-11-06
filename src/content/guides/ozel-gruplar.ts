@@ -208,7 +208,7 @@ export const GUIDES: Guide[] = [
       "Kordon bebeğin boynuna dolanmışsa parmağınızla gevşetip başının üstünden kaydırın.",
       "Bebek doğunca hemen havluyla kurulayın, ıslak havluyu kuru olanla değiştirin.",
       "Bebeği çıplak olarak annenin çıplak göğsüne yatırın. İkisinin üstünü örtün, bebeğin başını da örtün.",
-      "Bebek ağlamıyor ya da nefes almıyorsa sırtını ve ayak tabanlarını ovun. Yine nefes almazsa 112'ye söyleyin ve \"Kalp masajı — bebek\" rehberine geçin.",
+      "Bebek ağlamıyor ya da nefes almıyorsa sırtını ve ayak tabanlarını ovun. Yine nefes almazsa 112'ye söyleyin ve [[ilk-yardim-bebek-kpr|\"Kalp masajı — bebek\" rehberine]] geçin.",
       "Kordonu kesmeyin, bağlamayın, çekmeyin. Eş (plasenta) kendiliğinden gelirse bir poşete koyun, bebeğin yanında tutun.",
       "Anneyi emzirmeye teşvik edin. Kanaması çok artarsa, annede baş dönmesi ya da bayılma olursa 112'ye bildirin."
     ],

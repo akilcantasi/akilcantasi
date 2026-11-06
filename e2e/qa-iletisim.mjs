@@ -195,7 +195,7 @@ try {
   await A.p.goto(app + '?tab=iletisim', { waitUntil: 'domcontentloaded' });
   check(await waitText(A.p, tid('comm-card-pano'), '1'), 'ana sayfa: pano sayacı');
 
-  // --- kayıp → bulundu (A ilan verir, B işaretler) ---
+  // --- kayıp → bulundu (A ilan verir; yalnız A işaretleyebilir, B göremez) ---
   await A.p.goto(app + '?comm=kayip', { waitUntil: 'domcontentloaded' });
   await waitSel(A.p, tid('conn-status') + '[data-state="connected"]');
   check(await A.p.isDisabled(tid('missing-send')), 'kayıp: ad boşken gönder pasif');
@@ -209,21 +209,33 @@ try {
   await B.p.goto(app + '?comm=kayip', { waitUntil: 'domcontentloaded' });
   check(await waitText(B.p, tid('missing-item-name'), 'Gülşen Işık'), 'B ilanı görüyor');
   const fid = await B.p.getAttribute('[data-testid="board-item"][data-kind="kayip"]', 'data-id').catch(() => null);
-  const foundSel = fid ? tid('missing-found-' + fid) : '[data-testid^="missing-found-"]';
-  await B.p.click(foundSel);
-  await B.p.click(tid('missing-found-cancel'));
-  check(!!(await B.p.$(foundSel)), 'vazgeç: onay kapandı');
-  await B.p.click(foundSel);
-  await B.p.click(tid('missing-found-confirm'));
-  check(await waitText(B.p, tid('missing-found-result'), 'Gönderildi'), 'B: bulundu gönderildi');
-  check(await waitText(B.p, tid('board-empty'), 'açık kayıp ilanı'), 'B: "Aranıyor" süzgecinde ilan kalmadı');
+  check(await waitText(B.p, tid('missing-owner-note'), 'yalnızca ilanı veren telefon'), 'B: düğme yerine "yalnızca ilanı veren telefon" notu');
+  check(!(await B.p.$(tid('missing-found-' + fid))), 'B: "Bulundu olarak işaretle" düğmesi yok');
+  // sahte istek: imzasız "bulundu" 403 alır ve ilan değişmez
+  const sahte = await fetch(SRV + '/api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: fid ?? 'xxxxxx', kind: 'kayip', from: 'Kötü', text: 'x', status: 'bulundu' }) });
+  check(sahte.status === 403 && /yalnızca ilanı veren/.test((await sahte.json()).error ?? ''), 'sunucu: sahte "bulundu" 403 ve Türkçe hata');
+  const foundSel = tid('missing-found-' + fid);
+  await A.p.click(foundSel);
+  await A.p.click(tid('missing-found-cancel'));
+  check(!!(await A.p.$(foundSel)), 'vazgeç: onay kapandı');
+  await A.p.click(foundSel);
+  await A.p.click(tid('missing-found-confirm'));
+  check(await waitText(A.p, tid('missing-found-result'), 'Gönderildi'), 'A: bulundu gönderildi');
+  check(await waitText(A.p, tid('board-empty'), 'açık kayıp ilanı'), 'A: "Aranıyor" süzgecinde ilan kalmadı');
+  await B.p.click(tid('missing-show-all'));
+  check(await waitSel(B.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"][data-imza="gecerli"]', 12000), 'B: ilan "Bulundu" görünüyor (doğrulandı)');
+  check(await waitText(B.p, '[data-testid="board-item"][data-kind="kayip"]', 'Ayşe Öztürk'), 'bulundu işareti ilan sahibinin adını korudu');
+  await shot(B.p, 'kayip-bulundu');
+  // sahibi yeniden "aranıyor" yapabilir; başkası geri alamaz
   await A.p.click(tid('missing-show-all'));
-  check(await waitSel(A.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"]', 12000), 'A: ilan "Bulundu" görünüyor');
-  check(await waitText(A.p, '[data-testid="board-item"][data-kind="kayip"]', 'Ayşe Öztürk'), 'bulundu işareti ilan sahibinin adını korudu');
-  await shot(A.p, 'kayip-bulundu');
-  // sunucu tarafı: bulundu → aranıyor geri alınamaz
-  const pr = await fetch(SRV + '/api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: fid ?? 'xxxxxx', kind: 'kayip', from: 'Kötü', text: 'x', status: 'araniyor' }) }).then((r) => r.json());
-  check(pr.item?.status === 'bulundu' && pr.duplicate === true, 'sunucu: bulundu → aranıyor geri alınamaz');
+  await A.p.click(tid('missing-reopen-' + fid));
+  await A.p.click(tid('missing-found-confirm'));
+  check(await waitSel(B.p, '[data-testid="board-item"][data-kind="kayip"][data-status="araniyor"][data-imza="gecerli"]', 12000), 'sahibi ilanı yeniden "aranıyor" yaptı; B görüyor');
+  const pr = await fetch(SRV + '/api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: fid ?? 'xxxxxx', kind: 'kayip', from: 'Kötü', text: 'x', status: 'bulundu' }) });
+  check(pr.status === 403, 'sunucu: başkası yine "bulundu" yapamaz');
+  await A.p.click(tid('missing-found-' + fid));
+  await A.p.click(tid('missing-found-confirm'));
+  check(await waitSel(B.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"]', 12000), 'sahibi yeniden "bulundu" yaptı');
 
   // --- iyiyim + duyuru ---
   await B.p.goto(app + '?comm=iyiyim', { waitUntil: 'domcontentloaded' });
@@ -390,15 +402,29 @@ try {
   await M1.p.click(tid('missing-send'));
   check(await waitText(M2.p, tid('missing-item-name'), 'Hüseyin Şahin', 8000), 'mesh: ilan bilgi noktası olmadan diğer telefona ulaştı');
   check(await waitText(M2.p, '[data-testid="board-item"]', 'yakın cihazdan'), 'mesh: "yakın cihazdan" etiketi');
-  await M2.p.click('[data-testid^="missing-found-"]');
-  await M2.p.click(tid('missing-found-confirm'));
-  await M1.p.click(tid('missing-show-all'));
-  check(await waitSel(M1.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"]', 8000), 'mesh: "bulundu" işareti ilan sahibine ulaştı');
+  check(await waitSel(M2.p, '[data-testid="board-item"][data-kind="kayip"][data-imza="gecerli"] [data-testid="item-verified"]', 8000), 'mesh: alıcı imzayı doğruladı ("doğrulandı")');
+  check((await M2.p.$$('[data-testid^="missing-found-"]:not([data-testid="missing-found-result"])')).length === 0, 'mesh: başka telefonda "bulundu" düğmesi yok');
+  await M1.p.click('[data-testid^="missing-found-"]');
+  await M1.p.click(tid('missing-found-confirm'));
+  await M2.p.click(tid('missing-show-all'));
+  check(await waitSel(M2.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"][data-imza="gecerli"]', 8000), 'mesh: sahibin imzalı "bulundu" güncellemesi diğer telefona ulaştı');
   const ob1 = await M1.p.evaluate(() => JSON.parse(localStorage.getItem('ac.comm.outbox') || '[]'));
-  check(ob1.length === 1 && ob1[0].draft.status === 'bulundu' && ob1[0].draft.from === 'Mert', 'mesh: ilan sahibinin giden kutusu "bulundu"ya güncellendi');
-  await shot(M1.p, 'mesh-bulundu');
-  // köprü: M2 bilgi noktasına bağlanınca mesh'ten gelen kaydı sunucuya aktarır
-  await M2.p.goto(app + '?comm=baglan', { waitUntil: 'domcontentloaded' });
+  check(ob1.length === 1 && ob1[0].draft.status === 'bulundu' && ob1[0].draft.upd?.st === 'bulundu' && ob1[0].draft.from === 'Mert', 'mesh: ilan sahibinin giden kutusu imzalı "bulundu"ya güncellendi');
+  // sahte mesh güncellemesi: başka anahtarla "aranıyor" — alıcı yok sayar
+  await M2.p.evaluate(() => {
+    const it = [...document.querySelectorAll('[data-testid="board-item"][data-kind="kayip"]')][0];
+    const id = it.getAttribute('data-id');
+    const st = JSON.parse(localStorage.getItem('ac.comm.cache') || '{}').items?.find((x) => x.id === id);
+    const m = { id: id + '_dzzzz', kind: 'kayip', from: 'Kötü', text: '', time: Date.now(), pub: st.pub, sig: st.sig, ts: st.ts, ust: 'araniyor', uts: Date.now() + 5, usig: 'A'.repeat(86) };
+    window.__meshEmit('meshMessage', { from: 'EP_1', data: JSON.stringify({ t: 'msgs', ms: [m] }) });
+  });
+  await sleep(800);
+  check(await waitSel(M2.p, '[data-testid="board-item"][data-kind="kayip"][data-status="bulundu"]', 3000), 'mesh: sahte imzalı durum güncellemesi yok sayıldı');
+  await shot(M2.p, 'mesh-bulundu');
+  // köprü: M2 bilgi noktasına bağlanınca mesh'ten gelen kaydı sunucuya aktarır. Sayfa yeniden
+  // yüklenmeden (uygulama içinden) Bağlan ekranına geçilir: köprü kuyruğu bellektedir.
+  await M2.p.click(tid('conn-help'));
+  await waitSel(M2.p, tid('server-input'));
   await M2.p.fill(tid('server-input'), SRV);
   await M2.p.click(tid('server-save'));
   check(await waitSel(M2.p, tid('conn-status') + '[data-state="connected"]', 15000), 'mesh telefonu bilgi noktasına bağlandı');

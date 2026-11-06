@@ -33,6 +33,10 @@ export const MAX_FUTURE_SKEW_MS = 24 * HOUR;
 export const MIN_TIME = 1577836800000;
 
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
+/** Ed25519 açık anahtarı (32 bayt) ve imzası (64 bayt), dolgusuz base64url */
+export const PUB_RE = /^[A-Za-z0-9_-]{43}$/;
+export const SIG_RE = /^[A-Za-z0-9_-]{86}$/;
+const tsOk = (x: unknown): x is number => typeof x === 'number' && Number.isInteger(x) && x >= MIN_TIME && x <= 1e14;
 const NODE_RE = /^[A-Za-z0-9_-]{4,32}$/;
 
 export type Frame =
@@ -97,6 +101,18 @@ export function sanitizeMessage(x: unknown, now = Date.now()): MeshMessage | nul
     if (!finite(o.lat) || !finite(o.lon) || Math.abs(o.lat) > 90 || Math.abs(o.lon) > 180) return null;
     m.lat = o.lat;
     m.lon = o.lon;
+  }
+  // İmza alanları: biçimi bozuksa yalnız imza atılır (mesaj imzasız sayılır, yine taşınır);
+  // doğrulamayı alıcı yapar (src/iletisim/imza.ts)
+  if (typeof o.pub === 'string' && PUB_RE.test(o.pub) && typeof o.sig === 'string' && SIG_RE.test(o.sig) && tsOk(o.ts)) {
+    m.pub = o.pub;
+    m.sig = o.sig;
+    m.ts = o.ts;
+    if ((o.ust === 'araniyor' || o.ust === 'bulundu') && tsOk(o.uts) && typeof o.usig === 'string' && SIG_RE.test(o.usig)) {
+      m.ust = o.ust;
+      m.uts = o.uts;
+      m.usig = o.usig;
+    }
   }
   if (o.hops !== undefined) {
     if (!finite(o.hops) || !Number.isInteger(o.hops) || o.hops < 0 || o.hops > 255) return null;

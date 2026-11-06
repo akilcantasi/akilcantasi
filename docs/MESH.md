@@ -100,9 +100,38 @@ eksikleri tamamlar.
 - **Sıçrama sınırı:** `hops ≥ 12` olan mesaj saklanır, gösterilir ama aktarılmaz.
 - **Kapasite:** 500 mesaj; aşılınca en eski *başkasının* mesajı atılır, kendi
   mesajlarınız en son atılır.
-- **Güvenlik:** kimlik doğrulama ve şifreleme yok, imza yok. Herkes herkesle
-  konuşur (afet senaryosu); mesajlar açık metindir ve sahte gönderen adı
-  mümkündür. Arayüz bunu belirtmeli; gizli bilgi için uygun değildir.
+- **Güvenlik:** şifreleme yok; herkes herkesle konuşur (afet senaryosu),
+  mesajlar açık metindir, gizli bilgi için uygun değildir. Pano kayıtları
+  **imzalıdır** (aşağıya bakın): sahte ad yazılabilir ama yolda değiştirilen
+  kayıt ve başkasının "bulundu" işareti fark edilir.
+
+### İmzalı kayıtlar (2026-11)
+
+Her cihaz ilk kullanımda bir Ed25519 anahtar çifti üretir (`ac.comm.kimlik`,
+localStorage; yüksek değerli bir sır değildir). Kanonik biçim tek yerde
+tanımlıdır: `server/imza-kanonik.mjs` (tarayıcı ve Node sunucusu ortak kullanır).
+
+| Alan | Anlam |
+|---|---|
+| `pub` | imzalayan cihazın açık anahtarı (base64url, 43 karakter) |
+| `sig` | `kanonikIlan` üzerine imza (86 karakter): `["akil-ilan-1",id,kind,from,text,iyiyimDurumu\|"",lat\|null,lon\|null,ts,pub]` |
+| `ts` | imza zamanı (ms, gönderen saati) |
+| `ust`, `uts`, `usig` | kayıp ilanı durum güncellemesi: `["akil-durum-1",id,st,ts,pub]` üzerine aynı anahtarla imza |
+
+- Kayıp ilanının durumu ilan imzasına girmez; durumu yalnız aynı anahtarla
+  imzalı, daha yeni (`uts` büyük) güncelleme değiştirir. İmzalı ilan
+  güncellemesiz "bulundu" gösterilmez.
+- Durum güncellemesi mesh'te iki biçimde gider: yeni sürümler için metinsiz
+  `<ilan>_d<uts36>` (her değişiklik ayrı kimlik; eski sürümler metinsiz kaydı
+  geçersiz sayıp yok sayar ama taşır) ve yalnız "bulundu" için eski sürümlerin
+  anladığı metinli `<ilan>_bulundu`.
+- `sanitizeMessage` bu alanları biçim ve uzunluk denetimiyle tutar; biçimi bozuk
+  imza alanı yalnızca atılır (mesaj imzasız sayılır). Bilinmeyen alanlar her iki
+  yönde tolere edilir: eski sürüm imza alanlarını atarak taşır, alıcıda kayıt
+  "imzasız" görünür.
+- Alıcı imzayı arka planda, parça parça (dilim başına ≤ 8 ms) doğrular ve
+  sonucu içeriğe göre önbelleğe alır. İmzası tutmayan mesh kaydı gösterilmez ve
+  bilgi noktasına aktarılmaz; geçerli olanlar "✓ doğrulandı" işareti alır.
 
 ## Yerel eklenti sözleşmesi (`AkilMesh`)
 
@@ -220,5 +249,9 @@ Sorun çıkarsa logcat çıktısını ve `lastError()` değerini kaydedin;
 - GMS'siz Android (Huawei vb.) desteklenmez.
 - Arka planda / ekran kapalıyken çalışma garanti değil; ön plan hizmeti eklemek
   (`FOREGROUND_SERVICE_CONNECTED_DEVICE`) ileride gerekebilir.
-- Kimlik doğrulama, şifreleme ve imza yok.
+- Şifreleme yok. İmza "bu kaydı bu telefon yazdı" der, kişinin kim olduğunu
+  söylemez. Anahtar silinirse (uygulama verisi temizlenirse) o telefonun eski
+  ilanlarının durumu artık değiştirilemez.
+- Eski sürümlü bir telefondan geçen kayıt imza alanlarını kaybeder ve "imzasız"
+  görünür.
 - Bir mesaj en fazla 12 sıçrama ve 72 saat / 7 gün yaşar.

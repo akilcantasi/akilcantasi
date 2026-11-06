@@ -36,7 +36,9 @@ import java.util.concurrent.TimeUnit;
  *   /data/<dosya>          paket dosyaları (Range destekli)
  *   /download/akil-cantasi.apk
  *   GET  /api/board?since=ms  mesaj panosu ({items:[…], now})
- *   POST /api/board           {id,kind,from,text,lat?,lon?,status?}
+ *   POST /api/board           {id,kind,from,text,lat?,lon?,status?,pub?,sig?,ts?,upd?}
+ *                             İmzalı kayıp ilanının durumunu yalnız aynı anahtarla imzalı güncelleme
+ *                             değiştirir (API 33+ doğrular; altında saklar ve aktarır, istemci doğrular).
  * Pano bellekte tutulur ve uygulamanın files/ klasöründeki board.json'a yazılır.
  */
 public class InfoPointServer {
@@ -423,6 +425,10 @@ public class InfoPointServer {
             return;
         }
         Board.Result r = board.add((Board.Item) v, loopback);
+        if (r.error != null) {
+            send(out, r.status, json, Board.errorJson(r.error), null, false);
+            return;
+        }
         String res = "{\"ok\":true,\"item\":" + r.item.toJson() + ",\"duplicate\":" + r.duplicate + "}";
         send(out, r.status, json, res.getBytes(StandardCharsets.UTF_8), null, false);
     }
@@ -588,6 +594,12 @@ public class InfoPointServer {
             Double lat, lon;
             long time, rev;
             boolean local;
+            /** İmza alanları (src/iletisim/imza.ts): eski kayıtlarda null */
+            String pub, sig;
+            long ts;
+            /** Kayıp ilanının son imzalı durum güncellemesi */
+            String updSt, updSig;
+            long updTs;
 
             String toJson() {
                 StringBuilder sb = new StringBuilder("{");
@@ -595,6 +607,10 @@ public class InfoPointServer {
                   .append(",\"from\":").append(str(from)).append(",\"text\":").append(str(text));
                 if (lat != null && lon != null) sb.append(",\"lat\":").append(num(lat)).append(",\"lon\":").append(num(lon));
                 if (status != null) sb.append(",\"status\":").append(str(status));
+                if (pub != null) {
+                    sb.append(",\"pub\":").append(str(pub)).append(",\"sig\":").append(str(sig)).append(",\"ts\":").append(ts);
+                    if (updSt != null) sb.append(",\"upd\":{\"st\":").append(str(updSt)).append(",\"ts\":").append(updTs).append(",\"sig\":").append(str(updSig)).append('}');
+                }
                 sb.append(",\"time\":").append(time).append(",\"rev\":").append(rev);
                 if (local) sb.append(",\"local\":true");
                 return sb.append('}').toString();
@@ -602,8 +618,113 @@ public class InfoPointServer {
         }
 
         static final class Result {
-            final int status; final Item item; final boolean duplicate;
-            Result(int status, Item item, boolean duplicate) { this.status = status; this.item = item; this.duplicate = duplicate; }
+            final int status; final Item item; final boolean duplicate; final String error;
+            Result(int status, Item item, boolean duplicate) { this(status, item, duplicate, null); }
+            Result(int status, Item item, boolean duplicate, String error) { this.status = status; this.item = item; this.duplicate = duplicate; this.error = error; }
+        }
+
+        static final String SAHIP_HATASI = "Bu ilanın durumunu yalnızca ilanı veren telefon değiştirebilir.";
+        static final String DOGRULAYAMIYOR = "Bu bilgi noktası imzayı doğrulayamıyor; durum değişikliği başka cihazdan iletilecek.";
+        static final String KIMLIK_HATASI = "Kayıt kimliği imza anahtarına bağlı değil; kabul edilmedi.";
+        static final String IMZA_HATASI = "İmza doğrulanamadı; kayıt kabul edilmedi.";
+        private static final java.util.regex.Pattern PUB_RE = java.util.regex.Pattern.compile("^[A-Za-z0-9_-]{43}$");
+        private static final java.util.regex.Pattern SIG_RE = java.util.regex.Pattern.compile("^[A-Za-z0-9_-]{86}$");
+        static final long TS_MIN = 1577836800000L, TS_MAX = 100000000000000L;
+
+        /** server/imza-kanonik.mjs kanonikDurum ile aynı: ["akil-durum-1",id,st,ts,pub] */
+        static String kanonikDurum(String id, String st, long ts, String pub) {
+            return "[\"akil-durum-1\"," + str(id) + "," + str(st) + "," + ts + "," + str(pub) + "]";
+        }
+
+        /** server/imza-kanonik.mjs kimlikBagli ile aynı: kimlik, anahtarın ilk 10 karakteri ve "-" ile başlar */
+        static boolean kimlikBagli(String id, String pub) {
+            return id != null && pub != null && PUB_RE.matcher(pub).matches() && id.startsWith(pub.substring(0, 10) + "-");
+        }
+
+        /**
+         * server/imza-kanonik.mjs kanonikIlan ile aynı. Sayı biçimi JavaScript'ten ayrılabilecekse
+         * (üslü gösterim) null: imza bu cihazda denetlenmez, istemciler doğrular.
+         */
+        static String kanonikIlan(Item it) {
+            String la = it.lat == null ? "null" : num(it.lat), lo = it.lon == null ? "null" : num(it.lon);
+            if (la.indexOf('E') >= 0 || lo.indexOf('E') >= 0) return null;
+            String st = "iyiyim".equals(it.kind) ? (it.status == null ? "iyiyim" : it.status) : "";
+            return "[\"akil-ilan-1\"," + str(it.id) + "," + str(it.kind) + "," + str(it.from) + "," + str(it.text) + "," + str(st)
+                    + "," + la + "," + lo + "," + it.ts + "," + str(it.pub) + "]";
+        }
+
+        /** İlanın kendi imzası: TRUE / FALSE / null (doğrulanamıyor) */
+        static Boolean ilanGecerli(Item it) {
+            if (it.pub == null || it.sig == null) return Boolean.FALSE;
+            String k = kanonikIlan(it);
+            return k == null ? null : ed25519Dogrula(it.pub, k, it.sig);
+        }
+
+        /** Test için kapatılabilir: Ed25519 platformda yokmuş gibi davran (API < 33) */
+        static boolean ed25519Kapali = false;
+
+        /**
+         * Ed25519 doğrulaması. Android'de platform yalnız API 33'ten itibaren destekler; yoksa null
+         * döner (bilinmiyor): kayıt saklanır ve aktarılır, doğrulamayı istemciler yapar.
+         */
+        static Boolean ed25519Dogrula(String pub, String msg, String sig) {
+            byte[] p = b64uCoz(pub), g = b64uCoz(sig);
+            if (p == null || p.length != 32 || g == null || g.length != 64) return Boolean.FALSE;
+            if (ed25519Kapali) return null;
+            // SubjectPublicKeyInfo: 30 2a 30 05 06 03 2b 65 70 03 21 00 || anahtar
+            byte[] spki = new byte[44];
+            byte[] on = {0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00};
+            System.arraycopy(on, 0, spki, 0, 12);
+            System.arraycopy(p, 0, spki, 12, 32);
+            java.security.PublicKey key = null;
+            for (String ad : new String[] {"Ed25519", "EdDSA"}) {
+                try {
+                    key = java.security.KeyFactory.getInstance(ad).generatePublic(new java.security.spec.X509EncodedKeySpec(spki));
+                    break;
+                } catch (java.security.GeneralSecurityException | RuntimeException ignored) {}
+            }
+            if (key == null) return null;
+            for (String ad : new String[] {"Ed25519", "EdDSA"}) {
+                java.security.Signature v;
+                try {
+                    v = java.security.Signature.getInstance(ad);
+                    v.initVerify(key);
+                } catch (java.security.GeneralSecurityException | RuntimeException e) {
+                    continue;
+                }
+                try {
+                    v.update(msg.getBytes(StandardCharsets.UTF_8));
+                    return v.verify(g);
+                } catch (java.security.GeneralSecurityException | RuntimeException e) {
+                    return Boolean.FALSE;
+                }
+            }
+            return null;
+        }
+
+        /** Dolgusuz base64url; geçersizse null (java.util.Base64 API 26 ister, minSdk 24) */
+        static byte[] b64uCoz(String s) {
+            if (s == null || s.length() % 4 == 1) return null;
+            byte[] out = new byte[s.length() * 3 / 4];
+            int bits = 0, val = 0, j = 0;
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
+                int d = c >= 'A' && c <= 'Z' ? c - 'A' : c >= 'a' && c <= 'z' ? c - 'a' + 26 : c >= '0' && c <= '9' ? c - '0' + 52 : c == '-' ? 62 : c == '_' ? 63 : -1;
+                if (d < 0) return null;
+                val = (val << 6) | d;
+                bits += 6;
+                if (bits >= 8) {
+                    bits -= 8;
+                    out[j++] = (byte) ((val >> bits) & 255);
+                }
+            }
+            return j == out.length ? out : java.util.Arrays.copyOf(out, j);
+        }
+
+        /** Durum güncellemesi ilanın anahtarıyla mı? TRUE / FALSE / null (doğrulanamıyor) */
+        static Boolean durumGecerli(Item ilan, String st, long ts, String sig) {
+            if (ilan.pub == null) return Boolean.FALSE;
+            return ed25519Dogrula(ilan.pub, kanonikDurum(ilan.id, st, ts, ilan.pub), sig);
         }
 
         private final File file;
@@ -642,6 +763,7 @@ public class InfoPointServer {
                     it.time = m.get("time") instanceof Double ? ((Double) m.get("time")).longValue() : System.currentTimeMillis();
                     it.rev = m.get("rev") instanceof Double ? ((Double) m.get("rev")).longValue() : it.time;
                     it.local = Boolean.TRUE.equals(m.get("local"));
+                    if (it.pub != null && "kayip".equals(it.kind)) it.status = it.updSt != null ? it.updSt : "araniyor";
                     items.put(it.id, it);
                     lastRev = Math.max(lastRev, it.rev);
                 }
@@ -698,6 +820,46 @@ public class InfoPointServer {
 
         synchronized Result add(Item item, boolean local) {
             Item cur = items.get(item.id);
+            if (cur != null && cur.pub != null) {
+                // İmzalı kayıt: yalnız kayıp ilanının durumu, aynı anahtarla imzalı ve daha yeni bir
+                // güncellemeyle değişir. Platform Ed25519 doğrulayamıyorsa (API < 33) biçimi doğru,
+                // daha yeni güncelleme saklanır ve aktarılır; istemciler doğrular, tutmayanı yok sayar.
+                if ("kayip".equals(cur.kind) && "kayip".equals(item.kind)) {
+                    if (item.updSt != null) {
+                        if (item.updSig.equals(cur.updSig)) return new Result(200, cur, true);
+                        Boolean ok = durumGecerli(cur, item.updSt, item.updTs, item.updSig);
+                        if (Boolean.FALSE.equals(ok)) return new Result(403, null, false, SAHIP_HATASI);
+                        // Doğrulanamıyorsa saklanmaz: ileri tarihli sahte güncelleme sahibinin gerçek
+                        // güncellemelerini kilitlemesin (gerçeği mesh ya da başka bilgi noktası taşır)
+                        if (ok == null) return new Result(403, null, false, DOGRULAYAMIYOR);
+                        if ((cur.updSt != null && item.updTs <= cur.updTs) || item.updTs <= cur.ts) return new Result(200, cur, true);
+                        cur.status = item.updSt;
+                        cur.updSt = item.updSt;
+                        cur.updTs = item.updTs;
+                        cur.updSig = item.updSig;
+                        cur.rev = nextRev();
+                        scheduleSave();
+                        return new Result(200, cur, false);
+                    }
+                }
+                if (item.status != null && !item.status.equals(cur.status)) return new Result(403, null, false, SAHIP_HATASI);
+                return new Result(200, cur, true);
+            }
+            if (cur == null && item.pub != null) {
+                // Yeni imzalı kayıt: kimliği anahtarına bağlı olmalı (kimlik kapmaya karşı); imzası
+                // platform doğrulayabiliyorsa (API 33+) burada, değilse istemcilerde denetlenir.
+                if (!kimlikBagli(item.id, item.pub)) return new Result(403, null, false, KIMLIK_HATASI);
+                if (Boolean.FALSE.equals(ilanGecerli(item))) return new Result(403, null, false, IMZA_HATASI);
+            }
+            if (cur == null && item.pub != null && "kayip".equals(item.kind)) {
+                // Yeni imzalı ilan: güncellemesiz "bulundu" olamaz
+                if (item.updSt != null) {
+                    Boolean ok = durumGecerli(item, item.updSt, item.updTs, item.updSig);
+                    if (Boolean.FALSE.equals(ok)) return new Result(403, null, false, SAHIP_HATASI);
+                    if (ok == null) return new Result(403, null, false, DOGRULAYAMIYOR);
+                    item.status = item.updSt;
+                } else if (!"araniyor".equals(item.status)) return new Result(403, null, false, SAHIP_HATASI);
+            }
             if (cur != null) {
                 if ("kayip".equals(cur.kind) && "kayip".equals(item.kind) && "araniyor".equals(cur.status) && "bulundu".equals(item.status)) {
                     cur.status = "bulundu";
@@ -809,7 +971,37 @@ public class InfoPointServer {
             } else if (stO != null && !"".equals(stO)) {
                 return "Bu türde durum olmaz";
             }
+            // İmza alanları (server/imza-kanonik.mjs imzaAlanlari ile aynı denetim)
+            Object pubO = m.get("pub"), sigO = m.get("sig");
+            if (pubO != null || sigO != null) {
+                if (!(pubO instanceof String) || !PUB_RE.matcher((String) pubO).matches()) return "Geçersiz anahtar";
+                if (!(sigO instanceof String) || !SIG_RE.matcher((String) sigO).matches()) return "Geçersiz imza";
+                long ts = tsDegeri(m.get("ts"));
+                if (ts < 0) return "Geçersiz imza zamanı";
+                it.pub = (String) pubO;
+                it.sig = (String) sigO;
+                it.ts = ts;
+                Object uO = m.get("upd");
+                if (uO != null) {
+                    if (!kind.equals("kayip") || !(uO instanceof Map)) return "Geçersiz durum güncellemesi";
+                    Map<?, ?> u = (Map<?, ?>) uO;
+                    Object ust = u.get("st"), usig = u.get("sig");
+                    long uts = tsDegeri(u.get("ts"));
+                    if (!MISSING.contains(ust) || uts < 0 || !(usig instanceof String) || !SIG_RE.matcher((String) usig).matches()) return "Geçersiz durum güncellemesi";
+                    it.updSt = (String) ust;
+                    it.updTs = uts;
+                    it.updSig = (String) usig;
+                }
+            }
             return it;
+        }
+
+        /** Tam sayı ve aralıkta zaman damgası; değilse -1 */
+        private static long tsDegeri(Object o) {
+            if (!(o instanceof Double)) return -1;
+            double d = (Double) o;
+            if (d != Math.rint(d) || d < TS_MIN || d > TS_MAX) return -1;
+            return (long) d;
         }
 
         /** JavaScript Number() benzeri: sayı ya da sayısal metin; aksi halde NaN */

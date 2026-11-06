@@ -290,6 +290,8 @@ export const nativeFener = {
   async bosalt() {
     await call('fenerBosalt');
   },
+  /** Çökme sonrası kapatılan GPU'yu yeniden denemeye açar (fenerGpuSifirla) */
+  gpuSifirla: () => call<{ ok?: boolean; yenidenBaslat?: boolean }>('fenerGpuSifirla'),
 };
 
 /** Görülen bir uydu (Android GnssStatus) */

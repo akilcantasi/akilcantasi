@@ -57,6 +57,11 @@ Bağlantı kurmadan, Bluetooth yayınıyla. Metin sığmadığı için hazır me
 - Enkazdaki telefon kurtarıcı mesajlarını düşük güçte sürekli dinler (pil < %20 ise 2 dakikada
   bir 20 sn). Kendisine gelen mesajda titrer, kısa uyarı sesi verir, Türkçe çevrimdışı ses
   yüklüyse sesli okur, bildirim gösterir; mesaj numarasını işaretine "onay" olarak ekler.
+- **Uyarı sınırı** (`MesajUyariSiniri.java`): mesajlar imzasız olduğundan sahte mesaj yağmuru
+  telefonu sürekli titretip konuşturarak pili bitirmesin diye titreşim/ses/okuma sınırlıdır:
+  iki uyarı arasında en az 20 sn; aynı mesaj 1 dakika içinde yeniden duyurulmaz; 10 dakikada en
+  çok 6 uyarı. Sınıra takılan yeni mesaj yine kaydedilir, ekranda görünür ve bildirim sessizce
+  güncellenir; onay da işarete eklenir.
 - Kurtarıcının ekranında onay görülünce "Ulaştı ✓".
 - Enkazdaki kişi hazır yanıtlardan birine dokunur ("Yaralıyım", "İki kişiyiz"…); yanıt kodu
   işarete eklenir ve kurtarıcının ekranında, 112'ye bildirme SMS'inde görünür.
@@ -100,7 +105,9 @@ başlığında ve listede bu temiz metin görünür.
   arka plan işlerini durdurur (uygulama pil kısıtlamasını kaldırmayı önerir).
 - **Kimlik doğrulama yok:** işaret, etiket ve kurtarıcı mesajı imzasızdır. Yakındaki biri
   sahte işaret yayabilir (arama ekranında ve nöbet bildiriminde görünür) ya da bir işaretin
-  kimliğine sahte "kurtarıcı mesajı" gönderebilir (enkazdaki telefon titrer ve okur). Afet
+  kimliğine sahte "kurtarıcı mesajı" gönderebilir (enkazdaki telefon titrer ve okur; uyarılar
+  sıklık sınırlıdır, bkz. yukarıda). Mesaj listesi son 10 mesajı tutar: sahte mesaj yağmuru
+  gerçek mesajı listeden itebilir. Afet
   anında herkesin kurulumsuz duyabilmesi için bilerek böyle; arayüz kurtarıcı mesajını
   "hazır mesaj" olarak gösterir, kesin bilgi gibi sunmamalıdır.
 - Gerçek cihazda henüz denenmedi. Deneme planı: iki telefon; biri enkaz modunda, diğeri
@@ -108,9 +115,15 @@ başlığında ve listede bu temiz metin görünür.
   Nöbetin ekran kapalıyken ve uygulama kapalıyken bildirim verdiğini, sarsıntı sorusunun
   yürürken ve araçta tetiklenmediğini doğrulayın.
 
+- Kurtarıcının arama taraması uygulama öndeyken hızlı (LOW_LATENCY), arka plana geçince
+  2 sn sonra dengeli (BALANCED) kipe iner, öne gelince geri döner (`EnkazTarayici`, etkinlik
+  yaşam döngüsü). Dengeli kip işaretleri yine duyar; yalnız güncelleme seyrekleşir.
+
 ## Testler
 
 - `tools/enkaz-sinama/calistir.sh`: işaret kodlama/çözme, ham reklam ayrıştırma, etiket temizliği,
-  sarsıntı ölçütü; ayrıca mesh komşu adı temizliği ve gelen çerçeve sınırı (`MeshPeer`).
+  sarsıntı ölçütü; kurtarıcı mesajı uyarı sınırı (`MesajUyariSiniri`: 20 sn, aynı mesaj 1 dk,
+  10 dk'da 6, kayan pencere, saat geri gitmesi); ayrıca mesh komşu adı temizliği ve gelen çerçeve
+  sınırı (`MeshPeer`).
 - `tests/enkaz.test.ts`: bina, SMS metni, son konum kaydı, sinyal eğilimi.
 - `e2e/enkaz-check.mjs`: arayüz, sahte Capacitor köprüsüyle.

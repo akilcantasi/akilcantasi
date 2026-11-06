@@ -17,6 +17,11 @@ import {
   sanitizeMessage,
 } from '../src/lib/mesh/protocol';
 
+import * as ed from '@noble/ed25519';
+import { b64uKodla } from '../server/imza-kanonik.mjs';
+import { fromMesh, meshDurum, toMeshMessages, validateDraft, type BoardDraft } from '../src/iletisim/board';
+import { dogrula, durumImzala, ilanImzala } from '../src/iletisim/imza';
+
 const T0 = Date.UTC(2026, 10, 1, 12, 0, 0);
 const HOUR = 3600_000;
 
@@ -625,5 +630,74 @@ describe('mesh (Capacitor köprüsü)', () => {
     const mesh = createMesh({ plugin: () => p as any, storage: null });
     expect(await mesh.start('Ali')).toBe(false);
     expect(mesh.lastError()).toBe('permission');
+  });
+});
+
+// ---------------------------------------------------------------- imzalı mesajlar
+
+describe('mesh: imzalı pano kayıtları', () => {
+  const g = new Uint8Array(32).fill(3);
+  const k = { gizli: g, pub: b64uKodla(ed.getPublicKey(g)) };
+  const ilan = (): BoardDraft => {
+    const v = validateDraft({ id: 'lzx1abc-0a1b2c3d4e5f', kind: 'kayip', from: 'Ayşe', text: 'Ad: Mehmet\nYaş: 72', status: 'araniyor', lat: 39.9208, lon: 32.8541 });
+    if (!v.ok) throw new Error(v.error);
+    return ilanImzala(v.item, T0 - 1000, k);
+  };
+
+  it('sanitizeMessage imza alanlarını tutar; bozuk biçimde yalnız imzayı atar', () => {
+    const [m] = toMeshMessages(ilan(), T0);
+    const s = sanitizeMessage(m, T0)!;
+    expect(s).toMatchObject({ pub: k.pub, sig: m.sig, ts: T0 - 1000 });
+    const bozuk = sanitizeMessage({ ...m, sig: 'x'.repeat(500), usig: 'y' }, T0)!;
+    expect(bozuk.text).toBe(m.text);
+    expect(bozuk.pub).toBeUndefined();
+    expect(bozuk.sig).toBeUndefined();
+    // eski sürüm: imza alanlarını bilmeyen alıcı yine de mesajı alır
+    expect(sanitizeMessage({ ...m, yeniAlan: 1 }, T0)).not.toBeNull();
+  });
+
+  it('iki düğüm arasında gidiş-dönüş: imza tutar, durum güncellemesi tanınır', () => {
+    const { a, b, connect } = pair();
+    const got: MeshMessage[] = [];
+    b.onMessage((m) => got.push(m));
+    const d = ilan();
+    for (const m of toMeshMessages(d, T0)) a.publish(m as MeshMessage);
+    const upd = durumImzala(d, 'bulundu', T0 + 10, k)!;
+    const guncel = { ...d, status: 'bulundu' as const, upd };
+    const giden = toMeshMessages(guncel, T0 + 10);
+    // yeni biçim (metinsiz) + eski sürümler için "_bulundu" biçimi
+    expect(giden.map((m) => m.id)).toEqual([d.id + '_d' + upd.ts.toString(36), d.id + '_bulundu']);
+    for (const m of giden) a.publish(m as MeshMessage);
+    connect();
+    expect(got).toHaveLength(3);
+    const asil = fromMesh(got.find((m) => m.id === d.id)!)!;
+    expect(dogrula(asil)).toMatchObject({ ilan: 'gecerli', status: 'araniyor' });
+    // metinsiz güncelleme: pano kaydı değil, durum güncellemesi
+    const metinsiz = got.find((m) => m.text === '')!;
+    expect(fromMesh(metinsiz)).toBeNull();
+    const du = meshDurum(metinsiz)!;
+    expect(du.id).toBe(d.id);
+    expect(dogrula({ ...asil, status: du.upd.st, upd: du.upd })).toMatchObject({ durum: 'gecerli', status: 'bulundu' });
+    // metinli "_bulundu" biçimi de imzalı kayıt olarak çözülür
+    const eskiBicim = fromMesh(got.find((m) => m.id.endsWith('_bulundu'))!)!;
+    expect(eskiBicim.id).toBe(d.id);
+    expect(dogrula(eskiBicim)).toMatchObject({ ilan: 'gecerli', durum: 'gecerli', status: 'bulundu' });
+  });
+
+  it('yolda değiştirilen mesaj ve imzasız "[bulundu]" etiketi doğrulanmaz', () => {
+    const d = ilan();
+    const [m] = toMeshMessages(d, T0);
+    expect(dogrula(fromMesh({ ...m, text: m.text + ' x' })!).ilan).toBe('gecersiz');
+    // Biri imzalı ilanın metnine [bulundu] etiketi koyarsa durum değişmez
+    const etiketli = fromMesh({ ...m, id: d.id + '_bulundu', text: m.text.replace('[araniyor]', '[bulundu]') })!;
+    expect(etiketli.status).toBe('araniyor');
+    expect(dogrula(etiketli).status).toBe('araniyor');
+  });
+
+  it('eski sürümden gelen imzasız mesaj eskisi gibi çözülür', () => {
+    const it = fromMesh({ id: 'eski-0001_bulundu', kind: 'kayip', from: 'Ali', text: '[bulundu] Ad: Veli', time: T0 })!;
+    expect(it).toMatchObject({ id: 'eski-0001', status: 'bulundu' });
+    expect(it.pub).toBeUndefined();
+    expect(dogrula(it).ilan).toBe('imzasiz');
   });
 });

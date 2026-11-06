@@ -5,6 +5,10 @@ import path from 'node:path';
 import http from 'node:http';
 import { parseRange, safeJoin, startServer, unsafeSegment, type RunningServer } from '../server/server.mjs';
 import net from 'node:net';
+import * as ed from '@noble/ed25519';
+import { b64uKodla, kanonikBilgiNoktasi } from '../server/imza-kanonik.mjs';
+import { validateDraft } from '../src/iletisim/board';
+import { durumImzala, ilanImzala } from '../src/iletisim/imza';
 
 let srv: RunningServer;
 let tmp: string;
@@ -502,5 +506,143 @@ describe('güvenlik sertleştirmesi', () => {
     // Yol çözümünde hata çıkaran bozuk kodlama
     const r = await istek('/%E0%A4%A', { Host: `127.0.0.1:${s.port}` });
     expect(r.body).not.toMatch(/\/tmp|Error:|at /);
+  });
+});
+
+describe('imzalı kayıtlar: kayıp ilanı sahipliği', () => {
+  let isrv: RunningServer;
+  let idir: string;
+  let ibase: string;
+  const sahip = { gizli: new Uint8Array(32).fill(7), pub: '' };
+  const yabanci = { gizli: new Uint8Array(32).fill(9), pub: '' };
+  sahip.pub = b64uKodla(ed.getPublicKey(sahip.gizli));
+  yabanci.pub = b64uKodla(ed.getPublicKey(yabanci.gizli));
+  const T = Date.now();
+  const post = (body: unknown) => fetch(ibase + '/api/board', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const taslak = (id: string, o: Record<string, unknown> = {}) => {
+    const v = validateDraft({ id, kind: 'kayip', from: 'Ayşe', text: 'Ad: Mehmet\nYaş: 72', status: 'araniyor', ...o });
+    if (!v.ok) throw new Error(v.error);
+    return ilanImzala(v.item, T, sahip);
+  };
+
+  beforeAll(async () => {
+    idir = fs.mkdtempSync(path.join(os.tmpdir(), 'akil-imza-'));
+    isrv = await startServer({ port: 0, host: '127.0.0.1', data: idir, dist: idir, apkDirs: [idir], board: { ratePerMin: 200 } });
+    ibase = `http://127.0.0.1:${isrv.port}`;
+  });
+  afterAll(async () => {
+    await isrv?.close();
+    fs.rmSync(idir, { recursive: true, force: true });
+  });
+
+  it('imzalı ilan kabul edilir, alanları geri döner', async () => {
+    const d = taslak('imzali-01');
+    const r = await post(d);
+    expect(r.status).toBe(201);
+    const it = (await r.json()).item;
+    expect(it).toMatchObject({ pub: sahip.pub, sig: d.sig, ts: T, status: 'araniyor' });
+  });
+
+  it('sahte "bulundu" 403 alır: imzasız, başka anahtarla imzalı ya da bozuk imzalı', async () => {
+    const d = taslak('imzali-02');
+    expect((await post(d)).status).toBe(201);
+    // 1) eski istemci gibi imzasız
+    const r1 = await post({ id: d.id, kind: 'kayip', from: 'Kötü', text: 'x', status: 'bulundu' });
+    expect(r1.status).toBe(403);
+    expect((await r1.json()).error).toMatch(/yalnızca ilanı veren telefon/);
+    // 2) başka cihazın anahtarıyla imzalı güncelleme
+    const sahte = durumImzala({ ...d, pub: yabanci.pub }, 'bulundu', T + 10, yabanci)!;
+    expect((await post({ ...d, status: 'bulundu', upd: sahte })).status).toBe(403);
+    // 3) imza biçimi doğru ama içerik tutmuyor (başka ilanın güncellemesi)
+    const baska = taslak('imzali-03');
+    const u3 = durumImzala(baska, 'bulundu', T + 10, sahip)!;
+    expect((await post({ ...d, status: 'bulundu', upd: u3 })).status).toBe(403);
+    // 4) imzasını silip yeni kayıt gibi göstermek de işe yaramaz (kimlik zaten var, anahtarlı)
+    const { pub, sig, ts, ...cip } = d;
+    expect((await post({ ...cip, status: 'bulundu' })).status).toBe(403);
+    const all = await (await fetch(ibase + '/api/board')).json();
+    expect(all.items.find((i: any) => i.id === d.id).status).toBe('araniyor');
+  });
+
+  it('sahibi "bulundu" ve yeniden "aranıyor" yapabilir; eski güncelleme yenisini ezmez', async () => {
+    const d = taslak('imzali-04');
+    expect((await post(d)).status).toBe(201);
+    const u1 = durumImzala(d, 'bulundu', T + 10, sahip)!;
+    const r1 = await post({ ...d, status: 'bulundu', upd: u1 });
+    expect(r1.status).toBe(200);
+    expect((await r1.json()).item).toMatchObject({ status: 'bulundu', upd: u1 });
+    // aynı güncellemeyi yeniden göndermek (giden kutusu yeniden denemesi) zararsız
+    expect((await (await post({ ...d, status: 'bulundu', upd: u1 })).json()).duplicate).toBe(true);
+    const u2 = durumImzala({ ...d, upd: u1 }, 'araniyor', T + 20, sahip)!;
+    const r2 = await post({ ...d, status: 'araniyor', upd: u2 });
+    expect((await r2.json()).item.status).toBe('araniyor');
+    // eski ama gerçek "bulundu" (mesh'ten geç gelen) yok sayılır
+    const r3 = await post({ ...d, status: 'bulundu', upd: u1 });
+    expect(r3.status).toBe(200);
+    expect((await r3.json()).item.status).toBe('araniyor');
+  });
+
+  it('bozuk imzalı yeni kayıt ve güncellemesiz "bulundu" ilan reddedilir', async () => {
+    const d = taslak('imzali-05');
+    expect((await post({ ...d, text: d.text + ' değişti' })).status).toBe(403);
+    expect((await post({ ...d, status: 'bulundu' })).status).toBe(403);
+    expect((await post({ ...d, sig: 'x' })).status).toBe(400);
+    // güncellemesiyle birlikte ilk kez gelen "bulundu" ilan (ör. mesh köprüsü) kabul edilir
+    const u = durumImzala(d, 'bulundu', T + 10, sahip)!;
+    const r = await post({ ...d, status: 'bulundu', upd: u });
+    expect(r.status).toBe(201);
+    expect((await r.json()).item.status).toBe('bulundu');
+  });
+
+  it('imzasız eski ilanlarda eski davranış sürer', async () => {
+    expect((await post({ id: 'eski-ilan-01', kind: 'kayip', from: 'Ali', text: 'Ad: Veli' })).status).toBe(201);
+    const r = await post({ id: 'eski-ilan-01', kind: 'kayip', from: 'Başkası', text: 'x', status: 'bulundu' });
+    expect(r.status).toBe(200);
+    expect((await r.json()).item.status).toBe('bulundu');
+  });
+
+  it('kimlik anahtara bağlı: başka anahtarla aynı kimliği kapma ve öneksiz imzalı kayıt reddedilir', async () => {
+    const d = taslak('imzali-06');
+    expect(d.id.startsWith(d.pub!.slice(0, 10) + '-')).toBe(true);
+    // Saldırgan aynı kimliği kendi anahtarıyla imzalar
+    const saldirgan = { gizli: ed.utils.randomPrivateKey(), pub: '' };
+    saldirgan.pub = Buffer.from(ed.getPublicKey(saldirgan.gizli)).toString('base64url');
+    const v = validateDraft({ id: d.id, kind: 'kayip', from: 'X', text: 'Sahte' });
+    if (!v.ok) throw new Error('taslak');
+    const sahte = ilanImzala(v.item, T, saldirgan);
+    expect(sahte.id).not.toBe(d.id); // istemci kendi önekini ekler
+    const zorla = { ...sahte, id: d.id };
+    const r = await post(zorla);
+    expect(r.status).toBe(403);
+  });
+
+  it('board.json yeniden açılınca imzalar korunur; bilgi noktası anahtarı sunulmaz', async () => {
+    await isrv.close();
+    isrv = await startServer({ port: 0, host: '127.0.0.1', data: idir, dist: idir, apkDirs: [idir], board: { ratePerMin: 200 } });
+    ibase = `http://127.0.0.1:${isrv.port}`;
+    const all = await (await fetch(ibase + '/api/board')).json();
+    const it = all.items.find((i: any) => i.id.endsWith('-imzali-04'));
+    expect(it).toMatchObject({ pub: sahip.pub, status: 'araniyor' });
+    expect(it.upd.st).toBe('araniyor');
+    expect(fs.existsSync(path.join(idir, '.bilgi-noktasi-anahtari.json'))).toBe(true);
+    expect((await fetch(ibase + '/data/.bilgi-noktasi-anahtari.json')).status).not.toBe(200);
+    const packs = await (await fetch(ibase + '/api/packs')).json();
+    expect(JSON.stringify(packs)).not.toContain('anahtari');
+  });
+
+  it('bilgi noktasının kendi kaydı onun anahtarıyla imzalanır; anahtar yeniden başlatınca aynı', async () => {
+    const st = await (await fetch(ibase + '/api/status')).json();
+    expect(st.pub).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    // Origin başlığı olmayan loopback isteği bu bilgisayardan sayılır (local)
+    const r = await post({ id: 'bn-duyuru-01', kind: 'duyuru', from: 'Bilgi noktası', text: 'Su dağıtımı 15.00' });
+    const it = (await r.json()).item;
+    expect(it.local).toBe(true);
+    expect(it.bpub).toBe(st.pub);
+    const ok = ed.verify(Buffer.from(it.bsig, 'base64url'), new TextEncoder().encode(kanonikBilgiNoktasi(it, it.bpub)), Buffer.from(it.bpub, 'base64url'));
+    expect(ok).toBe(true);
+    await isrv.close();
+    isrv = await startServer({ port: 0, host: '127.0.0.1', data: idir, dist: idir, apkDirs: [idir], board: { ratePerMin: 200 } });
+    ibase = `http://127.0.0.1:${isrv.port}`;
+    expect((await (await fetch(ibase + '/api/status')).json()).pub).toBe(st.pub);
   });
 });

@@ -79,6 +79,23 @@ export function getNativeInfo(): NativeFenerDurum | null {
   return nativeInfo;
 }
 
+/**
+ * "GPU'yu yeniden dene": yerel motorun çökme sonrası koyduğu GPU kapalı işaretini siler.
+ * yenidenBaslat: GPU ancak uygulama yeniden açılınca denenir (bu süreçte motor yalnız
+ * işlemciyle başlatıldı). Değilse yüklü model boşaltılır, sonraki yükleme GPU'yu dener.
+ * Deneme yine çökerse yerel motor GPU'yu kendiliğinden yeniden kapatır.
+ */
+export async function resetGpu(): Promise<{ ok: boolean; yenidenBaslat: boolean }> {
+  if (!nativeFener.available()) return { ok: false, yenidenBaslat: false };
+  const r = await nativeFener.gpuSifirla().catch(() => null);
+  if (!r?.ok) return { ok: false, yenidenBaslat: false };
+  if (!r.yenidenBaslat && nativeLoaded && !st.gpu) await engine.unload();
+  // Bilgi tazelensin (gpuKapali artık false)
+  nativeInfoReq = null;
+  await loadNativeInfo().catch(() => null);
+  return { ok: true, yenidenBaslat: !!r.yenidenBaslat };
+}
+
 /** WebView'daki WebAssembly motorunun göreceği cihaz (navigator.deviceMemory, en çok 8 GB) */
 export function webDeviceProfile(): DeviceProfile {
   const nav: any = typeof navigator !== 'undefined' ? navigator : {};
@@ -291,6 +308,8 @@ let busy = false;
 /** Yerel motor hatasını kullanıcıya gösterilecek Türkçe iletiye çevirir (dosya yolları gösterilmez) */
 export function nativeErrorText(h: string | undefined): string {
   const m = String(h ?? '');
+  // Bütünlük denetimi (PaketButunlugu.java): dosya indirildikten sonra değişmiş
+  if (/değişmiş görünüyor/i.test(m)) return 'Model dosyası değişmiş görünüyor; yeniden indirin. Kütüphane > Yönet bölümünden silip yeniden indirebilirsiniz.';
   if (/belleğe sığmadı/i.test(m)) return 'Model bu cihazın belleğine sığmadı. Daha küçük bir model seçin.';
   if (/açılamadı|bozuk|cihazda yok/i.test(m)) return 'Model dosyası açılamadı; dosya eksik ya da bozuk olabilir. Kütüphane > Yönet bölümünden yeniden indirin.';
   if (/yanıt vermedi|yok:/i.test(m)) return 'Hızlı yerel motor başlatılamadı. Uygulamayı güncelleyin ya da daha küçük bir model seçin.';
@@ -434,7 +453,9 @@ export const engine = {
         }
         console.warn('[fener] yerel motor açamadı:', r.hata);
         // WebAssembly'ye ancak model WebView belleğine de sığıyorsa düş (yoksa uygulama çöker)
-        const fallbackOk = !unsupportedReason() && choice.parts.length > 0 && fitFor({ ...choice, complete: true } as any, webDeviceProfile()) === 'ok';
+        // Bütünlüğü bozulmuş dosya WebAssembly motoruyla da açılmaz
+        const degismis = /değişmiş görünüyor/i.test(r.hata ?? '');
+        const fallbackOk = !degismis && !unsupportedReason() && choice.parts.length > 0 && fitFor({ ...choice, complete: true } as any, webDeviceProfile()) === 'ok';
         if (!fallbackOk) {
           const msg = nativeErrorText(r.hata);
           set({ status: 'error', error: msg, progress: null });

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
+import { swEklentisi } from './tools/sw/sw-eklentisi';
 
 // Uygulama tamamen çevrimdışı çalışmalı: tüm varlıklar dist/ içine kopyalanır,
 // hiçbir CDN kullanılmaz. Göreli base sayesinde dist/ hem yerel sunucudan
@@ -36,7 +37,7 @@ const cspPlugin = {
 
 export default defineConfig({
   base: './',
-  plugins: [preact(), cspPlugin],
+  plugins: [preact(), cspPlugin, swEklentisi()],
   build: {
     target: 'es2022',
     outDir: 'dist',

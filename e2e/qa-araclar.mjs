@@ -50,6 +50,8 @@ async function newPage(opts = {}) {
   const body = JSON.stringify(manifest);
   const headers = { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cross-origin-resource-policy': 'cross-origin' };
   await ctx.route('**/packs-manifest.json', (r) => r.fulfill({ status: 200, headers, body }));
+  // İmza dosyası: sahte katalog imzasızdır → uzak katalog yok sayılır (yerel katalog kullanılır)
+  await ctx.route('**/packs-manifest.json.sig', (r) => r.fulfill({ status: 200, headers: { ...headers, 'content-type': 'text/plain' }, body: 'imzasiz' }));
   // Bilgi noktası sunucusu yokmuş gibi (uygulama server.mjs'den sunulsa da): tarayıcı durumu test edilir
   await ctx.route(/\/api\/(status|packs)/, (r) => r.fulfill({ status: 200, headers: { 'content-type': 'text/html' }, body: '<!doctype html>' }));
   const p = await ctx.newPage();
@@ -474,19 +476,45 @@ try {
     await p.waitForTimeout(300);
     // İl seçici: her il için Radyo 1 ve Haber satırı var, FM bandında; seçim kalıcı
     const cities = await p.$$eval('[data-testid="rd-city"] option', (o) => o.map((x) => x.value));
-    check(cities.length >= 13, 'radyo: ' + cities.length + ' il seçilebilir');
+    check(cities.length === 81, 'radyo: ' + cities.length + ' il seçilebilir (81)');
+    const names = await p.$$eval('[data-testid="rd-city"] option', (o) => o.map((x) => x.textContent));
+    check(names[0] === 'Adana' && names[80] === 'Zonguldak' && JSON.stringify(names) === JSON.stringify([...names].sort((a, b) => a.localeCompare(b, 'tr'))), 'radyo: iller Türkçe alfabe sırasında');
     let bad = [];
+    let na = 0;
     for (const c of cities) {
       await p.selectOption(tid('rd-city'), c);
       const r = await p.evaluate(() => {
         const t = document.querySelector('[data-testid="rd-freq-table"]');
-        const f = [...t.querySelectorAll('td[data-testid]')].map((td) => td.textContent);
+        const tds = [...t.querySelectorAll('td[data-testid]')];
+        const f = tds.filter((td) => !td.dataset.na).map((td) => td.textContent);
         const nums = f.join(' ').match(/\d+\.\d/g)?.map(Number) ?? [];
-        return { has1: !!t.querySelector('[data-testid="rd-f-trt-radyo-1"]'), hasH: !!t.querySelector('[data-testid="rd-f-trt-radyo-haber"]'), band: nums.every((n) => n >= 87.5 && n <= 108), fits: t.getBoundingClientRect().right <= innerWidth + 1 };
+        const r1 = t.querySelector('[data-testid="rd-f-trt-radyo-1"]');
+        const h = t.querySelector('[data-testid="rd-f-trt-radyo-haber"]');
+        const anyNa = tds.some((td) => td.dataset.na);
+        return {
+          has1: !!r1, hasH: !!h, na: anyNa,
+          naOk: tds.filter((td) => td.dataset.na).every((td) => /doğrulanmadı/.test(td.textContent)),
+          // eksik kayıt varsa not ya da "doğrulanmadı" yazısı görünür
+          note: !!document.querySelector('[data-testid="rd-note"]'),
+          band: nums.every((n) => n >= 87.5 && n <= 108), fits: t.getBoundingClientRect().right <= innerWidth + 1,
+        };
       });
-      if (!(r.has1 && r.hasH && r.band && r.fits)) bad.push(c + JSON.stringify(r));
+      if (r.na) na++;
+      if (!(r.has1 && r.hasH && r.naOk && r.band && r.fits)) bad.push(c + JSON.stringify(r));
     }
-    check(bad.length === 0, 'radyo: tüm illerde Radyo 1 + Haber, 87,5–108 MHz, ekrana sığar' + (bad.length ? ' — ' + bad.join(' ') : ''));
+    check(bad.length === 0, 'radyo: 81 ilde Radyo 1 + Haber satırı (frekans ya da "doğrulanmadı"), 87,5–108 MHz, ekrana sığar' + (bad.length ? ' — ' + bad.join(' ') : ''));
+    check(na > 0 && na < 40, 'radyo: eksik kayıtlı il sayısı makul (' + na + ')');
+    await p.selectOption(tid('rd-city'), 'kayseri');
+    check(/doğrulanmadı/.test(await p.textContent(tid('rd-f-trt-radyo-1'))) && /doğrulanmış frekans bulunamadı/.test(await p.textContent(tid('rd-note'))), 'radyo: kaydı olmayan il (Kayseri) "doğrulanmadı" ve not gösterir');
+    await p.selectOption(tid('rd-city'), 'kahramanmaras');
+    check((await p.textContent(tid('rd-f-trt-radyo-1'))).includes('99.8'), 'radyo: Kahramanmaraş Radyo 1 99.8');
+    // büyük yazıda da tablo ve not ekrana sığar
+    await p.evaluate(() => (document.documentElement.style.fontSize = '130%'));
+    await p.selectOption(tid('rd-city'), 'adiyaman');
+    const big = await p.evaluate(() => ({ t: document.querySelector('[data-testid="rd-freq-table"]').getBoundingClientRect().right <= innerWidth + 1, n: document.querySelector('[data-testid="rd-note"]').getBoundingClientRect().right <= innerWidth + 1, h: document.documentElement.scrollWidth <= innerWidth + 1 }));
+    check(big.t && big.n && big.h, 'radyo: büyük yazıda taşma yok ' + JSON.stringify(big));
+    await p.screenshot({ path: shots + '/radyo-buyuk-yazi.png', fullPage: false });
+    await p.evaluate(() => (document.documentElement.style.fontSize = ''));
     await p.selectOption(tid('rd-city'), 'ankara');
     check((await p.textContent(tid('rd-f-trt-radyo-1'))).includes('93.3'), 'radyo: Ankara Radyo 1 93.3');
     await p.reload({ waitUntil: 'networkidle' });

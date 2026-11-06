@@ -4,7 +4,8 @@
 // Bölümler: go.comm(id) ya da ?comm=<id>
 import { go, useAppState } from '../lib/store';
 import { useBoard } from '../iletisim/client';
-import { CSS, ConnCard } from '../iletisim/common';
+import { CSS, ConnCard, gorunenDurum } from '../iletisim/common';
+import { useDogrulama } from '../iletisim/imza';
 import { Baglan, Duyurular, Iyiyim, Kayip, Pano } from '../iletisim/BoardSections';
 import { Mors, Sms, Sos } from '../iletisim/OfflineTools';
 import { QuickHelp, Yakinlar } from '../iletisim/HizliSms';
@@ -46,7 +47,9 @@ function Ic({ id }: { id: SectionId }) {
 
 function Home() {
   const s = useBoard();
-  const count = (k: string) => s.items.filter((i) => i.kind === k && (k !== 'kayip' || i.status === 'araniyor')).length;
+  const dg = useDogrulama();
+  // Kayıp sayısı gösterilen (imzası doğrulanmış) duruma göre: sahte "bulundu" sayımı bozmasın
+  const count = (k: string) => s.items.filter((i) => i.kind === k && (k !== 'kayip' || gorunenDurum(i, dg(i)) === 'araniyor')).length;
   const row = (id: SectionId, title: string, desc: string, n?: number, extra = '') => (
     <button class={'cm-card cm-row' + extra} data-testid={'comm-card-' + id} onClick={() => go.comm(id)}>
       <Ic id={id} />

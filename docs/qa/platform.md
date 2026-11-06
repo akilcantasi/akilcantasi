@@ -147,3 +147,37 @@ Altı denetim ajanının değişiklikleri bağımsız bir gözden geçirmeden ge
   - Yüksek kontrastta tema rengi.
   - 112 düğmelerinde beyaz yazı karşıtlığı.
   - Uzak paket kataloğu artık her sekme açılışında değil, oturumda 6 saatte bir deneniyor.
+
+## Öneriler 2026-11 — service worker (tarayıcı / bilgi noktası)
+
+Bilgi noktasından (Windows / Raspberry Pi) tarayıcıyla bir kez açılan uygulama, bağlantı kopsa da yeniden açılır.
+
+- **Üretim:** `vite.config.ts` → `tools/sw/sw-eklentisi.ts` derleme sonunda `dist/sw.js` yazar (bağımlılık yok).
+  - **Önceden önbellek (~1,6 MB):** index.html, giriş betiği ve statik içe aktarımları, CSS, latin/latin-ext woff2
+    yazı tipleri, simgeler, manifest.
+  - **Çalışma anında:** diğer `/assets/` parçaları ve `/fonts/` (harita yazı tipi) ilk kullanımda saklanır.
+    `main.tsx` açılıştan sonra araçları önceden yüklediği için hepsi çevrimdışı açılır.
+  - **Asla saklanmaz:** `/data/`, `/api/`, `/download/`, `packs-manifest.json`, Range istekleri; .zim/.gguf/.pmtiles/
+    .wasm/.tar/.apk; 3 MB'tan büyük ya da boyu bilinmeyen yanıtlar.
+  - **Gezinme:** önce ağdan (4 sn sınır), sunucunun COOP/COEP başlıkları olduğu gibi gelir. Ağ yoksa önbellekteki
+    index.html verilir; o da aynı başlıklarla saklandığı için `crossOriginIsolated` (Fener'in çok iş parçacıklı
+    WebAssembly'si) çevrimdışı da korunur.
+  - **Sürüm:** önbellek adı `akil-kabuk-<içerik özeti>`; yeni sürüm etkinleşince eskiler silinir.
+- **Güncelleme akışı (güvenli olan):** yeni SW kendiliğinden devralmaz, bekler. Sayfanın altında küçük bir not çıkar:
+  "Yeni sürüm hazır. [Yenile] [Sonra]". Yenile → yeni sürüme geçilir, sayfa yenilenir. Basılmazsa sekme kapanıp
+  açılınca geçilir. Açık kalan ekran saatte bir yeni sürüm denetler.
+- **Kayıt** (`src/sw-kayit.ts`, `main.tsx`): yalnız üretim derlemesi, yalnız güvenli bağlam (https ya da localhost).
+  **Android uygulamasında (Capacitor) kaydedilmez**; eski bir kayıt varsa silinir.
+- **CSP:** derleme ve sunucu CSP'sinde `worker-src 'self' blob:` zaten var. `server.mjs` `sw.js`'yi `no-cache` ile
+  sunuyordu; sunucuda değişiklik gerekmedi.
+- **Sınır:** tarayıcılar SW'yi yalnız güvenli bağlamda çalıştırır. Telefonlar bilgi noktasına
+  `http://192.168.x.x:8080` ile girdiğinde SW yoktur. Orada önceki önlem (araç parçalarının önceden yüklenmesi,
+  sayfa açık kaldıkça) geçerlidir. SW, bilgi noktasının kendi ekranında (`http://localhost:8080`, Pi kiosk) ve
+  https kurulumlarda çalışır.
+- **Testler:** `tests/sw.test.ts` (kurallar, önceden önbellek seçimi, sürüm, üretilen betiğin `vm` içinde çalışması),
+  `e2e/sw-check.mjs`. e2e akışı: derleme kopyası `server.mjs` ile sunulur, ilk açılış, `context.setOffline(true)` ile
+  yeniden yükleme, çevrimdışı araç, önbellekte `/data/`·`/api/` yok, yeni sürüm notu + Yenile, Capacitor taklidinde kayıt yok.
+
+```
+npm run build && node e2e/sw-check.mjs          # ya da: npx vite build --outDir /tmp/d && node e2e/sw-check.mjs /tmp/d
+```

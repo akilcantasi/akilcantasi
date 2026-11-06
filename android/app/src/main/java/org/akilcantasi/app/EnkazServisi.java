@@ -50,6 +50,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *  • GPS: 30 dakikada bir en çok 60 sn denenir; bulunursa kayda ve işarete girer.
  *  • Bluetooth adı "ENKAZ · …" yapılabilir (uygulamasız telefonların eşleştirme listesinde
  *    görünür); görünürlük Android'de en çok 1 saattir, bitince hatırlatma bildirimi çıkar.
+ *  • Kurtarıcı mesajları kaydedilir ve gösterilir; titreşim/ses/okuma uyarısı sınırlıdır
+ *    (MesajUyariSiniri: 20 sn arayla, aynı mesaj 1 dk'da bir, 10 dk'da en çok 6).
  *
  * Durum her değişimde dinleyicilere (EnkazPlugin → JS "enkazDurum") iletilir.
  */
@@ -475,6 +477,8 @@ public class EnkazServisi extends Service {
     // ------------------------------------------------------------------ kurtarıcı mesajları
 
     android.bluetooth.le.ScanCallback taramaCb;
+    /** Sahte mesaj yağmuru pili bitirmesin: titreşim/ses/okuma sıklık sınırı (MesajUyariSiniri) */
+    private final MesajUyariSiniri uyariSiniri = new MesajUyariSiniri();
     private android.speech.tts.TextToSpeech tts;
     private boolean ttsHazir;
 
@@ -546,12 +550,34 @@ public class EnkazServisi extends Service {
         } catch (Exception ignored) {}
         // Onay hemen işarete girsin: kurtarıcı "ulaştı" görsün
         reklamBaslat();
-        mesajDuyur(metin);
+        // Mesaj her durumda kaydedildi ve ekranda görünür; yalnız sesli/titreşimli uyarı sınırlı
+        // (saat değişse de doğru çalışsın diye açılıştan beri geçen süre kullanılır)
+        mesajDuyur(metin, uyariSiniri.izinVer(android.os.SystemClock.elapsedRealtime(), kod));
         bildir(this);
     }
 
-    /** Titreşim, kısa uyarı sesi, sesli okuma (Türkçe ses varsa) ve bildirim */
-    private void mesajDuyur(String metin) {
+    /**
+     * Titreşim, kısa uyarı sesi, sesli okuma (Türkçe ses varsa) ve bildirim. uyar=false ise
+     * (sıklık sınırı) yalnız bildirim sessizce güncellenir.
+     */
+    private void mesajDuyur(String metin, boolean uyar) {
+        if (uyar) uyariVer(metin);
+        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        NotificationCompat.Builder b = new NotificationCompat.Builder(this, KANAL_UYARI)
+                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setContentTitle("Kurtarıcılardan mesaj")
+                .setContentText(metin)
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setSilent(!uyar)
+                .setAutoCancel(true)
+                .setContentIntent(uygulamayaAc(this, "enkaz", 5));
+        try {
+            nm.notify(4313, b.build());
+        } catch (Exception ignored) {}
+    }
+
+    private void uyariVer(String metin) {
         try {
             android.os.Vibrator v = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
             if (v != null) {
@@ -566,18 +592,6 @@ public class EnkazServisi extends Service {
             h.postDelayed(tg::release, 900);
         } catch (Exception ignored) {}
         konus("Kurtarıcılardan mesaj. " + metin, 1200);
-        NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-        NotificationCompat.Builder b = new NotificationCompat.Builder(this, KANAL_UYARI)
-                .setSmallIcon(android.R.drawable.stat_notify_chat)
-                .setContentTitle("Kurtarıcılardan mesaj")
-                .setContentText(metin)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                .setAutoCancel(true)
-                .setContentIntent(uygulamayaAc(this, "enkaz", 5));
-        try {
-            nm.notify(4313, b.build());
-        } catch (Exception ignored) {}
     }
 
     /** Çevrimdışı Türkçe ses yüklüyse metni alarm sesi düzeyinde okur */

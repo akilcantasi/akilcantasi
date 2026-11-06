@@ -6,9 +6,10 @@
 //   2) Android uygulamasında bu telefonun kendi bilgi noktası (http://127.0.0.1:<port>)
 //   3) Sayfanın geldiği sunucu (./api/…): tarayıcıda bilgi noktasından açıldıysa
 import { useEffect, useState } from 'preact/hooks';
-import { mesh } from '../lib/mesh';
+import { mesh, type MeshMessage } from '../lib/mesh';
 import { native } from '../lib/native';
-import { FOUND_SUFFIX, fromMesh, fromServer, mergeItems, toMeshText, validateDraft, type BoardDraft, type BoardItem } from './board';
+import { fromMesh, fromServer, meshDurum, mergeItems, toMeshMessages, validateDraft, type BoardDraft, type BoardItem, type MissingStatus } from './board';
+import { benimAnahtarim, bnPinle, dogrulaAsync, durumImzala, ilanImzala } from './imza';
 import { BoardCache, Outbox, loadProfile, normalizeServer } from './outbox';
 
 export type ConnState = 'checking' | 'connected' | 'offline';
@@ -25,6 +26,11 @@ export interface ServiceState {
   error: string;
   meshOn: boolean;
   meshPeers: number;
+  /**
+   * Bağlı bilgi noktasının imza anahtarı: ilk görüşte sabitlenir. 'farkli' → bu adreste daha
+   * önce başka bir anahtar görüldü (cihaz değişmiş ya da biri taklit ediyor).
+   */
+  bnPin: 'yok' | 'yeni' | 'ayni' | 'farkli';
 }
 
 const POLL_MS = 5000;
@@ -103,6 +109,7 @@ class BoardService {
     error: '',
     meshOn: false,
     meshPeers: 0,
+    bnPin: 'yok',
   };
 
   constructor() {
@@ -145,7 +152,7 @@ class BoardService {
     this.tick();
   }
 
-  private async findServer(): Promise<{ base: string; name: string; clients: number } | null> {
+  private async findServer(): Promise<{ base: string; name: string; clients: number; pub?: string } | null> {
     const cands: string[] = [];
     const custom = normalizeServer(loadProfile().server);
     if (custom) cands.push(custom);
@@ -161,7 +168,8 @@ class BoardService {
     for (const base of cands) {
       try {
         const r = await fetchJson(api(base, '/api/status'));
-        if (r.status === 200 && r.data?.server === true) return { base, name: String(r.data.name ?? ''), clients: Number(r.data.clients) || 0 };
+        if (r.status === 200 && r.data?.server === true)
+          return { base, name: String(r.data.name ?? ''), clients: Number(r.data.clients) || 0, pub: typeof r.data.pub === 'string' ? r.data.pub : undefined };
       } catch {}
     }
     return null;
@@ -176,7 +184,8 @@ class BoardService {
       if (!srv) {
         this.set({ conn: 'offline', serverName: '', clients: 0 });
       } else {
-        this.set({ conn: 'connected', base: srv.base, serverName: srv.name, clients: srv.clients, error: '' });
+        const pin = bnPinle(srv.base, srv.pub);
+        this.set({ conn: 'connected', base: srv.base, serverName: srv.name, clients: srv.clients, error: '', bnPin: pin === 'yeni' ? 'ayni' : pin });
         await this.sync(srv.base);
         next = POLL_MS;
       }
@@ -197,7 +206,7 @@ class BoardService {
     await this.outbox.flush((d) => this.postTo(base, d));
     // 2) mesh'ten gelenleri bilgi noktasına aktar (köprü)
     for (const m of this.meshItems.splice(0)) {
-      const { time, rev, viaMesh, pending, local, ...draft } = m;
+      const { time, rev, viaMesh, pending, local, bpub, bsig, ...draft } = m;
       const r = await this.postTo(base, draft).catch(() => ({ result: 'retry' as const }));
       if (r.result === 'retry') this.meshItems.push(m);
     }
@@ -243,27 +252,28 @@ class BoardService {
     return { result: 'retry', error: 'Sunucu hatası ' + r.status };
   }
 
-  /** Yeni kayıt: önce giden kutusuna yazılır (kaybolmasın), sonra gönderilir. */
-  async submit(raw: BoardDraft): Promise<{ ok: boolean; error?: string; queued?: boolean; reason?: string }> {
+  /**
+   * Yeni kayıt: önce giden kutusuna yazılır (kaybolmasın), sonra gönderilir. Yeni kayıtlar bu
+   * cihazın anahtarıyla imzalanır; imzasız: true yalnız eski (imzasız) ilanın güncellemesi içindir.
+   */
+  async submit(raw: BoardDraft, o: { imzasiz?: boolean } = {}): Promise<{ ok: boolean; error?: string; queued?: boolean; reason?: string }> {
     const v = validateDraft(raw);
     if (!v.ok) return { ok: false, error: v.error };
-    this.outbox.add(v.item);
+    // İmza temizlenmiş metin üzerine atılır (sunucu da aynı temizliği yapar)
+    const item = v.item.pub || o.imzasiz ? v.item : ilanImzala(v.item);
+    this.outbox.add(item);
     this.recompute();
     if (this.state.meshOn) {
-      // Mesh kimliğe göre tekilleştirir: "bulundu" güncellemesi ayrı kimlikle gider (fromMesh geri çevirir)
-      const meshId = v.item.status === 'bulundu' ? v.item.id + FOUND_SUFFIX : v.item.id;
-      if (meshId.length <= 64)
-        mesh
-          .send({ id: meshId, kind: v.item.kind, from: v.item.from, text: toMeshText(v.item), time: Date.now(), lat: v.item.lat, lon: v.item.lon })
-          .catch(() => {});
+      // Mesh kimliğe göre tekilleştirir: durum güncellemeleri ayrı kimlikle gider (fromMesh geri çevirir)
+      for (const m of toMeshMessages(item)) mesh.send(m as MeshMessage).catch(() => {});
     }
     if (this.state.conn === 'connected') {
       const res = await this.outbox.flush((d) => this.postTo(this.state.base, d));
       this.recompute();
-      const rej = res.rejects.find((x) => x.id === v.item.id);
+      const rej = res.rejects.find((x) => x.id === item.id);
       if (rej) return { ok: false, error: rej.error || 'Bilgi noktası kaydı kabul etmedi' };
       if (res.left) {
-        const e = this.outbox.list().find((x) => x.draft.id === v.item.id);
+        const e = this.outbox.list().find((x) => x.draft.id === item.id);
         // hız sınırı / ağ hatası: kayıt kutuda, birazdan yeniden denenir
         this.refreshNow();
         return { ok: true, queued: true, reason: e?.lastError };
@@ -274,6 +284,80 @@ class BoardService {
     return { ok: true, queued: true };
   }
 
+  /** Bu cihaz bu kaydın sahibi mi (imzalı ve anahtar bizim)? */
+  isOwner(it: BoardDraft): boolean {
+    return !!it.pub && it.pub === benimAnahtarim();
+  }
+
+  /**
+   * Kayıp ilanının durumunu değiştirir. İmzalı ilanı yalnız onu veren cihaz değiştirebilir
+   * (imzalı güncelleme gider). Eski (imzasız) ilanda eski davranış: herkes "bulundu" diyebilir.
+   */
+  async setMissingStatus(it: BoardItem, st: MissingStatus) {
+    const { time, rev, viaMesh, pending, local, bpub, bsig, ...draft } = it;
+    if (it.pub) {
+      const upd = durumImzala(draft, st);
+      if (!upd) return { ok: false, error: 'Bu ilanın durumunu yalnızca ilanı veren telefon değiştirebilir.' };
+      return this.submit({ ...draft, status: st, upd });
+    }
+    if (st !== 'bulundu') return { ok: false, error: 'Bu ilan yeniden “aranıyor” yapılamaz.' };
+    return this.submit({ id: it.id, kind: 'kayip', from: it.from, text: it.text, status: 'bulundu' }, { imzasiz: true });
+  }
+
+  /** Mesh'ten gelen kaydı panoya katar */
+  private meshEkle(it: BoardItem) {
+    this.meshItems = mergeItems(this.meshItems, [it]).slice(0, 200);
+    this.cache.merge([it], this.cache.load().since, this.cache.load().server);
+    this.recompute();
+  }
+
+  private async meshAl(m: MeshMessage) {
+    const durum = meshDurum(m);
+    const it = fromMesh(m);
+    if (durum) {
+      const cur = this.state.items.find((x) => x.id === durum.id);
+      if (cur) {
+        // İmzalı ilanın durumunu yalnız aynı anahtarla imzalanmış, daha yeni bir güncelleme değiştirir
+        if (!cur.pub || cur.pub !== durum.pub || cur.pending) return;
+        if (cur.upd && durum.upd.ts <= cur.upd.ts) return;
+        const { pending, ...temel } = cur;
+        const yeni: BoardItem = { ...temel, status: durum.upd.st, upd: durum.upd, viaMesh: true, rev: Math.max(durum.upd.ts, cur.rev + 1) };
+        const d = await dogrulaAsync(yeni);
+        if (d.ilan !== 'gecerli' || d.durum !== 'gecerli') return;
+        this.meshEkle(yeni);
+        return;
+      }
+      // İlanı bilmiyoruz: metinsiz güncelleme tek başına işe yaramaz; metinli olan yeni kayıt olarak gelir
+      if (!it) return;
+    }
+    if (!it) return;
+    // Kendi (henüz gönderilmemiş) eski tip ilanımız başka telefonda bulundu olarak işaretlendi
+    const own = this.outbox.list().find((e) => e.draft.id === it.id);
+    if (own) {
+      if (!own.draft.pub && own.draft.kind === 'kayip' && own.draft.status === 'araniyor' && it.kind === 'kayip' && it.status === 'bulundu' && !it.pub) {
+        this.outbox.add({ ...own.draft, status: 'bulundu' });
+        this.recompute();
+      }
+      return;
+    }
+    const cur = this.state.items.find((x) => x.id === it.id && !x.pending);
+    if (cur) {
+      // İmzalı kaydı yalnız imzalı güncelleme değiştirir (yukarıda)
+      if (cur.pub || it.pub) return;
+      // Bilinen eski kayıt: yalnızca kayıp ilanının "bulundu" güncellemesi kabul edilir
+      if (!(cur.kind === 'kayip' && cur.status === 'araniyor' && it.status === 'bulundu')) return;
+      // Telefon saati geride olsa da güncelleme eski kopyanın önüne geçsin
+      it.time = cur.time;
+      it.rev = Math.max(it.rev, cur.rev + 1);
+    }
+    if (it.pub) {
+      // İmzası tutmayan mesh kaydı gösterilmez ve bilgi noktasına aktarılmaz
+      const d = await dogrulaAsync(it);
+      if (d.ilan !== 'gecerli' || d.durum === 'gecersiz') return;
+    }
+    this.meshEkle(it);
+  }
+
   private startMesh() {
     if (this.meshStarted) return;
     try {
@@ -282,30 +366,7 @@ class BoardService {
       return;
     }
     this.meshStarted = true;
-    this.meshOff = mesh.onMessage((m) => {
-      const it = fromMesh(m);
-      if (!it) return;
-      // Kendi (henüz gönderilmemiş) ilanımız başka telefonda bulundu olarak işaretlendi
-      const own = this.outbox.list().find((e) => e.draft.id === it.id);
-      if (own) {
-        if (own.draft.kind === 'kayip' && own.draft.status === 'araniyor' && it.kind === 'kayip' && it.status === 'bulundu') {
-          this.outbox.add({ ...own.draft, status: 'bulundu' });
-          this.recompute();
-        }
-        return;
-      }
-      const cur = this.state.items.find((x) => x.id === it.id && !x.pending);
-      if (cur) {
-        // Bilinen kayıt: yalnızca kayıp ilanının "bulundu" güncellemesi kabul edilir
-        if (!(cur.kind === 'kayip' && cur.status === 'araniyor' && it.status === 'bulundu')) return;
-        // Telefon saati geride olsa da güncelleme eski kopyanın önüne geçsin
-        it.time = cur.time;
-        it.rev = Math.max(it.rev, cur.rev + 1);
-      }
-      this.meshItems = mergeItems(this.meshItems, [it]).slice(0, 200);
-      this.cache.merge([it], this.cache.load().since, this.cache.load().server);
-      this.recompute();
-    });
+    this.meshOff = mesh.onMessage((m) => void this.meshAl(m).catch(() => {}));
     // Komşu sayısı değişince hemen göster (15 sn'lik yoklamayı beklemeden)
     mesh.onPeers((p) => this.state.meshOn && this.set({ meshPeers: p.length }));
     const name = loadProfile().name || 'Akıl Çantası';

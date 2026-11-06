@@ -97,7 +97,7 @@ Kapsam: `src/tabs/FenerTab.tsx`, `src/tabs/FenerModels.tsx`, `src/tabs/fener.css
   ara sıra yarıda kesiliyordu (konuşma kayboluyor). HMR'siz ayrı bir sunucuda koşun (aşağıda).
 - Kütüphane'den "Fener'e sor" ile gelen "Bağlam" etiketi tıklanamıyor: bağlamda makale yolu yok
   (`store.ts` `pendingQuestion.context` tipine `path` eklenmeli; kapsam dışı).
-- Konuşma yenilemede siliniyor (bilinçli). Android süreci arka planda öldürülürse de silinir; istenirse sessionStorage.
+- ~~Konuşma yenilemede siliniyor~~ → Öneriler 2026-11'de kalıcı yapıldı (aşağıda).
 
 ### E2E
     # HMR'siz ayrı dev sunucusu (başka ajanların düzenlemeleri sayfayı yenilemesin):
@@ -107,3 +107,33 @@ Kapsam: `src/tabs/FenerTab.tsx`, `src/tabs/FenerModels.tsx`, `src/tabs/fener.css
     node e2e/fener-check.mjs http://localhost:5431/ /tmp  # gerçek wllama + küçük test modeli
     node e2e/fener-voice-check.mjs http://localhost:5431/ /tmp
     node e2e/fener-yerel-check.mjs http://localhost:8099/ # derlenmiş uygulama
+
+## Öneriler 2026-11
+
+### Sohbet kalıcılığı (Android arka planda uygulamayı kapatınca)
+- Sohbet (mesajlar, kaynaklar, hayati durum kutusu, yazılmakta olan soru) `localStorage`'a
+  `ac.fener.sohbet` anahtarıyla, zaman damgasıyla yazılır (`src/lib/fener/sohbet-kayit.ts`).
+  - **Neden sessionStorage değil:** Android WebView sessionStorage'ı bellekte tutar; süreç
+    öldürülünce o da gider. Bu yüzden localStorage + süre sınırı.
+  - **Süre:** son kayıttan 12 saat sonra açılışta yok sayılır ve silinir (ertesi gün temiz sohbet).
+  - **Sınırlar:** en çok 40 mesaj, mesaj başına 8000 karakter, bağlam metni 4000, taslak 2000,
+    toplam 200 000 karakter (aşılırsa en eski soru-cevaplar atılır). Bozuk/başka sürüm kayıt yok sayılır,
+    her alan doğrulanır.
+  - **Ne zaman yazılır:** her değişiklikte en geç 1 sn içinde (akışta token başına değil) ve uygulama arka
+    plana geçerken hemen (`visibilitychange` / `pagehide`).
+- Yazılırken kapanan cevap geri yüklenince "Cevap yarım kaldı: uygulama arka plandayken kapandı." notu ve
+  **Yeniden sor** düğmesi çıkar; düğme yarım soru-cevabı çıkarıp soruyu aynı bağlamla (ve "kendi bilgisiyle"
+  sorulduysa yine öyle) yeniden gönderir. Yarım cevap modele geçmiş olarak verilmez.
+- **Yeni sohbet** kaydı hemen siler (giriş kutusundaki yazı kalır).
+- Testler: `tests/fener-sohbet-kayit.test.ts` (10), `e2e/fener-yerel-check.mjs` (yeniden açılışta geri gelme,
+  yazılırken "süreç ölümü" → yarım kaldı → Yeniden sor, Yeni sohbet, 12 saat).
+
+### GPU'yu yeniden dene
+- Yerel motor GPU (OpenCL) ile çökünce `gpuKapali` işareti konur ve sonraki açılışlarda yalnız işlemci kullanılır
+  (`AkilCantasiPlugin.fenerVar`). Artık model panelinde sakin bir not çıkar: "GPU bu cihazda daha önce sorun
+  çıkardığı için kapatıldı; Fener işlemciyle sorunsuz çalışıyor." + **GPU'yu yeniden dene**.
+- Düğme `fenerGpuSifirla` eklenti yöntemini çağırır (`engine.resetGpu` → `nativeFener.gpuSifirla`): işaretler silinir.
+  Bu süreçte motor yalnız işlemci kütüphaneleriyle başlatıldığı için (OpenCL hiç yüklenmedi) GPU çoğunlukla
+  **uygulama kapatılıp açılınca** denenir; not bunu söyler. GPU bu süreçte kullanılabiliyorsa işlemciyle yüklü model
+  boşaltılır ve sonraki yüklemede GPU denenir. Deneme yine çökerse `gpuKapali` kendiliğinden yeniden konur.
+- Test: `e2e/fener-yerel-check.mjs` (iki durum: yeniden açılış gerekir / hemen).

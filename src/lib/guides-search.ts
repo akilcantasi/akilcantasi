@@ -2,6 +2,7 @@
 // Ağır bir arama kütüphanesi kullanılmaz; rehber sayısı küçüktür.
 import { GUIDES, type Guide } from '../content/guides';
 import { getPackGuides, packGuidesVersion } from '../content/pack-guides';
+import { stripGuideLinks as plain } from '../content/guide-links';
 
 export type { Guide };
 
@@ -127,8 +128,9 @@ function getIndex(): Indexed[] {
     title: new Set(tokenize(g.title + ' ' + g.tag)),
     keywords: new Set(g.keywords.flatMap(tokenize)),
     keywordPhrases: g.keywords.map((k) => tokenize(k).join(' ')).filter(Boolean),
-    summary: new Set(tokenize(g.summary)),
-    body: new Set([...g.steps, ...(g.dont ?? [])].flatMap(tokenize)),
+    // Rehberler arası bağlantı işaretlemesi ([[kimlik|metin]]) dizine girmez, yalnız görünen metin
+    summary: new Set(tokenize(plain(g.summary))),
+    body: new Set([...g.steps, ...(g.dont ?? [])].map(plain).flatMap(tokenize)),
     titleNorm: normalizeTr(g.title),
   }));
   vocab = new Map();
@@ -236,16 +238,16 @@ export function getAllGuides(): Guide[] {
 export function guideToText(g: Guide): string {
   const lines: string[] = [];
   lines.push(`${g.title} [${g.tag}]`);
-  lines.push(g.summary);
-  if (g.note) lines.push('Uyarı: ' + g.note);
+  lines.push(plain(g.summary));
+  if (g.note) lines.push('Uyarı: ' + plain(g.note));
   if (g.callEmergency) lines.push("Mümkünse hemen 112'yi arayın.");
   lines.push('');
   lines.push('Adımlar:');
-  g.steps.forEach((s, i) => lines.push(`${i + 1}. ${s}`));
+  g.steps.forEach((s, i) => lines.push(`${i + 1}. ${plain(s)}`));
   if (g.dont?.length) {
     lines.push('');
     lines.push('Yapmayın:');
-    g.dont.forEach((d) => lines.push(`- ${d}`));
+    g.dont.forEach((d) => lines.push(`- ${plain(d)}`));
   }
   lines.push('');
   lines.push('Kaynaklar: ' + g.sources.join('; '));

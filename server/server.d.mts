@@ -19,9 +19,17 @@ export interface BoardItemIn {
   lat?: number;
   lon?: number;
   status?: string;
+  pub?: string;
+  sig?: string;
+  ts?: number;
+  upd?: { st: string; ts: number; sig: string };
 }
 export function cleanBoardText(s: unknown, max: number, multiline?: boolean): string;
 export function validateBoardItem(raw: unknown): { ok: true; item: BoardItemIn } | { ok: false; error: string };
+export function imzaDogrula(pub: string, msg: string, sig: string): boolean;
+export function ilanImzasiGecerli(it: BoardItemIn): boolean;
+export function durumImzasiGecerli(it: BoardItemIn, u: { st: string; ts: number; sig: string }): boolean;
+export const SAHIP_HATASI: string;
 
 export interface StartOptions {
   port?: number;

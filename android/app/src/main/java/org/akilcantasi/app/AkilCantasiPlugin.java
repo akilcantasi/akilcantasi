@@ -402,6 +402,26 @@ public class AkilCantasiPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /**
+     * "GPU'yu yeniden dene": çökme sonrası konan gpuKapali işaretini (ve yarım kalan deneme
+     * işaretlerini) siler. → { ok, yenidenBaslat }. Bu süreçte motor yalnız işlemci
+     * kütüphaneleriyle başlatıldıysa GPU ancak uygulama yeniden açılınca denenir
+     * (yenidenBaslat: true). Deneme yine çökerse gpuKapali kendiliğinden yeniden konur.
+     */
+    @PluginMethod
+    public void fenerGpuSifirla(PluginCall call) {
+        fenerIs.execute(() -> {
+            fenerPrefs().edit().putBoolean("gpuKapali", false).putBoolean("gpuDeneniyor", false).putBoolean("baslatiliyor", false).commit();
+            boolean gpuSurecte = fenerVar() && jsonObj(FenerMotoru.arkaUclar()).optBoolean("gpu", false);
+            // GPU bu süreçte kullanılabiliyorsa işlemciyle yüklü model boşaltılır: sonraki yükleme GPU'yu dener
+            if (gpuSurecte && fenerH != 0 && !fenerGpu) fenerBosaltSimdi();
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("yenidenBaslat", !gpuSurecte);
+            call.resolve(ret);
+        });
+    }
+
     private android.content.SharedPreferences fenerPrefs() {
         return getContext().getSharedPreferences("fener", Context.MODE_PRIVATE);
     }
@@ -425,7 +445,19 @@ public class AkilCantasiPlugin extends Plugin {
                 if (!PaketIndirici.isPackName(dosya)) throw new Exception("Geçersiz dosya adı");
                 File f = new File(PaketIndirici.packsDir(getContext()), dosya);
                 if (!f.exists()) throw new Exception("Model dosyası cihazda yok");
+                // Android 7–10'da paket klasörü başka uygulamalarca yazılabilir: kaydı olan parçalar
+                // (boyut, zaman, kısmi SHA-256) yerel motora verilmeden önce denetlenir. Kaydı
+                // olmayanlar (eski sürümde indirilmiş) açılır ve ilk başarılı açılışta kaydedilir.
+                PaketButunlugu butunluk = new PaketButunlugu(getContext().getFilesDir());
+                java.util.List<File> kayitsiz;
+                try {
+                    kayitsiz = butunluk.modelDenetle(f);
+                } catch (java.io.IOException e) {
+                    if (dosya.equals(fenerDosya)) fenerBosaltSimdi();
+                    throw e;
+                }
                 if (fenerH != 0 && dosya.equals(fenerDosya)) {
+                    butunluk.kayitsizlariKaydet(kayitsiz);
                     ret.put("ok", true);
                     ret.put("bilgi", jsonObj(fenerBilgi));
                     ret.put("gpu", fenerGpu);
@@ -455,12 +487,15 @@ public class AkilCantasiPlugin extends Plugin {
                 fenerGpu = gpu;
                 fenerGpuOnayli = false;
                 fenerBilgi = FenerMotoru.bilgi(h);
+                butunluk.kayitsizlariKaydet(kayitsiz);
                 ret.put("ok", true);
                 ret.put("bilgi", jsonObj(fenerBilgi));
                 ret.put("gpu", gpu);
             } catch (Throwable e) {
                 ret.put("ok", false);
                 ret.put("hata", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                // Değişmiş model WebView motoruyla da açılmasın (src/lib/fener/engine.ts)
+                if (PaketButunlugu.MODEL_DEGISMIS.equals(e.getMessage())) ret.put("degismis", true);
             }
             call.resolve(ret);
         });
@@ -867,6 +902,8 @@ public class AkilCantasiPlugin extends Plugin {
             o.put("size", f.length());
             arr.put(o);
         }
+        // Elle silinmiş dosyaların bütünlük kayıtları atılır: aynı adla yeniden konan dosya eski kayda takılmasın
+        try { new PaketButunlugu(getContext().getFilesDir()).temizle(PaketIndirici.packsDir(getContext())); } catch (Exception ignored) {}
         JSObject ret = new JSObject();
         ret.put("files", arr);
         call.resolve(ret);
@@ -877,6 +914,7 @@ public class AkilCantasiPlugin extends Plugin {
         String name = call.getString("file", "");
         boolean ok = false;
         if (PaketIndirici.isPackName(name)) ok = new File(PaketIndirici.packsDir(getContext()), name).delete();
+        if (ok) new PaketButunlugu(getContext().getFilesDir()).sil(name);
         JSObject ret = new JSObject();
         ret.put("ok", ok);
         call.resolve(ret);

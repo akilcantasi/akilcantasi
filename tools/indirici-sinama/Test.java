@@ -4,6 +4,7 @@ import java.net.InetSocketAddress;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
+import org.akilcantasi.app.PaketButunlugu;
 import org.akilcantasi.app.PaketIndirici;
 import org.akilcantasi.app.SinamaErisim;
 
@@ -17,6 +18,100 @@ public class Test {
     String js = d.jobsJson().toString(); int i = js.indexOf("\"file\":\"" + f + "\""); if (i < 0) return "none";
     int s = js.indexOf("\"status\":\"", i) + 10; return js.substring(s, js.indexOf('"', s));
   }
+  static void bayt(File f, long konum, int deger) throws IOException {
+    try (RandomAccessFile r = new RandomAccessFile(f, "rw")) { r.seek(konum); r.write(deger); }
+  }
+  static void butunluk(File root, File indirilen, String sha) throws Exception {
+    PaketButunlugu b = new PaketButunlugu(root);
+    File kayit = new File(root, "paket-butunlugu.properties");
+    check(kayit.isFile() && b.denetle(indirilen) == PaketButunlugu.Durum.TAMAM, "indirme bitince bütünlük kaydı iç depoda; dosya TAMAM");
+    check(new String(Files.readAllBytes(kayit.toPath())).contains(sha), "kayıtta doğrulanmış tam SHA-256 da var");
+    check(b.modelDenetle(indirilen).isEmpty(), "kayıtlı ve sağlam dosya: modelDenetle geçer, kayıtsız parça yok");
+
+    // Yalnız zaman değişti, tam özet biliniyor: tamamı yeniden özetlenir, tutar → kabul ve kayıt yenilenir
+    indirilen.setLastModified(indirilen.lastModified() - 60_000);
+    check(b.denetle(indirilen) == PaketButunlugu.Durum.TAMAM, "yalnız zaman farklı + tam özet tutuyor → TAMAM");
+    check(b.denetle(indirilen) == PaketButunlugu.Durum.TAMAM, "kayıt yeni zamanla güncellendi");
+
+    // Baştaki 4 MB içinde tek bayt değişti, zaman geri alındı → DEGISMIS
+    File m = new File(root, "packs/deneme-model.gguf");
+    Files.copy(indirilen.toPath(), m.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    b.kaydet(m, null);
+    long t = m.lastModified();
+    bayt(m, 1000, 7 ^ Files.readAllBytes(m.toPath())[1000]);
+    m.setLastModified(t);
+    check(b.denetle(m) == PaketButunlugu.Durum.DEGISMIS, "baştaki baytı değişen dosya (zaman geri alınmış) yakalanır");
+    boolean reddedildi = false;
+    try { b.modelDenetle(m); } catch (IOException e) { reddedildi = PaketButunlugu.MODEL_DEGISMIS.equals(e.getMessage()); }
+    check(reddedildi, "modelDenetle Türkçe iletiyle reddeder: " + PaketButunlugu.MODEL_DEGISMIS);
+
+    // Sondaki bayt değişti
+    Files.copy(indirilen.toPath(), m.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    b.kaydet(m, null);
+    t = m.lastModified();
+    bayt(m, m.length() - 1, 1 ^ Files.readAllBytes(m.toPath())[(int) m.length() - 1]);
+    m.setLastModified(t);
+    check(b.denetle(m) == PaketButunlugu.Durum.DEGISMIS, "sondaki baytı değişen dosya yakalanır");
+
+    // Boyut değişti (sonuna ekleme)
+    Files.copy(indirilen.toPath(), m.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    b.kaydet(m, null);
+    Files.write(m.toPath(), new byte[] {1, 2, 3}, StandardOpenOption.APPEND);
+    check(b.denetle(m) == PaketButunlugu.Durum.DEGISMIS, "boyutu değişen dosya yakalanır");
+
+    // Yalnız zaman değişti, tam özet bilinmiyor (elle konan model yeniden kopyalandı):
+    // boyut ve kısmi özet tutuyorsa kabul, kayıttaki zaman güncellenir
+    Files.copy(indirilen.toPath(), m.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    b.kaydet(m, null);
+    m.setLastModified(m.lastModified() - 120_000);
+    check(b.denetle(m) == PaketButunlugu.Durum.TAMAM, "tam özet yokken yalnız zamanı değişen aynı dosya kabul edilir");
+    check(b.denetle(m) == PaketButunlugu.Durum.TAMAM, "kayıttaki zaman güncellendi");
+    // ama ortası değil başı değişmişse yine yakalanır
+    bayt(m, 5, 77);
+    m.setLastModified(m.lastModified() - 60_000);
+    check(b.denetle(m) == PaketButunlugu.Durum.DEGISMIS, "tam özet yokken baştaki baytı değişen dosya yakalanır");
+
+    // Kaydı olmayan (eski sürümde indirilmiş) dosya: açılır, ilk başarılı açılışta kaydedilir
+    File eski = new File(root, "packs/eski-model.gguf");
+    Files.write(eski.toPath(), new byte[3 * 1024 * 1024]);
+    check(b.denetle(eski) == PaketButunlugu.Durum.KAYIT_YOK, "kaydı olmayan dosya KAYIT_YOK (eski paketler çalışmaya devam eder)");
+    List<File> kayitsiz = b.modelDenetle(eski);
+    check(kayitsiz.size() == 1, "modelDenetle kayıtsız dosyayı reddetmez, kaydedilecekler listesinde");
+    b.kayitsizlariKaydet(kayitsiz);
+    check(b.denetle(eski) == PaketButunlugu.Durum.TAMAM, "ilk açılıştan sonra kaydedildi");
+    bayt(eski, 10, 9);
+    eski.setLastModified(eski.lastModified());
+    check(b.denetle(eski) == PaketButunlugu.Durum.DEGISMIS, "küçük dosyada (8 MB altı) her bayt denetlenir");
+
+    // Bölünmüş GGUF: bütün parçalar denetlenir
+    File p1 = new File(root, "packs/buyuk-00001-of-00003.gguf");
+    File p2 = new File(root, "packs/buyuk-00002-of-00003.gguf");
+    File p3 = new File(root, "packs/buyuk-00003-of-00003.gguf");
+    for (File p : new File[] {p1, p2, p3}) Files.write(p.toPath(), ("parca " + p.getName()).getBytes());
+    check(PaketButunlugu.modelParcalari(p1).size() == 3 && PaketButunlugu.modelParcalari(m).size() == 1, "bölünmüş modelin parçaları bulunur");
+    b.kayitsizlariKaydet(b.modelDenetle(p1));
+    check(b.modelDenetle(p1).isEmpty(), "üç parça da kaydedildi");
+    long t3 = p3.lastModified();
+    Files.write(p3.toPath(), ("PARCA " + p3.getName()).getBytes());
+    p3.setLastModified(t3);
+    reddedildi = false;
+    try { b.modelDenetle(p1); } catch (IOException e) { reddedildi = true; }
+    check(reddedildi, "son parçası değişen bölünmüş model reddedilir");
+
+    // Silinen paketin kaydı atılır; aynı adla yeniden konan dosya eski kayda takılmaz
+    b.sil(m.getName());
+    check(b.denetle(m) == PaketButunlugu.Durum.KAYIT_YOK, "sil: kayıt atıldı");
+    b.kaydet(m, null);
+    m.delete();
+    b.temizle(new File(root, "packs"));
+    Files.write(m.toPath(), new byte[] {5});
+    check(b.denetle(m) == PaketButunlugu.Durum.KAYIT_YOK, "temizle: klasörde olmayan dosyanın kaydı atıldı");
+
+    // Bozuk kayıt dosyası uygulamayı durdurmaz (kayıtsız sayılır)
+    Files.write(kayit.toPath(), new byte[] {(byte) 0xff, '\\', 'u', 'z'});
+    check(b.denetle(indirilen) == PaketButunlugu.Durum.KAYIT_YOK, "bozuk kayıt dosyası: kayıtsız sayılır, hata yok");
+  }
+
   public static void main(String[] a) throws Exception {
     data = new byte[70 * 1024 * 1024]; new Random(1).nextBytes(data);
     String sha = hex(MessageDigest.getInstance("SHA-256").digest(data));
@@ -136,6 +231,9 @@ public class Test {
     try { d.start("yer2.zim", Collections.singletonList(base + "/f/yer2.zim"), data.length, null); } catch (IOException e) { yerYok = e.getMessage().startsWith("Yer yetersiz"); }
     check(yerYok, "boyut biliniyorsa hemen reddedilir");
     android.os.StatFs.bos = 10_000_000_000L;
+
+    // 6) Bütünlük kaydı (Android 7–10: paket klasörü başka uygulamalarca yazılabilir)
+    butunluk(root, out, sha);
 
     srv.stop(0);
     System.out.println("TÜMÜ OK");

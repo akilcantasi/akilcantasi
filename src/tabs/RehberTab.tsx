@@ -6,8 +6,9 @@ import { useAppState, go } from '../lib/store';
 import { GUIDES, type Guide } from '../content/guides';
 import { CATEGORIES, categoryOf, type GuideCategory } from '../content/categories';
 import { GUIDE_ART, guideArt, guideThumb } from '../content/guide-art';
-import { getPackCategories, isPackGuide, packCategoryOf, usePackGuides } from '../content/pack-guides';
-import { getGuide, searchGuides } from '../lib/guides-search';
+import { getPackCategories, isPackGuide, packCategoryOf, packGuidesVersion, usePackGuides } from '../content/pack-guides';
+import { getAllGuides, getGuide, searchGuides } from '../lib/guides-search';
+import { buildTitleIndex, guideTextFields, linkQuotedTitles, parseGuideLinks, stripGuideLinks, type GuideTextPart } from '../content/guide-links';
 import { Art } from '../art';
 import { IconChat, IconWarn } from '../icons';
 import { KendineYetmek } from './KendineYetmek';
@@ -107,6 +108,9 @@ const CSS = `
 .rh-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; }
 .rh-none { display: flex; flex-direction: column; gap: 10px; }
 .rh-none .empty { margin: 0; }
+/* rehberler arası bağlantı: metin içinde (WCAG 2.5.8 satır içi istisnası); ayrıca altta 44 px'lik "İlgili rehberler" listesi */
+.rh-link { color: var(--accent2); font-weight: 600; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; border-radius: 4px; overflow-wrap: anywhere; }
+.rh-link:hover, .rh-link:focus-visible { color: var(--accent); }
 `;
 
 /** Hayati durumlar için ana ekrandaki hızlı erişim */
@@ -128,7 +132,7 @@ function GuideRow({ g, onOpen }: { g: Guide; onOpen?: (id: string) => void }) {
       <span class="rh-row-body">
         {g.critical && <span class="rh-crit">HAYATİ</span>}
         <span class="rh-row-title">{g.title}</span>
-        <span class="rh-row-sum">{g.summary}</span>
+        <span class="rh-row-sum">{stripGuideLinks(g.summary)}</span>
       </span>
     </button>
   );
@@ -176,29 +180,100 @@ function CategoryView({ c }: { c: GuideCategory }) {
 }
 
 /** Rehberin nereden açıldığı: arama sonuçlarından ya da ana ekrandaki hayati durum kısayolundan */
-type Origin = { id: string; from: 'search' | 'home' } | null;
+type Origin = { id: string; from: 'search' | 'home' | 'guide'; ref?: string; prev?: Origin } | null;
 
-function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: GuideCategory | undefined; origin: Origin }) {
-  // Kategoriden açıldıysa o kategoriye, aramadan ya da kısayoldan açıldıysa ana ekrana döner
+// --- Rehberler arası bağlantılar ---------------------------------------------------------------
+let titleIx: { v: number; ix: Map<string, string> } | null = null;
+/** Başlık → kimlik dizini (yerleşik + paket rehberleri); paket değişince yenilenir */
+function titleIndex(): Map<string, string> {
+  const v = packGuidesVersion();
+  if (!titleIx || titleIx.v !== v) titleIx = { v, ix: buildTitleIndex(getAllGuides()) };
+  return titleIx.ix;
+}
+
+/** Metni parçalara ayırır: [[kimlik|metin]] ve tırnaklı rehber başlıkları bağlantı olur. */
+function guideParts(text: string, selfId: string): GuideTextPart[] {
+  // Hedefi olmayan (silinmiş, paket kurulu değil) bağlantı düz yazı kalır
+  const parts = parseGuideLinks(text).map((p) => (typeof p === 'string' || (p.id !== selfId && getGuide(p.id)) ? p : p.text));
+  return linkQuotedTitles(parts, titleIndex(), selfId);
+}
+
+function GuideText({ text, selfId, onLink }: { text: string; selfId: string; onLink: (id: string) => void }) {
+  return (
+    <>
+      {guideParts(text, selfId).map((p, i) =>
+        typeof p === 'string' ? (
+          p
+        ) : (
+          <a
+            key={i}
+            class="rh-link"
+            href={'?guide=' + encodeURIComponent(p.id)}
+            data-testid="guide-link"
+            data-guide-id={p.id}
+            onClick={(e) => {
+              e.preventDefault();
+              onLink(p.id);
+            }}
+          >
+            {p.text}
+          </a>
+        ),
+      )}
+    </>
+  );
+}
+
+/** Rehber metninde bağlantı verilen rehberler (sırayla, tekrarsız) */
+function linkedGuides(g: Guide): Guide[] {
+  const ids: string[] = [];
+  for (const t of guideTextFields(g)) for (const p of guideParts(t, g.id)) if (typeof p !== 'string' && !ids.includes(p.id)) ids.push(p.id);
+  return ids.map((id) => getGuide(id)).filter((x): x is Guide => !!x);
+}
+
+function GuideDetail({
+  g,
+  fromCategory,
+  origin,
+  onLink,
+  onBackToRef,
+}: {
+  g: Guide;
+  fromCategory: GuideCategory | undefined;
+  origin: Origin;
+  onLink: (id: string) => void;
+  onBackToRef: () => void;
+}) {
+  // Başka bir rehberdeki bağlantıdan açıldıysa o rehbere; kategoriden açıldıysa o kategoriye;
+  // aramadan ya da kısayoldan açıldıysa ana ekrana döner
+  const ref = origin?.from === 'guide' && origin.ref ? getGuide(origin.ref) : undefined;
   const back = fromCategory ?? (origin ? undefined : categoryOf(g.id) ?? packCategoryOf(g.id));
   const art = guideArt(g.id);
   const fromPack = isPackGuide(g.id);
+  const related = linkedGuides(g);
+  const T = (text: string) => <GuideText text={text} selfId={g.id} onLink={onLink} />;
   return (
     <article class="pad" aria-labelledby="rh-title" data-testid="guide-detail">
-      <button class="rh-back" data-testid="guide-back" onClick={() => go.category(back?.id ?? null)}>
-        ← {back ? back.title : origin?.from === 'search' ? 'Arama sonuçları' : 'Rehber'}
-      </button>
+      {ref ? (
+        <button class="rh-back" data-testid="guide-back" data-back-guide={ref.id} onClick={onBackToRef}>
+          ← {ref.title}
+        </button>
+      ) : (
+        <button class="rh-back" data-testid="guide-back" onClick={() => go.category(back?.id ?? null)}>
+          ← {back ? back.title : origin?.from === 'search' ? 'Arama sonuçları' : 'Rehber'}
+        </button>
+      )}
       <div class="row" style="gap:8px">
         <span class="rh-tag">{g.tag}</span>
         {g.critical && <span class="rh-crit">HAYATİ</span>}
       </div>
       <h1 class="rh-title" id="rh-title">{g.title}</h1>
-      <p class="rh-summary">{g.summary}</p>
+      <p class="rh-summary">{T(g.summary)}</p>
 
       {g.note && (
         <p class="rh-note" role="note" data-testid="guide-note">
           <IconWarn size={18} />
-          <span>{g.note}</span>
+          <span>{T(g.note)}</span>
         </p>
       )}
 
@@ -218,7 +293,7 @@ function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: Guid
               <span class="rh-num" aria-hidden="true">{i + 1}</span>
               <span class="rh-step-text">
                 <span class="sr-only">Adım {i + 1}: </span>
-                {s}
+                {T(s)}
               </span>
             </div>
           </li>
@@ -232,10 +307,23 @@ function GuideDetail({ g, fromCategory, origin }: { g: Guide; fromCategory: Guid
             {g.dont.map((d, i) => (
               <li key={i}>
                 <span class="rh-x" aria-hidden="true">✕</span>
-                <span>{d}</span>
+                <span>{T(d)}</span>
               </li>
             ))}
           </ul>
+        </>
+      )}
+
+      {related.length > 0 && (
+        <>
+          <h2 class="rh-h">İlgili rehberler</h2>
+          <div class="rh-list" role="list" data-testid="guide-related">
+            {related.map((r) => (
+              <div role="listitem" key={r.id}>
+                <GuideRow g={r} onOpen={onLink} />
+              </div>
+            ))}
+          </div>
         </>
       )}
 
@@ -309,8 +397,25 @@ export function RehberTab() {
 
   let body;
   if (open) {
-    const fromCategory = cat && cat.guides.includes(open.id) ? cat : undefined;
-    body = <GuideDetail g={open} fromCategory={fromCategory} origin={!fromCategory && origin?.id === open.id ? origin : null} />;
+    // Bağlantıdan açılan rehber, aynı kategoride olsa da geri düğmesiyle bağlantının olduğu rehbere döner
+    const viaLink = origin?.from === 'guide' && origin.id === open.id;
+    const fromCategory = !viaLink && cat && cat.guides.includes(open.id) ? cat : undefined;
+    const curOrigin = !fromCategory && origin?.id === open.id ? origin : null;
+    body = (
+      <GuideDetail
+        g={open}
+        fromCategory={fromCategory}
+        origin={curOrigin}
+        onLink={(id) => {
+          setOrigin({ id, from: 'guide', ref: open.id, prev: curOrigin });
+          go.guide(id);
+        }}
+        onBackToRef={() => {
+          setOrigin(curOrigin?.prev ?? null);
+          go.guide(curOrigin?.ref ?? null);
+        }}
+      />
+    );
   } else if (cat) {
     body = <CategoryView c={cat} />;
   } else {
@@ -399,13 +504,7 @@ export function RehberTab() {
           </div>
         )}
         {!results && (
-          <KendineYetmek installed={packCats.length > 0}>
-            <div class="rh-cats" role="group" aria-label="Kendine Yetmek rehber kategorileri">
-              {packCats.map((c) => (
-                <CategoryTile key={c.id} c={c} />
-              ))}
-            </div>
-          </KendineYetmek>
+          <KendineYetmek cats={packCats} tile={(c) => <CategoryTile key={c.id} c={c} />} />
         )}
         </div>
       </div>

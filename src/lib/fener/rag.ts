@@ -2,6 +2,8 @@
 // parçalarını bulur, numaralı KAYNAKLAR bloğu halinde isteme (prompt) ekler.
 // Model yoksa aynı arama sonucu fallback.ts tarafından doğrudan kullanılır.
 
+import { stripGuideLinks } from '../../content/guide-links';
+
 // --- Bağımlı modüllerin (rehber arama, kütüphane) beklenen şekli -------------
 export interface GuideLike {
   id: string;
@@ -340,11 +342,11 @@ function guideText(deps: RagDeps | undefined, g: GuideLike): string {
     } catch {}
   }
   const steps = (g.steps ?? []).map((s, i) => `${i + 1}. ${stepToText(s)}`).join('\n');
-  return [g.title, g.summary, steps].filter(Boolean).join('\n');
+  return [g.title, g.summary && stripGuideLinks(g.summary), steps].filter(Boolean).join('\n');
 }
 
 export function stepToText(s: unknown): string {
-  if (typeof s === 'string') return s;
+  if (typeof s === 'string') return stripGuideLinks(s);
   if (s && typeof s === 'object') {
     const o = s as Record<string, unknown>;
     const parts = [o.title, o.text, o.body, o.detail].filter((x) => typeof x === 'string') as string[];

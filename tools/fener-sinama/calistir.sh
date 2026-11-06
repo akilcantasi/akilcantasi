@@ -12,5 +12,5 @@ cmake -G Ninja -S ../../android/app/src/main/cpp -B "$B" -DLLAMA_DIR="$LLAMA" -D
   -DBUILD_SHARED_LIBS=ON -DCMAKE_CXX_FLAGS="-I$JH/include -I$JH/include/linux" >/dev/null
 ninja -C "$B" fener >/dev/null
 OUT=$(mktemp -d)
-javac -d "$OUT" ../../android/app/src/main/java/org/akilcantasi/app/FenerMotoru.java Test.java
+javac -d "$OUT" ../../android/app/src/main/java/org/akilcantasi/app/FenerMotoru.java ../../android/app/src/main/java/org/akilcantasi/app/PaketButunlugu.java Test.java
 LD_LIBRARY_PATH="$B:$B/bin" java -Dstdout.encoding=UTF-8 -Djava.library.path="$B" -Darkauc="$B/bin" -cp "$OUT" Test "$MODEL"

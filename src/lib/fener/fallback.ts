@@ -36,7 +36,7 @@ export function fallbackAnswer(r: Retrieval, reason: FallbackReason = 'no-model'
     n++;
     sources.push({ n, kind: 'rehber', id: top.id, title: top.title });
     const lines: string[] = [top.title.toLocaleUpperCase('tr-TR')];
-    if (top.summary) lines.push(top.summary.trim());
+    if (top.summary) lines.push(stepToText(top.summary).trim());
     const steps = (top.steps ?? []).slice(0, MAX_STEPS).map(stepToText).filter(Boolean);
     if (steps.length) {
       lines.push('');

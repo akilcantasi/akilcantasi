@@ -90,3 +90,28 @@ node e2e/qa-iletisim.mjs            # "Denetim 2026-11" bölümü eklendi
 node e2e/hizli-sms-check.mjs ; node e2e/sms-kutusu-check.mjs ; node e2e/iletisim-check.mjs
 node e2e/mesh-check.mjs ; node e2e/native-infopoint-check.mjs ; node e2e/konum-arama-check.mjs
 ```
+
+## Öneriler turu 2026-11: imzalı kayıtlar ve kayıp ilanı sahipliği
+
+### Ne değişti
+- **Cihaz kimliği.** Her cihaz bir kez Ed25519 anahtar çifti üretir (`src/iletisim/imza.ts`, `ac.comm.kimlik`). Yeni pano kayıtları `pub`, `sig`, `ts` alanlarıyla imzalanır. Kanonik biçim tek dosyada: `server/imza-kanonik.mjs` (istemci ve sunucu ortak).
+- **Kayıp ilanı sahipliği.** "Bulundu" ve yeniden "aranıyor" ayrı, imzalı bir güncellemedir (`upd: {st, ts, sig}`), ilanı veren cihazın anahtarıyla. "Bulundu olarak işaretle" ve "Yeniden “aranıyor” yap" düğmeleri yalnız ilan sahibinde görünür; diğerleri "Durumunu yalnızca ilanı veren telefon (ad) değiştirebilir" notunu görür.
+- **Node bilgi noktası** imzasız ya da yanlış imzalı durum değişikliğini 403 ve Türkçe hatayla reddeder; bozuk imzalı yeni kaydı da reddeder. Eski (imzasız) ilanlarda eski davranış sürer: herkes "bulundu" diyebilir.
+- **Android bilgi noktası** (InfoPointServer.java) Ed25519'u platformdan kullanır (Android 13 / API 33+); yoksa güncellemeyi biçim ve zaman denetimiyle saklayıp aktarır (gelecekteki zaman ≤ 24 sa). Her durumda istemci doğrular: tutmayan güncelleme yok sayılır, ilan "Aranıyor" kalır ve "doğrulanamadı" yazar. Java ilanın kendi imzasını doğrulamaz (kanonik JSON'u birebir kurmak gerekirdi); bunu istemciler yapar.
+- **Arayüz.** Geçerli imza: küçük, sakin "✓ doğrulandı". İmzası tutmayan: kehribar "doğrulanamadı" ve açıklama (kırmızı değil). İmzasız eski kayıt: değişiklik yok.
+- **Bilgi noktası imzası.** Node bilgi noktası kendi anahtarını `data/.bilgi-noktasi-anahtari.json` dosyasında tutar (gizli dosya, `/data/` altından sunulmaz), `local` kayıtları `bpub`/`bsig` ile imzalar ve `/api/status` yanıtında `pub` verir. İstemci anahtarı adres başına ilk görüşte sabitler (TOFU, `ac.comm.bnpin`); imza tutar ve anahtar sabitse "bu bilgi noktasından" etiketi çıkar. Anahtar değişirse etiket yerine "doğrulanamadı" ve bağlantı kartında uyarı; Bağlan ekranında "Yeni anahtarı kabul et".
+- **Mesh.** İmza alanları mesh çerçevelerinde taşınır (docs/MESH.md › İmzalı kayıtlar).
+- **Geriye uyum.** İmzasız board.json, önbellek ve giden kutusu kayıtları aynen yüklenir ve gösterilir.
+
+### Doğrulama
+- `npx vitest run tests/imza.test.ts tests/server.test.ts tests/mesh.test.ts tests/iletisim.test.ts`
+- `sh tools/pano-sinama/calistir.sh` (Java pano kuralları; Node'da üretilen imzanın Java'da doğrulanması; Ed25519 yokken sakla-ve-aktar)
+- `node e2e/iletisim-check.mjs` (sahibi "bulundu" yapar; ikinci bağlamda düğme yok, sahte POST 403; bilgi noktası anahtarı sabitleme ve değişim uyarısı)
+- `node e2e/qa-iletisim.mjs http://localhost:5199/` (sahibi bulundu → aranıyor → bulundu; mesh'te imzalı güncelleme ve sahte güncellemenin yok sayılması; mesh köprüsü)
+
+### Bilinen sınırlamalar
+- Anahtar telefonda saklanır; uygulama verisi silinirse eski ilanların durumu değiştirilemez (yeni ilan verilebilir).
+- Kimlik kapma: bir ilanın kimliği, aslı bir bilgi noktasına ulaşmadan başka anahtarla oraya gönderilirse o bilgi noktasında ilk gelen kazanır. İstemci bir kaydın anahtarını ilk gördüğü haliyle tutar.
+- Eski sürümlü bir telefondan (mesh) geçen kayıt imzasını kaybeder ve "imzasız" görünür.
+- Android 13 öncesi bilgi noktasında sahte durum güncellemesi sunucuda saklanabilir; istemciler yok sayar ve ilanı "Aranıyor" gösterir.
+- Android bilgi noktası kendi duyurularını imzalamaz (eski "bilgi noktasından" etiketi sürer).

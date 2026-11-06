@@ -4,6 +4,9 @@
 //   • Durdur, üretim başlamadan önce bile kaybolmaz (kimlikli fenerDurdur)
 //   • yerel motor açamazsa ve model WebView'a sığmıyorsa Türkçe hata (WebAssembly denenmez)
 //   • 12 GB RAM bildiren telefonda büyük model "Bu cihaza uygun"
+//   • GPU çökme sonrası kapalıysa model panelinde sakin not ve "GPU'yu yeniden dene" (fenerGpuSifirla)
+//   • sohbet uygulama yeniden açılınca (Android süreci kapattı) geri gelir; yazılırken kalan
+//     cevap "yarım kaldı" ve "Yeniden sor" ile döner; taslak soru korunur; "Yeni sohbet" kaydı siler
 //   node e2e/fener-yerel-check.mjs [taban-url]
 import { createRequire } from 'module';
 import assert from 'assert/strict';
@@ -20,7 +23,7 @@ async function step(name, fn) {
 
 /** Sahte köprü: model dosyaları, yerel motor ve olaylar */
 function fake(opts) {
-  return ({ files, yukleOk, ram }) => {
+  return ({ files, yukleOk, ram, gpuKapali, yenidenBaslat }) => {
     window.__calls = [];
     window.__wasm = 0;
     const subs = {};
@@ -31,7 +34,8 @@ function fake(opts) {
       async addListener(ev, fn) { (subs[ev] ||= []).push(fn); return { remove() { subs[ev] = subs[ev].filter((x) => x !== fn); } }; },
       async paketDurumu() { return { jobs: [], free: 50e9 }; },
       async paketListesi() { return { files }; },
-      async fenerDurumu() { return { var: true, ram: ram, cores: 8, threads: 6, yuklu: null, arkaUclar: { gpu: true, devices: 'CPU,GPUOpenCL' } }; },
+      async fenerDurumu() { return { var: true, ram: ram, cores: 8, threads: 6, yuklu: null, arkaUclar: { gpu: !gpuKapali, devices: 'CPU,GPUOpenCL' }, gpuKapali: !!gpuKapali }; },
+      async fenerGpuSifirla() { window.__calls.push(['gpuSifirla']); gpuKapali = false; return { ok: true, yenidenBaslat: !!yenidenBaslat }; },
       async fenerYukle(a) { window.__calls.push(['yukle', a.dosya, a.nCtx, a.gpu]); return yukleOk ? { ok: true, gpu: true, bilgi: { threads: 6 } } : { ok: false, hata: 'Model belleğe sığmadı (bağlam oluşturulamadı)' }; },
       async fenerSohbet(a) {
         window.__calls.push(['sohbet', a.messages.length]);
@@ -120,6 +124,100 @@ const BIG = 'Qwen3.5-9B-Q4_K_M.gguf';
     assert.ok(!/\/data\//.test(text), 'iç dosya yolu gösterildi');
     assert.equal(await page.evaluate(() => window.__wasm), 0);
   });
+  await page.close();
+}
+for (const yenidenBaslat of [true, false]) {
+  const { page, errors } = await open({ files: [{ name: BIG, size: 5680522464 }], yukleOk: true, ram: 12.5e9, gpuKapali: true, yenidenBaslat });
+  await step(`GPU kapalıysa panelde not ve "GPU'yu yeniden dene" (yenidenBaslat=${yenidenBaslat})`, async () => {
+    await page.waitForSelector(`${tid('fener-status')}[data-mode="model"]`, { timeout: 15000 });
+    await page.click(tid('fener-model-btn'));
+    await page.waitForSelector(tid('fener-gpu-note'));
+    assert.match(await page.textContent(tid('fener-gpu-note')), /sorun çıkardığı için kapatıldı/);
+    assert.doesNotMatch(await page.textContent(tid('fener-native')), /GPU var/);
+    const box = await page.$eval(tid('fener-gpu-retry'), (e) => e.getBoundingClientRect().height);
+    assert.ok(box >= 44, 'düğme 44px altında: ' + box);
+    const color = await page.$eval(tid('fener-gpu-note'), (e) => getComputedStyle(e).color);
+    assert.ok(!/rgb\(2[0-9]{2}, [0-9]{1,2}, [0-9]{1,2}\)/.test(color), 'kırmızı not: ' + color);
+    await page.screenshot({ path: '/tmp/fener-gpu-not.png' });
+    await page.click(tid('fener-gpu-retry'));
+    await page.waitForSelector(`${tid('fener-gpu-note')}[data-state="${yenidenBaslat ? 'yeniden-ac' : 'hemen'}"]`);
+    assert.match(await page.textContent(tid('fener-gpu-note')), yenidenBaslat ? /kapatıp yeniden açınca GPU denenecek/ : /bir sonraki yüklenişinde GPU denenecek/);
+    assert.ok((await page.evaluate(() => window.__calls)).some((c) => c[0] === 'gpuSifirla'));
+    await page.screenshot({ path: '/tmp/fener-gpu-sonra.png' });
+    await page.click(tid('fener-model-close'));
+    // Panel yeniden açılınca not kalmaz (gpuKapali artık false)
+    await page.click(tid('fener-model-btn'));
+    await page.waitForSelector(tid('fener-native'));
+    assert.equal(await page.$(tid('fener-gpu-note')), null);
+    await page.click(tid('fener-model-close'));
+  });
+  await step('GPU notu varken konsol hatası yok', async () => assert.deepEqual(errors, []));
+  await page.close();
+}
+{
+  // Android'in süreci kapatması: sayfa yeniden yüklenir, localStorage kalır
+  const { page, errors } = await open({ files: [{ name: BIG, size: 5680522464 }], yukleOk: true, ram: 12.5e9 });
+  const bots = () => page.$$eval(tid('fener-msg-bot'), (e) => e.map((x) => ({ phase: x.dataset.phase, text: x.querySelector('[data-testid="fener-text"]')?.textContent ?? '', yarim: !!x.querySelector('[data-testid="fener-interrupted"]'), src: x.querySelectorAll('[data-testid="fener-source"]').length })));
+  await step('tamamlanmış sohbet ve taslak yeniden açılışta geri gelir', async () => {
+    await page.waitForSelector(`${tid('fener-status')}[data-mode="model"]`, { timeout: 15000 });
+    await page.fill(tid('fener-input'), 'Kanama nasıl durdurulur?');
+    await page.press(tid('fener-input'), 'Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="fener-msg-bot"]')].pop()?.dataset.phase === 'done', null, { timeout: 30000 });
+    const once = await bots();
+    await page.fill(tid('fener-input'), 'Yarım kalan taslak');
+    // Arka plana geçiş: kayıt hemen yazılır
+    await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(tid('fener-msg-bot'));
+    const sonra = await bots();
+    assert.equal(sonra.length, 1);
+    assert.equal(sonra[0].text, once[0].text);
+    assert.equal(sonra[0].src, once[0].src);
+    assert.ok(sonra[0].src > 0, 'kaynak yok');
+    assert.equal(sonra[0].yarim, false);
+    assert.equal(await page.inputValue(tid('fener-input')), 'Yarım kalan taslak');
+    assert.equal((await page.$$(tid('fener-msg-user'))).length, 1);
+  });
+  await step('yazılırken kapanan cevap "yarım kaldı" + Yeniden sor', async () => {
+    await page.fill(tid('fener-input'), '');
+    await page.evaluate(() => (window.__slow = true));
+    await page.fill(tid('fener-input'), 'Yaralıyı nasıl taşırım?');
+    await page.press(tid('fener-input'), 'Enter');
+    await page.waitForFunction(() => { const b = [...document.querySelectorAll('[data-testid="fener-msg-bot"]')].pop(); return b?.dataset.phase === 'write' && (b.querySelector('[data-testid="fener-text"]')?.textContent.length ?? 0) > 0; }, null, { timeout: 15000 });
+    // Kayıt en geç 1 sn'de bir: bekle, sonra "süreç ölür"
+    await page.waitForTimeout(1300);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(tid('fener-interrupted'));
+    const b = await bots();
+    assert.equal(b.length, 2);
+    assert.ok(b[1].yarim && b[1].phase === 'done' && b[1].text.length > 0, JSON.stringify(b[1]));
+    assert.match(await page.textContent(tid('fener-interrupted')), /Cevap yarım kaldı/);
+    assert.equal(await page.$(tid('fener-stop')), null);
+    await page.screenshot({ path: '/tmp/fener-yarim.png' });
+    await page.evaluate(() => (window.__slow = false));
+    await page.click(tid('fener-retry'));
+    await page.waitForFunction(() => { const b = [...document.querySelectorAll('[data-testid="fener-msg-bot"]')]; return b.length === 2 && b[1].dataset.phase === 'done' && !b[1].querySelector('[data-testid="fener-interrupted"]'); }, null, { timeout: 30000 });
+    const users = await page.$$eval(tid('fener-msg-user'), (e) => e.map((x) => x.textContent));
+    assert.deepEqual(users, ['Kanama nasıl durdurulur?', 'Yaralıyı nasıl taşırım?']);
+    assert.match((await bots())[1].text, /temiz bir bezle/);
+  });
+  await step('Yeni sohbet kaydı siler; yeniden açılışta boş', async () => {
+    await page.click(tid('fener-new'));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => localStorage.getItem('ac.fener.sohbet')), null);
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(tid('fener-suggest'));
+    assert.equal((await page.$$(tid('fener-msg-bot'))).length, 0);
+  });
+  await step('12 saatten eski kayıt yüklenmez', async () => {
+    await page.evaluate(() => localStorage.setItem('ac.fener.sohbet', JSON.stringify({ v: 1, t: Date.now() - 13 * 3600e3, input: 'eski', msgs: [{ id: 1, role: 'user', text: 'Eski soru' }] })));
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector(tid('fener-suggest'));
+    assert.equal((await page.$$(tid('fener-msg-user'))).length, 0);
+    assert.equal(await page.inputValue(tid('fener-input')), '');
+    assert.equal(await page.evaluate(() => localStorage.getItem('ac.fener.sohbet')), null);
+  });
+  await step('kalıcılıkta konsol hatası yok', async () => assert.deepEqual(errors, []));
   await page.close();
 }
 await browser.close();

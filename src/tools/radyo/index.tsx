@@ -2,7 +2,7 @@
 // Kaynaklar: TRT Radyo frekans sayfaları (radyo.trt.net.tr/frekanslar), AFAD eğitmeninin pilli radyo
 // ve yedek pil önerisi (karar.com, "AFAD eğitmeni deprem çantasında pilli radyonun önemine dikkat çekti").
 import { useState } from 'preact/hooks';
-import { CITY_FREQS, FREQ_SOURCE, fmt } from './frekanslar';
+import { CITY_FREQS, CITY_FREQS_SORTED, FREQ_SOURCE, fmt, isUnverified } from './frekanslar';
 
 const CSS = `
 .rd-hero { background: linear-gradient(135deg, rgba(245,165,36,0.16), rgba(245,165,36,0.04)); border: 1px solid rgba(245,165,36,0.4); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -23,6 +23,8 @@ const CSS = `
 .rd-table tr.hl td { color: var(--accent); }
 .rd-table tr.hl td:last-child { color: var(--accent); }
 .rd-src { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.rd-table td.rd-na { font-family: inherit; font-weight: 400; color: var(--muted); white-space: normal; font-size: 14px; }
+.rd-note { margin: 0; border-left: 3px solid var(--accent); background: var(--bg2); border-radius: 8px; padding: 8px 10px; font-size: 14px; line-height: 1.45; color: var(--text); }
 `;
 
 function Sec({ id, title, open, onToggle, children }: { id: string; title: string; open: boolean; onToggle: () => void; children: any }) {
@@ -79,7 +81,7 @@ function FreqTable() {
           }
         }}
       >
-        {CITY_FREQS.map((x) => (
+        {CITY_FREQS_SORTED.map((x) => (
           <option key={x.id} value={x.id}>
             {x.city}
           </option>
@@ -88,18 +90,34 @@ function FreqTable() {
       <table class="rd-table" data-testid="rd-freq-table">
         <tbody>
           {rows
-            .filter(([, f]) => f && f.length)
-            .map(([n, f, hl]) => (
-              <tr key={n} class={hl ? 'hl' : ''}>
-                <td>{n}</td>
-                <td data-testid={'rd-f-' + n.replace(/\s+/g, '-').toLowerCase()}>{fmt(f)} FM</td>
-              </tr>
-            ))}
+            // Radyo 1 ve Radyo Haber satırı her zaman görünür (kayıt yoksa "doğrulanmadı" yazar).
+            .filter(([, f, hl]) => hl || (f && f.length))
+            .map(([n, f, hl]) => {
+              const tid = 'rd-f-' + n.replace(/\s+/g, '-').toLowerCase();
+              const has = !!(f && f.length);
+              return (
+                <tr key={n} class={hl && has ? 'hl' : ''}>
+                  <td>{n}</td>
+                  {has ? (
+                    <td data-testid={tid}>{fmt(f)} FM</td>
+                  ) : (
+                    <td data-testid={tid} class="rd-na" data-na="1">
+                      doğrulanmadı · tarama yapın
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
         </tbody>
       </table>
+      {c.note && (
+        <p class="rd-note" data-testid="rd-note">
+          {c.note}
+        </p>
+      )}
       <p class="rd-src">
-        {c.city} / {c.district} vericileri. İlçenizde frekans farklı olabilir; duyamazsanız tarama yapın. Listede olmayan iller için
-        “Nasıl ayar yapılır” bölümüne bakın.
+        {isUnverified(c) ? c.city + ' için kayıtlı verici yok.' : c.city + ' / ' + c.district + ' vericileri.'} İlçenizde frekans farklı
+        olabilir; duyamazsanız tarama yapın (“Nasıl ayar yapılır” bölümü).
       </p>
       <p class="rd-src" data-testid="rd-source">
         Kaynak: {FREQ_SOURCE}.
@@ -238,7 +256,7 @@ export default function Radyo() {
         </ul>
       </Sec>
 
-      <Sec id="frekans" title="TRT frekansları (il merkezleri)" open={open === 'frekans'} onToggle={t('frekans')}>
+      <Sec id="frekans" title="TRT frekansları (81 il)" open={open === 'frekans'} onToggle={t('frekans')}>
         <FreqTable />
       </Sec>
     </div>

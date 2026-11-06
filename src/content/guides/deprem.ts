@@ -229,7 +229,7 @@ export const GUIDES: Guide[] = [
       "Tek başınıza çalışmayın; yanınızda mutlaka biri olsun.",
       "Kolon, kiriş ya da taşıyıcı duvar kesmeyin, yerinden oynatmayın.",
       "Enkaz üzerinde ateş yakmayın, sigara içmeyin.",
-      "Uzun süre sıkışmış birini aceleyle çekip çıkarmayın; \"Ezilme yaralanması\" rehberine bakın."
+      "Uzun süre sıkışmış birini aceleyle çekip çıkarmayın; [[ezilme-yaralanmasi|\"Ezilme yaralanması\" rehberine]] bakın."
     ],
     "callEmergency": true,
     "keywords": [
