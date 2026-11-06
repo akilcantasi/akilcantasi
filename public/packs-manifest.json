@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updated": "2026-11-02",
+  "updated": "2026-11-06",
   "note": "Boyutlar yaklaşık (sizeApprox). sha256 boş ise indirme sonrası doğrulama yapılmaz. Kiwix dosya adlarındaki _2026-10 tarihi yayın öncesi güncel sürümle değiştirilmelidir. Fener modelleri: 2 GB'ı aşan modeller llama-gguf-split ile parçalara bölünür; parçalar aynı 'group' değerini taşır ve hepsi kurulunca tek model olarak kullanılır. 'ses' paketleri Whisper ONNX dosyalarını içeren tek bir tar dosyasıdır; içerik ve kaynak adresleri 'contents' alanındadır. Ayrıntı: docs/FENER_MODELLER.md",
   "packs": [
     {
@@ -1132,9 +1132,9 @@
       "name": "Türkiye haritası — genel (z0–10)",
       "desc": "İl, ilçe ve ana yollar. Mahalle ve sokak ayrıntısı yok.",
       "file": "turkiye-genel-z10.pmtiles",
-      "size": 45908301,
+      "size": 45933805,
       "sizeApprox": false,
-      "sha256": "c9d1a7280d3128375c80c6935802653c8324eadd79ea3c21b7d59b692e34dee8",
+      "sha256": "91ff55a4a7b683c5238fee55d749e900649e7fa36f056b860f99f664723c5ba6",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye-genel-z10.pmtiles"
@@ -1148,9 +1148,9 @@
       "name": "Türkiye haritası — sokak ayrıntılı (z0–14)",
       "desc": "Sokaklar, binalar ve yürüme yolları dahil tüm Türkiye (z0–14).",
       "file": "turkiye.pmtiles",
-      "size": 727906062,
+      "size": 728457041,
       "sizeApprox": false,
-      "sha256": "7e817344c11791d3c526af40ec8c6a6cd19f519c47fb122da955e41efa33da93",
+      "sha256": "d111509863bfa79e7be1403cf4b6bf41b58b270dc58979ce7eeaf6f6d48852ea",
       "tier": "standart",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/harita/turkiye.pmtiles"
@@ -1164,9 +1164,9 @@
       "name": "Afet noktaları — Türkiye",
       "desc": "Toplanma alanları, hastane ve sağlık ocakları, eczaneler, içme suyu noktaları ve barınaklar. Hazır paket olarak hızlıca iner; gerekirse cihazda OpenStreetMap'ten yeniden oluşturulur.",
       "file": "turkiye-afet-noktalari.geojson",
-      "size": 10338974,
+      "size": 10390348,
       "sizeApprox": false,
-      "sha256": "cac6f268f8b0155654368c34c39e9c4f8cabdfd7b0f48ca636ff60843e5f69fb",
+      "sha256": "d41f9cb6a07f17edab1f2ae06b03f6bcd65e01f4903c6d59dbdb1926b2835ce3",
       "tier": "temel",
       "urls": [
         "https://huggingface.co/datasets/akilcantasi/paketler/resolve/main/noktalar/turkiye-afet-noktalari.geojson",
@@ -1182,7 +1182,7 @@
       "name": "Hava ve iklim — Türkiye (81 il)",
       "desc": "Her il için ay ay iklim normalleri (sıcaklık, don, yağış) ve önümüzdeki 6–7 ayın mevsimsel eğilimi: normalden sıcak mı soğuk mu, yağışlı mı kurak mı. Gün gün hava durumu değildir. Her ay yenilenir.",
       "file": "hava-iklim-tr.json",
-      "size": 57443,
+      "size": 57489,
       "sizeApprox": false,
       "tier": "temel",
       "urls": [
@@ -1191,7 +1191,7 @@
       "license": "CC BY 4.0 (ECMWF SEAS5, Open-Meteo.com) · NASA POWER",
       "source": "ECMWF SEAS5 mevsimsel tahmin (Open-Meteo üzerinden), NASA POWER iklim verisi",
       "howto": "Aylık GitHub işinde tools/hava/hava-paketi.mjs ile üretilir (her ayın 6'sı; SEAS5 ayın 5'inde yenilenir).",
-      "sha256": "3a91f616429963abf84dce424129503284fa7c20befe43f664c43cbcfbf1accc"
+      "sha256": "9c2e7f18ba11720de47c67d8384e2c24aeae2b74376bb292c77e8154f8c89104"
     },
     {
       "id": "kendine-yetmek",
