@@ -1,409 +1,460 @@
-// Kütüphane sekmesindeki kitaplık bölümü (harman tasarım):
-//  • Durum kartı: Temel setin yüzdesi, yüklü paket sayısı/boyutu, güncellemeler; "Yönet" ile yüklüler
-//  • Hızlı seçim: Önerilenler / Yerimi doldur / Temizle
-//  • Paket setleri: her setin ilerlemesi ve (yüklüler düşülmüş) kalan boyutu; dokununca seçilir
-//  • Alt çubuk: seçilenlerin toplamı ve "İndir"; inerken toplu ilerleme, hız ve "Duraklat"
-//  • Tek tek seçmek isteyene raflara ayrılmış tüm koleksiyon
-//  • Rehber paketleri ("Kendine Yetmek": indir, dosyadan içe aktar, sil)
-// Paket satırları Araçlar → Paketler ile aynıdır (src/lib/packs-ui.tsx).
-import { useMemo, useRef, useState } from 'preact/hooks';
-import { importRehberPack, packInfoForFile, usePackGuides } from '../content/pack-guides';
-import { SHELVES, SHELF_LABEL, SHELF_SHORT, type Shelf } from '../lib/manifest';
-import { PackRow, UpdateBanner, usePackRows, type RowModel } from '../lib/packs-ui';
-import { canSaveToDevice, isActive, pauseDownload } from '../lib/downloader';
-import { formatSize } from '../lib/packs';
+// Kütüphane → İçerik indir (mağaza): ihtiyaca göre düzenlenmiş katalog.
+//  • Boş yer çubuğu ve süren indirmeler (duraklat / devam / iptal)
+//  • Önerilen başlangıç seti (tek düğme)
+//  • Mağazada ara + bölümler: Sağlık ve ilk yardım, Genel bilgi, Su ve yemek, Afet ve hayatta kalma,
+//    Kendin yap ve onarım, Kitaplar, Sözlük ve dil (her bölüm ilk 3 + "Tümünü göster")
+//  • Her öğe: ad, açıklama, boyut + telefona sığma ipucu, dil; tek düğme (İndir → ilerleme → Oku).
+//    Dosya adı, kaynak, lisans, indirme adresi sayısı "Ayrıntılar"da.
+//  • Hazır setler ve "Boş yerime göre seç", Kendine Yetmek rehberleri, dosyadan ekleme
+import { useMemo, useState } from 'preact/hooks';
+import { usePackGuides, packInfoForFile } from '../content/pack-guides';
+import { TIER_LABEL } from '../lib/manifest';
+import { pct, startRow, startUpdate, type RowModel } from '../lib/packs-ui';
+import { canSaveToDevice, cancelDownload, isActive, pauseDownload, type DlState } from '../lib/downloader';
 import { go } from '../lib/store';
-import { hazir, kuyruk, setDurumu, setleriAl, sigdir, toplam } from '../lib/setler';
-import { hepsiniDuraklat, kuyrugaEkle, useKuyruk } from '../lib/indirme-kuyrugu';
+import { foldCharwise } from '../lib/zim';
+import { hazir, sigdir, toplam } from '../lib/setler';
+import { kuyrugaEkle, useKuyruk } from '../lib/indirme-kuyrugu';
+import { setEkran, type useKoleksiyonlar } from './kutuphane/durum';
+import { BaslangicKarti } from './kutuphane/BaslangicKarti';
+import { DosyadanEkle } from './kutuphane/Ekle';
+import { IndirmeListesi, adOf, useIndirmeler } from './kutuphane/Indirmeler';
+import { IcoBack, IcoDownload, IcoFind, IcoPause, IcoPlay, IcoX, KategoriIkon } from './kutuphane/ikonlar';
+import { setKuyrugu, setlerOf } from './kutuphane/setler-ui';
+import { IHTIYACLAR, fmt, gorunum, ihtiyacOf, kalanSure, sigmaIpucu, type Ihtiyac } from './kutuphane/veri';
 
-export const MAGAZA_CSS = `
-.lm { display: flex; flex-direction: column; gap: 12px; }
-.lm-list { display: flex; flex-direction: column; gap: 8px; }
-.lm .sh-pack { background: var(--card); border-radius: 16px; gap: 6px; }
-.lm .sh-pack.ready { border-color: rgba(79, 209, 165, 0.45); }
-.lm-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-top: 4px; }
-.lm-h h2 { margin: 0; font-size: 16px; font-weight: 600; }
-.lm-h span { font-size: 12.5px; color: var(--muted); }
-/* durum kartı */
-.lm-status { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; background: var(--card); border: 1px solid var(--line2); border-radius: 20px; padding: 12px 14px; }
-.lm-ring { width: 62px; height: 62px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.lm-ring b { width: 48px; height: 48px; border-radius: 50%; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
-/* Büyük yazıda metin sütunu tek kelimelik şeride inmesin: yer kalmazsa "Yönet" alt satıra iner */
-.lm-status-t { flex: 1 1 110px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.lm-status-t b { font-size: 15.5px; font-weight: 600; }
-.lm-status-t span { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
-.lm-status-t span.upd { color: var(--ok); }
-.lm-manage { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--glass-line); background: transparent; color: var(--accent2); font-size: 13.5px; font-weight: 600; flex-shrink: 0; margin-left: auto; }
-.lm-manage[aria-expanded='true'] { background: var(--glass); }
-.lm-panel { display: flex; flex-direction: column; gap: 8px; }
-/* hızlı seçim */
-.lm-quick { display: flex; flex-wrap: wrap; gap: 8px; }
-.lm-quick button { flex: 1 1 auto; min-height: 44px; border-radius: 999px; font-size: 13.5px; font-weight: 600; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); padding: 0 10px; }
-.lm-quick button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
-.lm-quick button.clear { flex: 0 0 auto; background: transparent; color: var(--text2); font-weight: 500; }
-/* setler */
-.lm-sets { display: flex; flex-direction: column; gap: 10px; }
-@media (min-width: 600px) { .lm-sets, .lm-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
-.lm-set { background: var(--card); border: 1px solid var(--line2); border-radius: 20px; padding: 13px 14px; display: flex; flex-direction: column; gap: 9px; }
-.lm-set.on { border: 2px solid var(--accent); padding: 12px 13px; }
-.lm-set-top { display: flex; gap: 12px; align-items: center; }
-.lm-set-ic { width: 42px; height: 42px; border-radius: 13px; background: var(--accent-soft); color: var(--accent2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; font-weight: 700; }
-.lm-set-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.lm-set-t b { font-size: 15px; font-weight: 600; }
-.lm-set-t span { font-size: 12.5px; color: var(--muted); line-height: 1.35; }
-.lm-prog { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
-.lm-prog i { display: block; height: 100%; border-radius: 3px; background: var(--ok); }
-.lm-set-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.lm-set-bottom > span { flex: 1 1 150px; min-width: 0; font-size: 12.5px; color: var(--text2); }
-.lm-pick { min-height: 44px; min-width: 108px; padding: 0 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; border: 1px solid rgba(245,165,36,0.55); background: transparent; color: var(--accent2); }
-.lm-pick[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); border-color: transparent; }
-.lm-pick.done { background: rgba(79,209,165,0.14); color: var(--ok); border-color: transparent; }
-/* alt çubuk */
-.lm-bar { position: sticky; bottom: 10px; z-index: 6; margin-top: 4px; background: var(--accent); color: var(--on-accent); border-radius: 18px; padding: 8px 8px 8px 16px; display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
-.lm-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,0.3); transition: width 0.4s; }
-.lm-bar-t { position: relative; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; }
-.lm-bar-t b { font-size: 14.5px; font-weight: 700; }
-.lm-bar-t span { font-size: 12px; }
-.lm-bar button { position: relative; background: #1a1206; color: var(--accent2); border: 0; border-radius: 999px; min-height: 44px; padding: 0 18px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
-.lm-bar button:disabled { opacity: 0.6; }
-/* tüm koleksiyon */
-.lm-toggle { overflow-wrap: anywhere; display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 56px; padding: 10px 16px; border-radius: 16px; border: 1px solid var(--glass-line); background: var(--glass); color: var(--text); font-size: 15px; font-weight: 600; text-align: left; }
-.lm-toggle:hover { border-color: rgba(255, 200, 97, 0.5); }
-.lm-toggle small { display: block; font-size: 12.5px; font-weight: 400; color: var(--muted); }
-.lm-toggle .lm-chev { font-size: 22px; color: var(--accent2); transition: transform 0.15s; }
-.lm-toggle[aria-expanded='true'] .lm-chev { transform: rotate(90deg); }
-.lm-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.lm-chips .chip { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
-.lm-chips .chip span { font-size: 11.5px; opacity: 0.75; }
-.lm-group { display: flex; flex-direction: column; gap: 8px; }
-.lm-group h3 { margin: 6px 0 0; font-size: 15px; font-weight: 600; }
-.lm-note { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
-.lm-rehber { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
-.lm-rehber .btn { align-self: flex-start; }
-`;
+/** Eski dışa aktarım (biçem artık kutuphane/css.ts içinde) */
+export const MAGAZA_CSS = '';
 
-// İçe aktarma sonucu: paket listesi değişince Kütüphane yeniden kurulur, ileti kaybolmasın
-let lastRehberMsg = '';
+type K = ReturnType<typeof useKoleksiyonlar>;
 
-/** Rehber paketleri rafı: katalogdaki ve kurulu .rehber.json paketleri */
-function RehberShelf({ rows, dlFor, memGB, rec }: Pick<ReturnType<typeof usePackRows>, 'rows' | 'dlFor' | 'memGB' | 'rec'>) {
+/** Bölüm içi sıra: önerilenler, sonra küçükten büyüğe */
+function siraPuan(r: RowModel): number {
+  const e = r.entry;
+  const t = e?.featured ? 0 : e?.tier === 'temel' ? 1 : e?.tier === 'standart' ? 2 : 3;
+  return t * 1e13 + (r.size || 0);
+}
+
+let acikBolumler = new Set<Ihtiyac>();
+let magazaSorgu = '';
+
+export function LibraryStore({ k, bolum }: { k: K; bolum?: Ihtiyac }) {
+  const [q, setQState] = useState(magazaSorgu);
+  const setQ = (v: string) => setQState((magazaSorgu = v));
+  const [acik, setAcik] = useState<Set<Ihtiyac>>(() => new Set([...acikBolumler, ...(bolum ? [bolum] : [])]));
+  const [fitSor, setFitSor] = useState(false);
+  const sira = useKuyruk();
   usePackGuides();
-  // Katalogda olmayan (içe aktarılan) paketlerde dosya adı yerine paketin kendi adı
-  const list = rows
+
+  const all = setlerOf(k.manifest, k.rows);
+  const indirmeler = useIndirmeler(k.rows, k.dlFor);
+  const free = k.storage && k.storage.quota ? k.storage.quota - k.storage.usage : null;
+  const ok = canSaveToDevice();
+
+  const gruplar = useMemo(() => {
+    const m = new Map<Ihtiyac, RowModel[]>();
+    for (const r of all.zims) {
+      if (!r.entry) continue;
+      const n = ihtiyacOf(r.entry);
+      m.set(n, [...(m.get(n) ?? []), r]);
+    }
+    for (const v of m.values()) v.sort((a, b) => siraPuan(a) - siraPuan(b));
+    return m;
+  }, [all.zims]);
+
+  const fq = foldCharwise(q.trim());
+  const bulunan = fq
+    ? all.zims.filter((r) => r.entry && foldCharwise(`${r.entry.name} ${r.entry.desc} ${r.entry.source}`).includes(fq)).sort((a, b) => siraPuan(a) - siraPuan(b))
+    : [];
+
+  const rehberler = k.rows
     .filter((r) => r.kind === 'rehber')
     .map((r) => {
       const info = !r.entry && r.device ? packInfoForFile(r.device.id) : null;
       return info ? { ...r, name: info.name, desc: `${info.guides} rehber · ${info.desc}` } : r;
     });
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsgState] = useState(lastRehberMsg);
-  const setMsg = (m: string) => setMsgState((lastRehberMsg = m));
-  const onFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setBusy(true);
-    setMsg('');
-    const out: string[] = [];
-    for (const f of Array.from(files)) {
-      try {
-        const r = await importRehberPack(f);
-        out.push(`"${r.name}" eklendi (${r.guides} rehber). Rehber sekmesinde "Kendine Yetmek" bölümünde.` + (r.warnings.length ? ` ${r.warnings.length} bozuk öğe atlandı.` : ''));
-      } catch (e) {
-        out.push(`${f.name}: ${(e as Error).message}`);
-      }
-    }
-    if (fileRef.current) fileRef.current.value = '';
-    setBusy(false);
-    setMsg(out.join(' '));
+
+  const toggle = (n: Ihtiyac) => {
+    const s = new Set(acik);
+    if (s.has(n)) s.delete(n);
+    else s.add(n);
+    acikBolumler = s;
+    setAcik(s);
   };
+  const git = (n: Ihtiyac) => {
+    document.getElementById('kt-sec-' + n)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  // "Boş yerime göre seç": setler sırayla, boş yere sığdığı kadar (yüklüler ve inenler düşülür)
+  const sigan = sigdir(all.setler, all.byId, free);
+  const fitRows = (() => {
+    const seen = new Set<string>();
+    const out: RowModel[] = [];
+    for (const d of all.durum) {
+      if (!sigan.includes(d.set.id)) continue;
+      for (const r of setKuyrugu(d, all, k.dlFor, sira)) if (!seen.has(r.file)) (seen.add(r.file), out.push(r));
+    }
+    return out;
+  })();
+
+  if (!k.manifest) {
+    return (
+      <div class="pad kt" data-testid="lib-store">
+        <p class="empty">Katalog yükleniyor…</p>
+      </div>
+    );
+  }
+
+  const kitaplik = all.zims.filter(hazir).reduce((a, r) => a + (r.device?.size ?? 0), 0);
+
   return (
-    <div class="lm-group lm-rehber" data-testid="lib-rehber">
-      <h3>Kendine Yetmek rehberleri</h3>
-      <p class="lm-note">
-        Uzun süre dışarıdan yardım gelmezse: yiyecek, su, barınak, alet ve tarım üzerine adım adım, çizimli rehberler. İndirilen paketler Rehber sekmesinde görünür.
-      </p>
-      {list.map((r) => (
-        <PackRow key={r.key} row={r} dl={dlFor(r)} memGB={memGB} recommended={rec.tier} />
-      ))}
-      {!list.length && <p class="lm-note">Katalogda henüz rehber paketi yok; elinizdeki .rehber.json dosyasını içe aktarabilirsiniz.</p>}
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".json,.rehber.json,application/json"
-        multiple
-        hidden
-        data-testid="rehber-import-input"
-        onChange={(e) => onFiles((e.currentTarget as HTMLInputElement).files)}
-      />
-      <button class="btn" data-testid="rehber-import" disabled={busy || !canSaveToDevice()} onClick={() => fileRef.current?.click()}>
-        {busy ? 'İçe aktarılıyor…' : 'Rehber paketini dosyadan içe aktar'}
-      </button>
-      {msg && (
-        <p class="lm-note" data-testid="rehber-import-msg" role="status">
-          {msg}
-        </p>
+    <div class="pad kt" data-testid="lib-store">
+      <div class="kt-top">
+        <button class="kt-back" data-testid="lib-store-back" aria-label="Geri: Kitaplığım" onClick={() => setEkran({ ad: 'ana' })}>
+          <IcoBack />
+          <span>Kitaplığım</span>
+        </button>
+      </div>
+      <header>
+        <h1 class="kt-h1">İçerik indir</h1>
+        <p class="kt-sub">Bir kez indirin, internet olmadan okuyun. İnenler Kitaplığım'da görünür.</p>
+      </header>
+
+      {free != null && free > 0 && (
+        <div class="kt-store-free" data-testid="lib-status">
+          <div>
+            <span>
+              Telefonunuzda <b>{fmt(free)}</b> boş
+            </span>
+            {kitaplik > 0 && <span>Kitaplığınız {fmt(kitaplik)}</span>}
+          </div>
+          {kitaplik > 0 && (
+            <span class="kt-meter" aria-hidden="true">
+              <i class="on" style={{ width: Math.min(100, (kitaplik / (free + kitaplik)) * 100) + '%' }} />
+            </span>
+          )}
+        </div>
       )}
+      {!ok && <p class="kt-note">Bu bağlantı güvenli değil (http); içerik telefona kaydedilemez, bilgi noktasından okunur.</p>}
+
+      <IndirmeListesi list={indirmeler} />
+      <BaslangicKarti k={k} />
+
+      <div class="kt-search" role="search">
+        <div class="kt-search-box">
+          <IcoFind />
+          <input
+            class="input"
+            type="search"
+            data-testid="lib-store-q"
+            aria-label="Mağazada ara"
+            placeholder="Mağazada ara: ilaç, su, tamir…"
+            value={q}
+            onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+            autocomplete="off"
+            spellcheck={false}
+          />
+          {q && (
+            <button class="kt-search-x" aria-label="Aramayı temizle" onClick={() => setQ('')}>
+              <IcoX />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {fq ? (
+        <section class="kt-sec" data-testid="lib-store-results">
+          <h2 class="kt-h2">
+            Sonuçlar <small>{bulunan.length} içerik</small>
+          </h2>
+          {bulunan.map((r) => (
+            <Oge key={r.key} r={r} dl={k.dlFor(r)} sira={sira} free={free} />
+          ))}
+          {!bulunan.length && <p class="empty">"{q.trim()}" için içerik bulunamadı. Daha genel bir kelime deneyin (ör. "sağlık", "kitap").</p>}
+        </section>
+      ) : (
+        <>
+          <div class="kt-needs" role="navigation" aria-label="Bölümler">
+            {IHTIYACLAR.filter((n) => gruplar.get(n.id)?.length).map((n) => (
+              <button key={n.id} class="chip" data-testid="lib-need" data-need={n.id} onClick={() => git(n.id)}>
+                {n.ad}
+              </button>
+            ))}
+          </div>
+          {IHTIYACLAR.map((n) => {
+            const list = gruplar.get(n.id) ?? [];
+            if (!list.length) return null;
+            const hepsi = acik.has(n.id);
+            const gorunen = hepsi ? list : list.slice(0, 3);
+            return (
+              <section key={n.id} id={'kt-sec-' + n.id} class={'kt-sec kt-k-' + n.kategori} data-testid="lib-store-sec" data-need={n.id} aria-labelledby={'kt-sec-h-' + n.id}>
+                <div class="kt-sec-h">
+                  <span class="kt-dot" aria-hidden="true">
+                    <KategoriIkon k={n.kategori} size={20} />
+                  </span>
+                  <div>
+                    <b id={'kt-sec-h-' + n.id}>{n.ad}</b>
+                    <span>{n.alt}</span>
+                  </div>
+                </div>
+                {gorunen.map((r) => (
+                  <Oge key={r.key} r={r} dl={k.dlFor(r)} sira={sira} free={free} />
+                ))}
+                {list.length > 3 && (
+                  <button class="btn" data-testid="lib-store-more" aria-expanded={hepsi} onClick={() => toggle(n.id)}>
+                    {hepsi ? 'Daha az göster' : `Tümünü göster (${list.length})`}
+                  </button>
+                )}
+              </section>
+            );
+          })}
+
+          <section class="kt-sec" aria-labelledby="kt-sets-h" data-testid="lib-sets">
+            <h2 class="kt-h2" id="kt-sets-h">
+              Hazır setler <small>telefondakiler düşülür</small>
+            </h2>
+            <div class="kt-sets">
+              {all.durum.slice(1).map((d) => {
+                const indir = setKuyrugu(d, all, k.dlFor, sira);
+                const kalan = toplam(indir);
+                const inen = d.rows.filter((r) => isActive(k.dlFor(r)) || sira.includes(r.file)).length;
+                return (
+                  <div class="kt-set" key={d.set.id} data-testid="lib-set" data-set={d.set.id}>
+                    <b>{d.set.title}</b>
+                    <p>{d.set.desc}</p>
+                    <div class="kt-item-b">
+                      <span data-testid="lib-set-status">
+                        {d.complete ? `Hepsi hazır (${d.total})` : `${d.have}/${d.total} hazır${inen ? ` · ${inen} iniyor` : ''}`}
+                      </span>
+                      {d.complete ? (
+                        <span class="ok" style="color:var(--ok);font-weight:600">Tamam ✓</span>
+                      ) : indir.length ? (
+                        <button class="btn" data-testid="lib-set-dl" disabled={!ok} onClick={() => kuyrugaEkle(indir)}>
+                          <IcoDownload />
+                          İndir ({fmt(kalan)})
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {ok && fitRows.length > 0 && (
+              fitSor ? (
+                <div class="kt-confirm" data-testid="lib-pick-fit-q">
+                  <p>
+                    Boş yerinize göre {fitRows.length} içerik seçildi, toplam {fmt(toplam(fitRows))}. İndirme sonrası{' '}
+                    {free != null ? fmt(free - toplam(fitRows)) : 'bir miktar'} boş kalır. İndirilsin mi?
+                  </p>
+                  <div class="row" style="flex-wrap:wrap">
+                    <button class="btn" data-testid="lib-pick-fit-no" onClick={() => setFitSor(false)}>
+                      Vazgeç
+                    </button>
+                    <button
+                      class="btn primary"
+                      data-testid="lib-pick-fit-yes"
+                      onClick={() => {
+                        kuyrugaEkle(fitRows);
+                        setFitSor(false);
+                      }}
+                    >
+                      İndir
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button class="kt-link" data-testid="lib-pick-fit" onClick={() => setFitSor(true)}>
+                  Boş yerime göre seç →
+                </button>
+              )
+            )}
+          </section>
+
+          <section class="kt-sec kt-k-hayatta" aria-labelledby="kt-rehber-h" data-testid="lib-rehber">
+            <div class="kt-sec-h">
+              <span class="kt-dot" aria-hidden="true">
+                <KategoriIkon k="kitap" size={20} />
+              </span>
+              <div>
+                <b id="kt-rehber-h">Kendine Yetmek rehberleri</b>
+                <span>Yiyecek, su, barınak, alet ve tarım üzerine adım adım, çizimli rehberler. İnenler Rehber sekmesinde görünür.</span>
+              </div>
+            </div>
+            {rehberler.map((r) => (
+              <Oge key={r.key} r={r} dl={k.dlFor(r)} sira={sira} free={free} />
+            ))}
+            {!rehberler.length && <p class="kt-note">Katalogda henüz rehber paketi yok; elinizdeki .rehber.json dosyasını aşağıdan ekleyebilirsiniz.</p>}
+          </section>
+        </>
+      )}
+
+      <section class="kt-sec" aria-labelledby="kt-ekle-h">
+        <h2 class="kt-h2" id="kt-ekle-h">
+          Başka bir yerden
+        </h2>
+        <p class="kt-note">
+          Bilgisayarda ya da başka bir telefonda indirilmiş bir koleksiyon (.zim) ya da rehber paketi (.rehber.json) varsa ekleyebilirsiniz. Haritalar ve Fener modelleri için{' '}
+          <button class="kt-link" style="min-height:0;display:inline;padding:0" data-testid="lib-manage" onClick={() => go.tool('paylas')}>
+            Araçlar → Paketler
+          </button>
+          .
+        </p>
+        <DosyadanEkle />
+      </section>
     </div>
   );
 }
 
-const LS_SEL = 'ac.lib.setler';
-const LS_MODE = 'ac.lib.secimTuru';
+/** Mağaza öğesi: tek, duruma göre değişen düğme; teknik ayrıntılar katlanmış */
+function Oge({ r, dl, sira, free }: { r: RowModel; dl?: DlState; sira: string[]; free: number | null }) {
+  const ok = canSaveToDevice();
+  const g = gorunum(r.file, r.entry, null);
+  const size = r.device?.size ?? r.server?.size ?? r.size;
+  const fit = sigmaIpucu(r.size || size, free);
+  const active = isActive(dl);
+  const queued = !active && sira.includes(r.file);
+  const ready = !!r.device || (!!r.server && !dl);
+  const durum = active ? 'iniyor' : queued ? 'sirada' : dl?.status === 'paused' ? 'duraklatildi' : dl?.status === 'error' ? 'hata' : r.device ? 'telefonda' : r.server ? 'bilgi-noktasi' : 'yok';
+  const oku = () => (r.kind === 'rehber' ? go.category(null) : setEkran({ ad: 'koleksiyon', id: (r.device ?? r.server)!.id }));
+  const ad = r.kind === 'rehber' && !r.entry ? r.name : adOf(r);
+  const p = dl ? pct(dl) : 0;
 
-function loadSel(): { sel: string[]; mode: 'rec' | 'fit' | 'manual' } {
-  try {
-    const s = JSON.parse(localStorage.getItem(LS_SEL) ?? 'null');
-    const m = localStorage.getItem(LS_MODE) as any;
-    if (Array.isArray(s)) return { sel: s.filter((x) => typeof x === 'string'), mode: m === 'fit' || m === 'manual' ? m : 'rec' };
-  } catch {}
-  return { sel: ['temel'], mode: 'rec' };
-}
-
-function shelfOf(r: RowModel): Shelf | 'diger' {
-  return r.entry?.shelf ?? 'diger';
-}
-
-const fmt = (b: number) => formatSize(Math.max(0, b));
-
-export function LibraryStore() {
-  const { manifest, rows, dlFor, rec, storage, memGB } = usePackRows();
-  const bekleyen = useKuyruk();
-  const [{ sel, mode }, setChoice] = useState(loadSel);
-  const [manage, setManage] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [shelf, setShelf] = useState<Shelf | 'hepsi'>('hepsi');
-
-  const zims = useMemo(() => rows.filter((r) => r.kind === 'zim'), [rows]);
-  const byId = useMemo(() => new Map(zims.filter((r) => r.entry).map((r) => [r.entry!.id, r])), [zims]);
-  const setler = useMemo(() => setleriAl(manifest?.sets, new Set(byId.keys())), [manifest, byId]);
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const r of zims) c[shelfOf(r)] = (c[shelfOf(r)] ?? 0) + 1;
-    return c;
-  }, [zims]);
-
-  if (!manifest) return <p class="empty">İndirilebilir kitaplar yükleniyor…</p>;
-
-  const free = storage && storage.quota ? storage.quota - storage.usage : null;
-  const save = (s: string[], m: 'rec' | 'fit' | 'manual') => {
-    setChoice({ sel: s, mode: m });
-    try {
-      localStorage.setItem(LS_SEL, JSON.stringify(s));
-      localStorage.setItem(LS_MODE, m);
-    } catch {}
-  };
-  const inQueue = (r: RowModel) => bekleyen.includes(r.file);
-  const aktif = (r: RowModel) => isActive(dlFor(r)) || inQueue(r);
-
-  const durum = setler.map((s) => setDurumu(s, byId));
-  const temel = durum[0];
-  const ringPct = temel && temel.total ? Math.round((temel.have / temel.total) * 100) : 0;
-  const yuklu = zims.filter(hazir);
-  const yukluBytes = yuklu.reduce((a, r) => a + (r.device?.size ?? r.server?.size ?? 0), 0);
-  const guncel = zims.filter((r) => r.outdated && hazir(r)).length;
-
-  const q = kuyruk(sel, setler, byId, aktif);
-  const qBytes = toplam(q);
-  const inen = zims.filter(aktif);
-  const inenTotal = inen.reduce((a, r) => a + (dlFor(r)?.total || r.size || 0), 0);
-  const inenDone = inen.reduce((a, r) => a + (dlFor(r)?.received ?? 0), 0);
-  const speed = inen.reduce((a, r) => a + (dlFor(r)?.speed ?? 0), 0);
-  const yerYok = free != null && qBytes > free;
-  /** Kuyruktaki duraklatılmış (yarım) indirmeler: düğme "Devam et" olur */
-  const yarim = q.filter((r) => dlFor(r)?.status === 'paused').length;
-
-  const groups: (Shelf | 'diger')[] = shelf === 'hepsi' ? [...SHELVES, 'diger'] : [shelf];
-  const ringBg = `conic-gradient(var(--ok) 0 ${ringPct}%, rgba(255,255,255,0.1) ${ringPct}% 100%)`;
-
-  return (
-    <section class="lm" aria-label="Kitaplık" data-testid="lib-store">
-      <div class="lm-status" data-testid="lib-status">
-        <div class="lm-ring" style={{ background: ringBg }} aria-hidden="true">
-          <b>%{ringPct}</b>
-        </div>
-        <div class="lm-status-t">
-          <b>{ringPct === 100 ? 'Temel set hazır' : yuklu.length ? 'Kütüphaneniz hazırlanıyor' : 'Kütüphanenizi kurun'}</b>
-          <span>
-            {yuklu.length ? `${yuklu.length} paket yüklü · ${fmt(yukluBytes)}` : 'Henüz paket yok'}
-            {free != null && free > 0 ? ` · ${fmt(free)} boş` : ''}
-          </span>
-          {yuklu.length > 0 && <span class={guncel ? 'upd' : ''}>{guncel ? `${guncel} paketin yeni sürümü var` : 'Hepsi güncel'}</span>}
-        </div>
-        {yuklu.length > 0 && (
-          <button class="lm-manage" data-testid="lib-manage-toggle" aria-expanded={manage} aria-controls="lm-manage" onClick={() => setManage(!manage)}>
-            Yönet
+  let alt: preact.ComponentChildren = null;
+  let dugme: preact.ComponentChildren = null;
+  if (durum === 'iniyor' && dl) {
+    const kalan = kalanSure(dl.received, dl.total, dl.speed ?? 0);
+    alt =
+      dl.status === 'hashing' || dl.status === 'verifying'
+        ? 'Bozuk olmadığı denetleniyor…'
+        : `İndiriliyor %${p} · ${fmt(dl.received)} / ${fmt(dl.total || r.size)}${kalan ? ' · ' + kalan : ''}${dl.remote ? ' · bilgi noktası indiriyor' : ''}`;
+    dugme = (
+      <>
+        <button class="btn" data-testid="lib-store-pause" onClick={() => pauseDownload(dl.file)}>
+          <IcoPause />
+          Duraklat
+        </button>
+        <button class="kt-ib" aria-label={`İptal: ${ad}`} data-testid="lib-store-cancel" onClick={() => cancelDownload(dl.file)}>
+          <IcoX />
+        </button>
+      </>
+    );
+  } else if (durum === 'sirada') {
+    alt = 'Sırada; öncekiler bitince başlar';
+  } else if (durum === 'duraklatildi' && dl) {
+    alt = `Duraklatıldı %${p} · kaldığı yerden sürer`;
+    dugme = (
+      <>
+        <button class="btn primary" data-testid="lib-store-resume" onClick={() => startRow(r)}>
+          <IcoPlay />
+          Devam et
+        </button>
+        <button class="kt-ib" aria-label={`İptal: ${ad}`} data-testid="lib-store-cancel" onClick={() => cancelDownload(dl.file)}>
+          <IcoX />
+        </button>
+      </>
+    );
+  } else if (durum === 'hata' && dl) {
+    alt = 'Yarıda kaldı: ' + (dl.error ?? 'bağlantı kesildi');
+    dugme = (
+      <>
+        <button class="btn primary" data-testid="lib-store-resume" onClick={() => startRow(r)}>
+          Tekrar dene
+        </button>
+        {dl.received > 0 && (
+          <button class="kt-ib" aria-label={`Sil: ${ad}`} data-testid="lib-store-cancel" onClick={() => cancelDownload(dl.file)}>
+            <IcoX />
           </button>
         )}
-      </div>
-
-      {manage && (
-        <div id="lm-manage" class="lm-panel" data-testid="lib-manage-panel">
-          <UpdateBanner rows={zims} dlFor={dlFor} />
-          <div class="lm-list">
-            {yuklu.map((r) => (
-              <PackRow key={r.key} row={r} dl={dlFor(r)} memGB={memGB} recommended={rec.tier} />
-            ))}
-          </div>
-          <p class="lm-note">
-            Dosyadan içe aktarmak ve haritalar, Fener modelleri için{' '}
-            <button class="link-btn" style="display:inline;min-height:0;padding:0;color:var(--accent2)" onClick={() => go.tool('paylas')}>
-              Araçlar → Paketler
-            </button>
-            .
-          </p>
-        </div>
-      )}
-
-      {!canSaveToDevice() && <p class="lm-note">Bu bağlantı güvenli değil (http); paketler cihaza kaydedilemez, bilgi noktasından okunur.</p>}
-
-      <div class="lm-quick" role="group" aria-label="Hızlı seçim">
-        <button aria-pressed={mode === 'rec'} data-testid="lib-pick-rec" onClick={() => save(['temel'], 'rec')}>
-          Önerilenler
+      </>
+    );
+  } else if (r.outdated && r.entry && ready) {
+    alt = <span class="ok">Hazır · yeni sürümü var</span>;
+    dugme = (
+      <>
+        <button class="btn" data-testid="lib-store-read" onClick={oku}>
+          Oku
         </button>
-        <button aria-pressed={mode === 'fit'} data-testid="lib-pick-fit" onClick={() => save(sigdir(setler, byId, free), 'fit')}>
-          Yerimi doldur
+        <button class="btn primary" data-testid="lib-store-update" disabled={!ok && !r.server} onClick={() => startUpdate(r)}>
+          Güncelle ({fmt(r.entry.size)})
         </button>
-        <button class="clear" data-testid="lib-pick-none" onClick={() => save([], 'manual')}>
-          Temizle
+      </>
+    );
+  } else if (durum === 'telefonda' || durum === 'bilgi-noktasi') {
+    alt = <span class="ok">{durum === 'telefonda' ? '✓ Telefonda' : '✓ Bilgi noktasında'}</span>;
+    dugme = (
+      <>
+        <button class="btn primary" data-testid="lib-store-read" onClick={oku}>
+          Oku
         </button>
-      </div>
-
-      <div class="lm-h">
-        <h2>Paket setleri</h2>
-        <span>yüklü olanlar düşülür</span>
-      </div>
-      <div class="lm-sets" data-testid="lib-sets">
-        {durum.map((d) => {
-          const on = sel.includes(d.set.id) && !d.complete;
-          const inSet = d.rows.filter(aktif).length;
-          return (
-            <div class={'lm-set' + (on ? ' on' : '')} key={d.set.id} data-testid="lib-set" data-set={d.set.id}>
-              <div class="lm-set-top">
-                <span class="lm-set-ic" aria-hidden="true">
-                  {d.set.title[0]}
-                </span>
-                <div class="lm-set-t">
-                  <b>{d.set.title}</b>
-                  <span>{d.set.desc}</span>
-                </div>
-              </div>
-              <div class="lm-prog" aria-hidden="true">
-                <i style={{ width: (d.total ? (d.have / d.total) * 100 : 0) + '%' }} />
-              </div>
-              <div class="lm-set-bottom">
-                <span data-testid="lib-set-status">
-                  {d.complete ? `Hepsi yüklü (${d.total} paket)` : `${d.have}/${d.total} yüklü · kalan ${fmt(d.leftBytes)}${inSet ? ` · ${inSet} iniyor` : ''}`}
-                </span>
-                {d.complete ? (
-                  <span class="lm-pick done" style="display:flex;align-items:center;justify-content:center">
-                    Tamam ✓
-                  </span>
-                ) : (
-                  <button
-                    class="lm-pick"
-                    aria-pressed={on}
-                    data-testid="lib-set-pick"
-                    aria-label={`${on ? 'Seçildi' : '+ ' + fmt(d.leftBytes)}, ${d.set.title}`}
-                    onClick={() => save(on ? sel.filter((x) => x !== d.set.id) : [...sel, d.set.id], 'manual')}
-                  >
-                    {on ? 'Seçildi' : '+ ' + fmt(d.leftBytes)}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <button class="lm-toggle" data-testid="lib-catalog-toggle" aria-expanded={open} aria-controls="lm-catalog" onClick={() => setOpen(!open)}>
-        <span>
-          Tek tek seç: tüm koleksiyon ({zims.length})
-          <small>Ansiklopediler, ilaç rehberleri, telifsiz kitaplar, sözlükler…</small>
-        </span>
-        <span class="lm-chev" aria-hidden="true">
-          ›
-        </span>
+        {durum === 'bilgi-noktasi' && ok && (
+          <button class="btn" data-testid="lib-store-dl" onClick={() => kuyrugaEkle([r])}>
+            Telefona kaydet
+          </button>
+        )}
+      </>
+    );
+  } else {
+    alt = ok ? null : 'Bu bağlantıda indirilemez';
+    dugme = ok ? (
+      <button class="btn primary" data-testid="lib-store-dl" disabled={fit.duzey === 'yer-yok'} onClick={() => kuyrugaEkle([r])} aria-label={`İndir: ${ad}, ${fmt(size)}`}>
+        <IcoDownload />
+        İndir
       </button>
+    ) : null;
+  }
 
-      {open && (
-        <div id="lm-catalog" class="lm" data-testid="lib-catalog">
-          <div class="lm-chips" role="group" aria-label="Raf">
-            <button class="chip" aria-pressed={shelf === 'hepsi'} data-testid="lib-shelf" data-shelf="hepsi" onClick={() => setShelf('hepsi')}>
-              Tümü <span>{zims.length}</span>
-            </button>
-            {SHELVES.filter((s) => counts[s]).map((s) => (
-              <button key={s} class="chip" aria-pressed={shelf === s} data-testid="lib-shelf" data-shelf={s} onClick={() => setShelf(s)}>
-                {SHELF_SHORT[s]} <span>{counts[s]}</span>
-              </button>
-            ))}
-          </div>
-          {groups.map((g) => {
-            const list = zims.filter((r) => shelfOf(r) === g);
-            if (!list.length) return null;
-            return (
-              <div class="lm-group" key={g} data-testid="lib-catalog-group" data-shelf={g}>
-                <h3>{g === 'diger' ? 'Diğer paketler' : SHELF_LABEL[g]}</h3>
-                {list.map((r) => (
-                  <PackRow key={r.key} row={r} dl={dlFor(r)} memGB={memGB} recommended={rec.tier} />
-                ))}
-              </div>
-            );
-          })}
-          <p class="lm-note">İngilizce paketlerdeki makaleleri, makaleyi açtıktan sonra Fener ile Türkçeye çevirebilirsiniz.</p>
+  return (
+    <div class={'kt-item' + (ready ? ' ready' : '')} data-testid="lib-store-item" data-pack={r.file} data-state={durum}>
+      <div class="kt-item-t">
+        <b>{ad}</b>
+        {(r.entry?.desc || r.desc) && <span>{r.entry?.desc || r.desc}</span>}
+      </div>
+      <div class="kt-item-m">
+        <span>{size ? (r.sizeApprox && !ready ? '~' : '') + fmt(size) : 'boyut bilinmiyor'}</span>
+        {!ready && durum === 'yok' && size > 0 && <span class={'kt-fit-' + fit.duzey}>· {fit.metin}</span>}
+        {g.dil && <span class="tag">{g.dil}</span>}
+        {r.entry?.featured && <span class="tag" style="color:var(--accent2)">Önerilen</span>}
+      </div>
+      {(active || durum === 'duraklatildi') && dl && (
+        <div class="progress" role="progressbar" aria-label={`${ad} indiriliyor`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={p}>
+          <div style={{ width: (dl.status === 'verifying' ? 100 : p) + '%' }} />
         </div>
       )}
-
-      <RehberShelf rows={rows} dlFor={dlFor} memGB={memGB} rec={rec} />
-
-      {(inen.length > 0 || q.length > 0) && (
-        <div class="lm-bar" data-testid="lib-bar" role="status">
-          {inen.length > 0 && <span class="lm-bar-fill" style={{ width: (inenTotal ? Math.min(100, (inenDone / inenTotal) * 100) : 0) + '%' }} aria-hidden="true" />}
-          <div class="lm-bar-t">
-            {inen.length > 0 ? (
-              <>
-                <b>İndiriliyor · %{inenTotal ? Math.floor((inenDone / inenTotal) * 100) : 0}</b>
-                <span>
-                  {inen.length} paket · {fmt(inenDone)} / {fmt(inenTotal)}
-                  {speed > 0 ? ` · ${(speed / 1e6).toFixed(1).replace('.', ',')} MB/sn` : ''}
-                </span>
-              </>
-            ) : (
-              <>
-                <b>
-                  {q.length} paket · {fmt(qBytes)}
-                </b>
-                <span>
-                  {yerYok
-                    ? `Yer yetmez: ${fmt(free!)} boş`
-                    : yarim
-                      ? `${yarim} paket duraklatıldı · kaldığı yerden sürer`
-                      : free != null
-                        ? `İndirme sonrası ${fmt(free - qBytes)} boş kalır`
-                        : 'Yüklü olanlar düşüldü'}
-                </span>
-              </>
-            )}
-          </div>
-          {inen.length > 0 ? (
-            <button
-              data-testid="lib-bar-pause"
-              onClick={() => {
-                hepsiniDuraklat();
-                for (const r of inen) {
-                  const d = dlFor(r);
-                  if (d && isActive(d)) pauseDownload(d.file);
-                }
-              }}
-            >
-              Duraklat
-            </button>
-          ) : (
-            <button data-testid="lib-bar-start" disabled={yerYok || !canSaveToDevice()} onClick={() => kuyrugaEkle(q)}>
-              {yarim ? 'Devam et' : 'İndir'}
-            </button>
-          )}
+      {(alt || dugme) && (
+        <div class="kt-item-b">
+          <span class="grow" data-testid="lib-store-state">
+            {alt}
+          </span>
+          {dugme}
         </div>
       )}
-    </section>
+      {r.entry && (
+        <details class="kt-details" data-testid="lib-store-details">
+          <summary>Ayrıntılar</summary>
+          <div class="kt-details-in">
+            <dl class="kt-dl-list">
+              <dt>Kaynak</dt>
+              <dd>{r.entry.source}</dd>
+              <dt>Lisans</dt>
+              <dd>{r.entry.license}</dd>
+              <dt>Düzey</dt>
+              <dd>{TIER_LABEL[r.entry.tier]}</dd>
+              {r.entry.minRamGB ? (
+                <>
+                  <dt>Bellek</dt>
+                  <dd>{r.entry.minRamGB} GB ve üstü önerilir</dd>
+                </>
+              ) : null}
+              <dt>Dosya</dt>
+              <dd>{(r.device ?? r.server)?.id ?? r.entry.file}</dd>
+              <dt>İndirme</dt>
+              <dd>
+                {r.entry.urls.length} adresten{r.entry.sha256 ? ', bozulmaya karşı denetlenir' : ''}
+              </dd>
+            </dl>
+          </div>
+        </details>
+      )}
+    </div>
   );
 }

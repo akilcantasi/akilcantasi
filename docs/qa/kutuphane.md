@@ -152,3 +152,76 @@ dev sunucusunda `?devzim=`, 400 sayfalık PDF'li sınama arşivi ve yavaşlatıl
     node e2e/kutuphane-check.mjs http://localhost:8098 && node e2e/sanitize-check.mjs
     node e2e/kutuphane-ceviri-check.mjs http://localhost:5199/
     node e2e/kutuphane-denetim-check.mjs http://localhost:5199/ /tmp/ktd   # bu denetimin regresyonu (dev sunucusu)
+
+## Okuma hatası 2026-11 ("İndirdiklerimi okuyamıyorum")
+
+Sahibinin gerçek indirdiği 9 ZIM (Vikipedi özet, Kimya, Vikikitap, Vikikaynak, Vikidia, NHS ilaç rehberi,
+Askeri sahra tıbbı, Düğümler, Su arıtma) üç okuma yolundan da okundu: Android paket klasörü
+(`/_paket/?aralik=`, MainActivity.packResponse'un birebir taklidi + Capacitor eklenti taklidi), bilgi noktası
+(`server/server.mjs`, /data/ Range) ve tarayıcı deposu (OPFS).
+
+### Kök neden
+- **Taranmış PDF sayfaları boş çiziliyordu.** pdf.js 6 taranmış belgelerin görsellerini (CCITT faks, JBIG2) ve
+  JPEG 2000'i WebAssembly çözücülerle açar; bu dosyaların yeri (`wasmUrl`) hiç verilmemişti. Konsolda
+  "Ensure that the `wasmUrl` API parameter is provided" / "JBig2 failed to initialize"; sayfa beyaz. Askeri
+  sahra tıbbının 25 PDF'inin neredeyse tamamı, Düğümler'in çoğu ve Su arıtma (4) etkileniyordu (ör. bandage.pdf
+  85 sayfanın hepsi boş). Üç yolda da aynı; Android'de de.
+- ZIM okuma katmanı (Android aralık yolu dahil) gerçek dosyalarda sağlam: 9 dosyada ~1500'er girdi tarandı, hata yok.
+
+### Düzeltmeler
+- `src/lib/pdf.ts`: `PdfIkiliVeri` (pdf.js `BinaryDataFactory`) jbig2/openjpeg wasm'ını ve sembol yazı tiplerini
+  Vite'ın derlemeye koyduğu adreslerden okur; `loadPdfjs().getDocument` bunu kendiliğinden ekler (okuyucu
+  bileşeninde değişiklik gerekmez).
+- `src/lib/zim/index.ts`: önek başlık araması yönlendirme bilgisini taşır; "Vikipedi" araması aynı katlanmış
+  başlıklı "Vıkıpedı" yönlendirmesini değil maddeyi getirir. Android paket kaynağı (QueryRangeSource) da
+  uzak kaynak gibi okunur (büyük sayfa, gruplu Xapian bloğu): Vikipedi aramasında ~%20 daha az istek.
+
+### Denetim
+    node e2e/kutuphane-gercek-check.mjs [/zim/klasörü]   # 3 yol × her dosya: ana sayfa, görsel, bağlantı, arama, PDF (boş sayfa denetimi)
+    npx vitest run tests/kutuphane-gercek.test.ts tests/pdf-ikili.test.ts
+
+### Kalan / not
+- Service worker `.wasm`'ı önbelleğe almaz (tools/sw): bilgi noktası kapandıktan sonra önbellekten açılan sayfada
+  taranmış PDF görselleri çözülemez.
+- İngilizce tam metin araması kök biçimini (ör. "military" → "militari") aramıyor; tek kelime bazen sonuçsuz.
+- Taranmış PDF'lerde metin katmanı yok: "Bu kitapta ara" ve çeviri bu belgelerde sonuç vermez (OCR yok).
+
+## Yeniden tasarım 2026-11 (standart kullanıcı gözüyle)
+
+Tasarım belgesi: `docs/qa/kutuphane-tasarim.md`. Ekran görüntüleri: `docs/images/kutuphane-yeni/`.
+
+### Yapı
+`KutuphaneTab.tsx` artık yalnız yönlendirici; ekranlar `src/tabs/kutuphane/` altında:
+`Kitapligim.tsx` (koleksiyon kartları, kaldığın yerden devam, son okunanlar, birleşik arama),
+`Koleksiyon.tsx` (okumaya başla / kitap listesi, bu koleksiyonda ara, ayrıntılar, telefona kaydet, sil),
+`Okuyucu.tsx` (makale, PDF, dosya görüntüleyici), `KutuphaneMagaza.tsx` (ihtiyaca göre mağaza),
+`Yonet.tsx` (yer aç), `Indirmeler.tsx`, `BaslangicKarti.tsx`, `Ekle.tsx` (dosyadan ekleme),
+`veri.ts` (saf yardımcılar; `tests/kutuphane-veri.test.ts`), `durum.ts`, `gezinme.ts`, `css.ts`.
+
+### Önemli kararlar
+- İç ekranlar `openArticlePath` alanında `kt:` önekiyle tutulur (`kt:koleksiyon/<dosya>`, `kt:magaza`,
+  `kt:yonet`, `kt:ara`). Böylece Android geri tuşu `src/gecmis.ts` ile iç ekranları da kaydeder. Önce
+  "katman" (useGeriKapat) denendi: makale açılırken katman kaldırma ve kayıt ekleme yarışıyor, geri tuşu
+  uygulamadan çıkabiliyordu.
+- Kitaplığım ilk çizimde arşivleri açmaz: paket listesi + katalog + `ac.lib.meta` önbelleği (gerçek
+  9 paketle kartlar ~0,4–0,8 s). Arşivler arama kutusuna dokununca ya da boşta açılır.
+- Son okunanlar `ac.lib.okunan` (okunan oran / PDF sayfası). Yazı boyutu 5 kademe (`ac.lib.yazi`; eski
+  `ac.lib.textSize` taşınır). Kaynak süzgecinin kalıcılığı (`ac.lib.source`) kaldırıldı: süzgeç artık arama
+  sonuçlarının üstünde geçici bir çip.
+- Android'de yeni pencere ve blob indirme çalışmadığından resim, ses, görüntü ve düz metin uygulama içinde
+  gösterilir; öteki türler için açıklama. PDF'te taranmış sayfalar için "arama ve çeviri yapılamıyor" iletisi.
+- PDF açılamazsa iletinin rengi kırmızı değil kehribar (tehlike değil).
+
+### Testler
+    npx vitest run tests/kutuphane-veri.test.ts
+    node e2e/qa-kutuphane.mjs                     # dört bilgi noktası kurulumu (betik başı)
+    node e2e/kutuphane-check.mjs <bilgi noktası>  # gerçek paketlerle yolculuklar (paketleri geçici klasöre bağlayın)
+    node e2e/kutuphane-denetim-check.mjs <dev>    # PDF, dosyalar, Android dosya görüntüleyici, mağaza indirme akışları, çeviri
+    node e2e/kutuphane-ceviri-check.mjs <dev>
+    QA_PDF=… QA_TARANMIS=… node e2e/pdf-okuyucu-check.mjs   # taranmış PDF'li zimgit paketleriyle
+    node e2e/sanitize-check.mjs
+
+### Kalan
+- Arama sıralaması `src/lib/library.ts`/`zim` kapsamında: "su" aramasında "Şu" ilk sırada (katlanmış eşleşme).
+- Kiwix sayfalarının kendi gezinme öğeleri (ör. NHS "Skip to main content") makalede görünür.
+- Kuyruktaki tek bir bekleyen indirme ayrı iptal edilemez (yalnız "Hepsini duraklat"); `indirme-kuyrugu.ts` kapsamı.

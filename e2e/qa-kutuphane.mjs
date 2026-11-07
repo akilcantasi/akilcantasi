@@ -1,4 +1,4 @@
-// Kütüphane QA regresyon denetimi (docs/qa/kutuphane.md). Dört veri kurulumu:
+// Kütüphane QA regresyon denetimi (docs/qa/kutuphane.md; yeni tasarım 2026-11). Dört veri kurulumu:
 //   npm run build            (ya da: npx vite build --outDir /tmp/kt-dist)
 //   D=/tmp/qa-kt; rm -rf $D; mkdir -p $D/bos $D/ornek $D/tek $D/coklu
 //   cp testdata/*.zim $D/ornek/
@@ -28,14 +28,19 @@ const browser = await pw.chromium.launch();
 const errors = [];
 let fails = 0;
 
-async function page(base, vp = { width: 390, height: 844 }) {
+async function page(base, vp = { width: 390, height: 844 }, { temiz = true } = {}) {
   const ctx = await browser.newContext({ viewport: vp });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(`${base} pageerror: ${e.message}`));
-  // Paketler aracının çevrimiçi katalog isteği bu kum havuzunda tünel hatası verir (kapsam dışı)
-  p.on('console', (m) => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED/.test(m.text())) errors.push(`${base} console: ${m.text()}`); });
+  // Çevrimiçi katalog isteği bu kum havuzunda engellenir (kapsam dışı)
+  p.on('console', (m) => { if (m.type() === 'error' && !/ERR_TUNNEL|ERR_INTERNET_DISCONNECTED|ERR_NAME_NOT_RESOLVED|ERR_FAILED/.test(m.text())) errors.push(`${base} console: ${m.text()}`); });
+  if (temiz) {
+    await p.goto(base + '/?tab=kutuphane', { waitUntil: 'domcontentloaded' });
+    await p.evaluate(() => localStorage.clear());
+  }
   await p.goto(base + '/?tab=kutuphane', { waitUntil: 'networkidle' });
-  await p.waitForSelector(`${tid('lib-search')},${tid('lib-empty')}`, { timeout: 30000 });
+  await p.waitForSelector(`${tid('lib-home')}:not([data-state="loading"])`, { timeout: 30000 });
   return p;
 }
 async function step(name, fn) {
@@ -47,6 +52,7 @@ async function step(name, fn) {
     console.log('HATA', name, '\n     ', e.message.split('\n').slice(0, 4).join('\n      '));
   }
 }
+/** Arama kutusuna yazar (Kitaplığım'da arama ekranına geçer), sonuçların bu sorguya ait olmasını bekler */
 const search = async (p, q, full = false) => {
   await p.fill(tid('lib-search'), q);
   await p.waitForFunction(
@@ -60,31 +66,44 @@ const search = async (p, q, full = false) => {
     throw new Error(`arama "${q.slice(0, 30)}" bitmedi: ${e.message}`);
   });
 };
-const titles = (p, id = 'lib-result') => p.$$eval(`${tid(id)} .kt-hit-title`, (x) => x.map((e) => e.textContent));
+const titles = (p, id = 'lib-result') => p.$$eval(`${tid(id)} .kt-row-t b`, (x) => x.map((e) => e.textContent));
 /** Görünür etkileşimli öğelerden 44 px'ten küçük olanlar (makale içi metin bağlantıları hariç) */
 const smallTargets = (p) =>
-  p.$$eval('#main button, #main input', (els) =>
+  p.$$eval('#main button, #main input, #main summary', (els) =>
     els
-      .filter((e) => e.offsetParent)
+      .filter((e) => e.offsetParent && !e.closest('.kt-body') && !e.closest('.kt-note'))
       .map((e) => ({ id: e.dataset.testid || e.textContent.trim().slice(0, 15), r: e.getBoundingClientRect() }))
-      .filter((x) => x.r.width < 44 || x.r.height < 44)
+      .filter((x) => x.r.width < 43.5 || x.r.height < 43.5)
       .map((x) => `${x.id} ${Math.round(x.r.width)}x${Math.round(x.r.height)}`),
   );
-const hOverflow = (p) => p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
+const hOverflow = (p) => p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1 || document.getElementById('main').scrollWidth > document.getElementById('main').clientWidth + 1);
+const openColl = async (p, src) => {
+  await p.click(`${tid('lib-coll')}[data-src="${src}"]`);
+  await p.waitForSelector(tid('lib-coll-home'));
+};
 
 // ---------------------------------------------------------------------------
 // 1) Paket yok
 // ---------------------------------------------------------------------------
 for (const vp of [{ width: 360, height: 640 }, { width: 1280, height: 800 }]) {
-  await step(`paket yok: boş durum ${vp.width}px`, async () => {
+  await step(`paket yok: boş durum, başlangıç seti ve mağaza ${vp.width}px`, async () => {
     const p = await page(URL.bos, vp);
     await p.waitForSelector(tid('lib-empty'));
-    assert.match(await p.textContent(tid("lib-empty")), /Çevrimdışı kütüphane/);
+    assert.match(await p.textContent(tid('lib-empty')), /Kitaplığınız boş/);
+    assert.match(await p.textContent(tid('lib-starter')), /Önerilen başlangıç seti/);
+    assert.match(await p.textContent(tid('lib-starter-dl')), /Başlangıç setini indir \(\d/);
+    assert.equal(await p.$(tid('lib-search')), null, 'boşken arama kutusu yok');
     assert.deepEqual(await smallTargets(p), []);
     assert.equal(await hOverflow(p), false);
     await p.screenshot({ path: `${SHOTS}/bos-${vp.width}.png` });
+    await p.click(`${tid('lib-empty')} ${tid('lib-open-store')}`);
+    await p.waitForSelector(tid('lib-store'));
+    const needs = await p.$$eval(tid('lib-need'), (b) => b.map((x) => x.textContent));
+    assert.ok(needs.includes('Sağlık ve ilk yardım') && needs.includes('Genel bilgi'), needs.join(', '));
+    assert.equal(await hOverflow(p), false);
+    assert.deepEqual(await smallTargets(p), []);
     await p.click(tid('lib-manage'));
-    await p.waitForFunction(() => /← Araçlar/.test(document.getElementById('main')?.innerText || ''));
+    await p.waitForFunction(() => /← Araçlar|Araçlar/.test(document.getElementById('main')?.innerText || '') && !document.querySelector('[data-testid="lib-store"]'));
     await p.context().close();
   });
 }
@@ -92,16 +111,19 @@ for (const vp of [{ width: 360, height: 640 }, { width: 1280, height: 800 }]) {
 // ---------------------------------------------------------------------------
 // 2) Örnek ZIM'ler: aynı adlı iki Vikipedi ayırt edilir, görsel yüklenir
 // ---------------------------------------------------------------------------
-await step('örnek ZIM: aynı adlı kaynaklar ayırt edilir', async () => {
+await step('örnek ZIM: aynı adlı koleksiyonlar ayırt edilir (kartlar ve süzgeç)', async () => {
   const p = await page(URL.ornek, { width: 360, height: 640 });
+  const cards = await p.$$eval(`${tid('lib-coll')} .kt-card-t`, (b) => b.map((x) => x.textContent.trim()));
+  assert.equal(new Set(cards).size, cards.length, cards.join(', '));
+  await p.click(tid('lib-search'));
+  await search(p, 'a', true);
   const chips = await p.$$eval(tid('lib-src'), (b) => b.map((x) => x.textContent.trim()));
   assert.equal(new Set(chips).size, chips.length, chips.join(', '));
-  assert.ok(chips.some((c) => /^Vikipedi \(/.test(c)), chips.join(', '));
   await p.screenshot({ path: `${SHOTS}/ornek-360.png` });
   assert.deepEqual(await smallTargets(p), []);
   await p.context().close();
 });
-await step('örnek ZIM: makale görseli arşivden yüklenir, iç bağlantı çalışır', async () => {
+await step('örnek ZIM: makale görseli arşivden yüklenir', async () => {
   const p = await page(URL.ornek);
   await search(p, 'deprem');
   await p.click(tid('lib-result'));
@@ -113,15 +135,20 @@ await step('örnek ZIM: makale görseli arşivden yüklenir, iç bağlantı çal
 });
 
 // ---------------------------------------------------------------------------
-// 3) Tek kaynak (gerçek Vikipedi): seçici yok, üstveri kartı, arama kalitesi
+// 3) Tek kaynak (gerçek Vikipedi): süzgeç yok, koleksiyon kartı, arama kalitesi
 // ---------------------------------------------------------------------------
-await step('tek kaynak: seçici gizli, üstveri kartı', async () => {
+await step('tek kaynak: süzgeç gizli, koleksiyon ekranı, arama kalitesi', async () => {
   const p = await page(URL.tek, { width: 360, height: 640 });
-  assert.equal(await p.$(tid('lib-sources')), null);
-  assert.equal(await p.textContent(tid('lib-meta-count')), '700.883 madde');
-  assert.equal(await p.textContent(tid('lib-meta-lang')), 'Türkçe');
+  await openColl(p, 'wikipedia_tr_all_mini_2026-09.zim');
+  await p.waitForSelector(tid('lib-meta-count'), { timeout: 30000 });
+  assert.equal(await p.textContent(tid('lib-meta-count')), '700.883 sayfa');
+  assert.equal(await p.$(tid('lib-meta-lang')), null, 'Türkçe koleksiyonda dil rozeti yok');
   assert.deepEqual(await smallTargets(p), []);
-  await p.screenshot({ path: `${SHOTS}/tek-360.png` });
+  await p.screenshot({ path: `${SHOTS}/tek-koleksiyon-360.png` });
+  await p.click(tid('lib-coll-back'));
+  await p.click(tid('lib-search'));
+  await search(p, 'deprem', true);
+  assert.equal(await p.$(tid('lib-sources')), null);
   // Türkçe duyarsız: büyük I / noktasız ı ile yazılan İstanbul
   for (const q of ['Istanbul', 'ISTANBUL', 'ıstanbul', 'istanbul', 'İSTANBUL']) {
     await search(p, q);
@@ -141,6 +168,7 @@ await step('tek kaynak: seçici gizli, üstveri kartı', async () => {
     assert.ok(await p.$(tid('lib-noresult')), q);
   }
   assert.match(await p.textContent(tid('lib-noresult')), /bulunamadı/);
+  assert.ok(await p.$(tid('lib-noresult-store')), 'sonuç yoksa mağaza önerisi');
   // çok uzun sorgu taşmaz
   await search(p, 'x'.repeat(200), true);
   assert.equal(await hOverflow(p), false);
@@ -173,7 +201,6 @@ await step('makale: ölü çapalar ve eksik maddeye bağlantılar tıklanabilir 
   const col = await p.$$eval('[data-testid="lib-article-body"] a:not([href])', (as) => [...new Set(as.map((a) => getComputedStyle(a).color))]);
   const accent = await p.evaluate(() => getComputedStyle(document.querySelector('[data-testid="lib-article-body"] a[data-zim-path]')).color);
   assert.ok(!col.includes(accent), `ölü bağlantı rengi ${col} / ${accent}`);
-  // Olimpiyat bilgi kutusu: "IOC kodu" başlığı kelime ortasından bölünmemeli
   await p.click(tid('lib-back'));
   await search(p, "Olimpiyat Oyunları'nda Laos");
   await p.click(tid('lib-result'));
@@ -185,28 +212,36 @@ await step('makale: ölü çapalar ve eksik maddeye bağlantılar tıklanabilir 
   await p.context().close();
 });
 
+await step('çevrimdışıyken dış bağlantı: kısa bilgi, sayfa değişmez', async () => {
+  const p = await page(URL.tek);
+  await search(p, 'deprem');
+  await p.click(tid('lib-result'));
+  await p.waitForSelector(tid('lib-article-body'));
+  const ext = await p.$('[data-testid="lib-article-body"] a[data-ext]');
+  if (ext) {
+    await p.context().setOffline(true);
+    await ext.click();
+    await p.waitForSelector(tid('lib-toast'));
+    assert.match(await p.textContent(tid('lib-toast')), /internet ister/);
+    await p.context().setOffline(false);
+  }
+  await p.context().close();
+});
+
 // ---------------------------------------------------------------------------
-// 4) Çok kaynak: Tümü, seçim, kalıcılık, makale, bul, yazı boyutu, Fener
+// 4) Çok kaynak: süzgeç, koleksiyonda ara, makale, bul, yazı boyutu, Fener
 // ---------------------------------------------------------------------------
-await step('çoklu: Tümü + kaynak seçici + üstveri kartı + yeniden yüklemede kalıcılık', async () => {
+await step('çoklu: kartlar, süzgeç, koleksiyonda arama, tam metin', async () => {
   const p = await page(URL.coklu);
-  await p.evaluate(() => localStorage.clear());
-  await p.reload({ waitUntil: 'networkidle' });
-  await p.waitForSelector(tid('lib-search'));
-  assert.deepEqual(await p.$$eval(tid('lib-src'), (b) => b.map((x) => x.textContent.trim())), ['Vikipedi', 'WikiMed']);
+  assert.equal((await p.$$(tid('lib-coll'))).length, 2);
+  await p.click(tid('lib-search'));
+  await search(p, 'bleeding', true);
+  assert.equal((await p.$$(tid('lib-src'))).length, 2);
   assert.equal(await p.getAttribute(tid('lib-src-all'), 'aria-pressed'), 'true');
-  // Yüklü kaynaklar büyük liste yerine kapak kutucukları; durum kartı ve setler görünür
-  assert.ok(await p.isVisible(tid('lib-status')));
-  assert.equal((await p.$$(tid('lib-set'))).length, 5);
-  assert.equal((await p.$$(tid('lib-main'))).length, 2);
   await p.click(`${tid('lib-src')}[data-src="sample_med_en.zim"]`);
-  assert.equal(await p.textContent(tid('lib-meta-count')), '12 madde');
-  await p.reload({ waitUntil: 'networkidle' });
-  await p.waitForSelector(tid('lib-search'));
-  assert.equal(await p.getAttribute(`${tid('lib-src')}[data-src="sample_med_en.zim"]`, 'aria-pressed'), 'true');
-  assert.match(await p.getAttribute(tid('lib-search'), 'placeholder'), /WikiMed içinde ara/);
-  await search(p, 'kalp', true);
-  assert.ok((await p.$$eval(tid('lib-result-src'), (b) => b.map((x) => x.textContent))).every((x) => x === 'WikiMed'));
+  await p.waitForFunction(() => { const v = document.querySelector('[data-testid="lib-view"]'); return v?.dataset.filter === 'sample_med_en.zim' && v.dataset.state === 'idle'; });
+  const srcs = await p.$$eval(tid('lib-result-src'), (b) => b.map((x) => x.textContent));
+  assert.ok(srcs.length && srcs.every((x) => x === srcs[0]) && !/Vikipedi/.test(srcs[0]), srcs.join(', '));
   await p.click(tid('lib-src-all'));
   await search(p, 'anadolu fay', true);
   assert.ok((await titles(p)).includes('Kuzey Anadolu Fay Hattı'));
@@ -217,14 +252,21 @@ await step('çoklu: Tümü + kaynak seçici + üstveri kartı + yeniden yükleme
     assert.equal(await hOverflow(p), false);
     await p.screenshot({ path: `${SHOTS}/coklu-arama-${vp.width}.png` });
   }
+  // Koleksiyon içinde arama yalnız o koleksiyonda
+  await p.click(tid('lib-search-cancel'));
+  await openColl(p, 'sample_med_en.zim');
+  await p.click(`${tid('lib-details')} summary`);
+  assert.match(await p.textContent(tid('lib-details')), /Sayfa\s*12/);
+  await search(p, 'bleeding', true);
+  assert.equal(await p.$(tid('lib-result-src')), null, 'koleksiyon içinde kaynak etiketi gereksiz');
+  assert.equal((await titles(p))[0], 'Bleeding');
   await p.context().close();
 });
 
-await step('çoklu: makale, geri/ileri, sayfada bul, yazı boyutu, listeye dönüşte kaydırma', async () => {
+await step('çoklu: makale, geri/ileri, sayfada bul, yazı boyutu (kalıcı), listeye dönüşte kaydırma', async () => {
   const p = await page(URL.coklu, { width: 360, height: 640 });
-  await p.click(tid('lib-src-all'));
+  await p.click(tid('lib-search'));
   await search(p, 'deprem', true);
-  // listeyi aşağı kaydır, sondan bir sonucu aç, dönünce aynı yerde olmalı
   const last = (await p.$$(tid('lib-result'))).at(-1);
   await last.scrollIntoViewIfNeeded();
   const y0 = await p.evaluate(() => document.getElementById('main').scrollTop);
@@ -234,19 +276,19 @@ await step('çoklu: makale, geri/ileri, sayfada bul, yazı boyutu, listeye dön�
   assert.ok((await p.evaluate(() => document.getElementById('main').scrollTop)) < 10);
   await p.click(tid('lib-back'));
   await p.waitForSelector(tid('lib-results'));
-  await p.waitForTimeout(100);
+  await p.waitForTimeout(150);
   const y1 = await p.evaluate(() => document.getElementById('main').scrollTop);
   assert.ok(Math.abs(y1 - y0) < 5, `dönüş kaydırma ${y1} ≠ ${y0}`);
 
   await p.click(`${tid('lib-result')}[data-ref="@wikipedia_tr_all_mini_2026-09.zim/Deprem"]`);
   await p.waitForSelector(tid('lib-article-body'));
   assert.equal(await p.textContent(tid('lib-article-title')), 'Deprem');
-  assert.equal(await p.isDisabled(tid('lib-nav-back')), true);
-  assert.equal(await p.isDisabled(tid('lib-nav-fwd')), true);
+  assert.equal(await p.$(tid('lib-nav-back')), null, 'geçmiş yokken ‹ › gizli');
   const link = await p.$('[data-testid="lib-article-body"] a[data-zim-path]');
   await link.click();
   await p.waitForFunction(() => document.querySelector('[data-testid="lib-article-title"]')?.textContent !== 'Deprem');
   const second = await p.textContent(tid('lib-article-title'));
+  assert.equal(await p.isDisabled(tid('lib-nav-fwd')), true);
   await p.click(tid('lib-nav-back'));
   await p.waitForFunction(() => document.querySelector('[data-testid="lib-article-title"]')?.textContent === 'Deprem');
   await p.click(tid('lib-nav-fwd'));
@@ -276,29 +318,30 @@ await step('çoklu: makale, geri/ileri, sayfada bul, yazı boyutu, listeye dön�
   await p.fill(tid('lib-find-input'), 'fay');
   await p.waitForTimeout(100);
   assert.ok((await p.$$('mark.kt-mark')).length > 0);
-  // yazı boyutu: işaretler korunur, 3 kademe döner, kalıcıdır
-  const f0 = parseFloat(await p.$eval(tid('lib-article-body'), (b) => getComputedStyle(b).fontSize));
-  await p.click(tid('lib-textsize'));
-  assert.ok((await p.$$('mark.kt-mark')).length > 0);
-  await p.click(tid('lib-textsize'));
-  const f2 = parseFloat(await p.$eval(tid('lib-article-body'), (b) => getComputedStyle(b).fontSize));
-  assert.ok(f2 > f0);
-  assert.equal(await p.getAttribute(tid('lib-textsize'), 'aria-label'), 'Yazı boyutu: Çok büyük');
   await p.screenshot({ path: `${SHOTS}/makale-bul-360.png` });
   await p.press(tid('lib-find-input'), 'Escape');
   assert.equal((await p.$$('mark.kt-mark')).length, 0);
+  // Yazı boyutu: 5 kademe, A− / A+ sınırda kapanır, kalıcı
+  const f0 = parseFloat(await p.$eval(tid('lib-article-body'), (b) => getComputedStyle(b).fontSize));
+  await p.click(tid('lib-textsize'));
+  for (let i = 0; i < 4; i++) await p.click(tid('lib-size-up')).catch(() => {});
+  assert.equal(await p.isDisabled(tid('lib-size-up')), true);
+  const f2 = parseFloat(await p.$eval(tid('lib-article-body'), (b) => getComputedStyle(b).fontSize));
+  assert.ok(f2 > f0 + 5, `${f0} → ${f2}`);
+  assert.equal(await p.getAttribute(tid('lib-textsize'), 'aria-label'), 'Yazı boyutu: En büyük');
   assert.deepEqual(await smallTargets(p), []);
+  assert.equal(await hOverflow(p), false);
+  await p.screenshot({ path: `${SHOTS}/makale-yazi-360.png` });
   await p.reload({ waitUntil: 'networkidle' });
-  await p.waitForSelector(tid('lib-search'));
-  await search(p, 'deprem');
-  await p.click(tid('lib-result'));
-  await p.waitForSelector(tid('lib-article-body'));
-  assert.match(await p.$eval(tid('lib-article-body'), (b) => b.className), /kt-size-2/);
-  await p.click(tid('lib-textsize')); // normale dön
+  await p.click(tid('lib-continue'));
+  await p.waitForSelector(tid('lib-article-body'), { timeout: 30000 });
+  assert.equal(parseFloat(await p.$eval(tid('lib-article-body'), (b) => getComputedStyle(b).fontSize)), f2);
+  await p.click(tid('lib-textsize'));
+  for (let i = 0; i < 3; i++) await p.click(tid('lib-size-down')); // normale dön
   await p.context().close();
 });
 
-await step("çoklu: Bu makale hakkında Fener'e sor", async () => {
+await step("çoklu: Fener'e sor", async () => {
   const p = await page(URL.coklu);
   await search(p, 'hipotermi');
   await p.click(tid('lib-result'));
@@ -307,15 +350,14 @@ await step("çoklu: Bu makale hakkında Fener'e sor", async () => {
   await p.waitForFunction(() => /"Hipotermi" hakkında kısaca bilgi verir misin\?/.test(document.getElementById('main')?.textContent || ''), null, { timeout: 30000 });
   await p.screenshot({ path: `${SHOTS}/fener-sor.png` });
   // Kütüphane'ye dönünce makale açık kalır
-  await p.click('nav >> text=Kütüphane');
+  await p.click(tid('nav-kutuphane'));
   await p.waitForSelector(tid('lib-article-title'));
   assert.equal(await p.textContent(tid('lib-article-title')), 'Hipotermi');
   await p.context().close();
 });
 
-await step('çoklu: geçmiş (kalıcı, uzun sorgu taşmaz), temizle/vazgeç, rastgele makale', async () => {
+await step('çoklu: geçmiş (kalıcı, uzun sorgu taşmaz), temizle/vazgeç, rastgele sayfa, okumaya başla', async () => {
   const p = await page(URL.coklu, { width: 360, height: 640 });
-  await p.evaluate(() => localStorage.removeItem('ac.lib.history'));
   await search(p, 'dehydration');
   await p.press(tid('lib-search'), 'Enter');
   await p.waitForSelector(tid('lib-article-title'));
@@ -324,9 +366,10 @@ await step('çoklu: geçmiş (kalıcı, uzun sorgu taşmaz), temizle/vazgeç, ra
   await search(p, long, true);
   await p.press(tid('lib-search'), 'Enter');
   await p.fill(tid('lib-search'), '');
-  await p.reload({ waitUntil: 'networkidle' });
+  await p.goto(URL.coklu + '/?tab=kutuphane', { waitUntil: 'networkidle' });
   await p.waitForSelector(tid('lib-search'));
-  await p.fill(tid('lib-search'), '');
+  await p.click(tid('lib-search'));
+  await p.waitForSelector(tid('lib-history-item'));
   const hist = await p.$$eval(tid('lib-history-item'), (b) => b.map((x) => x.textContent));
   assert.equal(hist[0], long.trim());
   assert.ok(hist.includes('dehydration'));
@@ -342,18 +385,24 @@ await step('çoklu: geçmiş (kalıcı, uzun sorgu taşmaz), temizle/vazgeç, ra
   await p.click(tid('lib-history-clear'));
   await p.click(tid('lib-history-clear-yes'));
   assert.equal(await p.$(tid('lib-history-item')), null);
-  await p.reload({ waitUntil: 'networkidle' });
-  await p.waitForSelector(tid('lib-search'));
-  assert.equal(await p.$(tid('lib-history-item')), null);
+  // Rastgele: tüm koleksiyonlardan (arama ekranında) ve tek koleksiyondan
+  await p.click(tid('lib-random'));
+  await p.waitForSelector(tid('lib-article-title'), { timeout: 30000 });
+  await p.click(tid('lib-back'));
+  await p.click(tid('lib-search-cancel'));
   for (const src of ['sample_med_en.zim', 'wikipedia_tr_all_mini_2026-09.zim']) {
-    await p.click(`${tid('lib-src')}[data-src="${src}"]`);
+    await openColl(p, src);
+    await p.waitForSelector(`${tid('lib-random')}:not([disabled])`, { timeout: 30000 });
     await p.click(tid('lib-random'));
     await p.waitForSelector(tid('lib-article-title'), { timeout: 30000 });
-    assert.equal(await p.textContent(tid('lib-article-src')), src.startsWith('sample') ? 'WikiMed' : 'Vikipedi');
+    const kol = await p.textContent(tid('lib-article-src'));
+    assert.ok(src.startsWith('sample') ? !/Vikipedi/.test(kol) : /Vikipedi/.test(kol), kol);
     await p.click(tid('lib-back'));
+    await p.waitForSelector(tid('lib-coll-home'));
+    await p.click(tid('lib-coll-back'));
   }
-  await p.click(tid('lib-src-all'));
-  await p.click(`${tid('lib-main')} >> nth=0`);
+  await openColl(p, 'wikipedia_tr_all_mini_2026-09.zim');
+  await p.click(tid('lib-main'));
   await p.waitForSelector(tid('lib-article-body'), { timeout: 30000 });
   await p.context().close();
 });

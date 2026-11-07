@@ -1,6 +1,6 @@
 // Rehber sekmesi QA regresyon betiği:
 //   node e2e/qa-rehber.mjs [http://localhost:5199/] [/tmp/qa-rehber]
-// Ana ekran (18 kategori, 3 hayati kısayol, arama), her kategori ve her rehber
+// Ana ekran (tüm kategoriler, 3 hayati kısayol, arama), her kategori ve her rehber
 // (adımlar, çizimler, 112 bandı, Yapmayın, kaynaklar, inceleme notu, Fener'e sor),
 // doğrudan bağlantılar, geri dönüş, yerleşim (390×844, 360×640, 1280×800) ve konsol hataları.
 import { createRequire } from 'module';
@@ -46,12 +46,13 @@ const data = await p.evaluate(async () => {
   };
 });
 const ids = Object.keys(data.guides);
-check(ids.length === 168, `168 rehber (${ids.length})`);
-check(data.cats.length === 18, `18 kategori (${data.cats.length})`);
+const N_REHBER = ids.length, N_KAT = data.cats.length;
+check(N_REHBER >= 189, `en az 189 rehber (${ids.length})`);
+check(N_KAT >= 19, `en az 19 kategori (${data.cats.length})`);
 
 // --- Ana ekran -----------------------------------------------------------------
 const tiles = await p.$$eval(T('guide-category'), (els) => els.map((e) => [e.dataset.categoryId, e.querySelector('.rh-cat-count')?.textContent]));
-check(tiles.length === 18, `ana ekranda 18 kutu (${tiles.length})`);
+check(tiles.length === N_KAT, `ana ekranda her kategori için kutu (${tiles.length})`);
 for (const c of data.cats) {
   const t = tiles.find((x) => x[0] === c.id);
   check(t && t[1] === `${c.guides.length} rehber`, `kutu sayacı ${c.id}: ${t?.[1]}`);
@@ -64,7 +65,7 @@ for (const [id] of sos) {
   check((await p.textContent('#rh-title')) === data.guides[id].title, `kısayol ${id} rehberi açar`);
   check((await p.textContent(T('guide-back'))).trim() === '← Rehber', `kısayoldan açılan ${id}: geri "← Rehber"`);
   await p.click(T('guide-back'));
-  check((await p.$$(T('guide-category'))).length === 18, `kısayol ${id}: geri ana ekrana döner`);
+  check((await p.$$(T('guide-category'))).length === N_KAT, `kısayol ${id}: geri ana ekrana döner`);
 }
 
 // --- Arama -----------------------------------------------------------------------
@@ -92,7 +93,7 @@ check((await p.textContent(T('guide-back'))).trim() === '← Arama sonuçları',
 await p.click(T('guide-back'));
 check((await p.inputValue(T('guide-search'))) === 'kanama' && (await firstCard()) === 'kanama', 'geri: arama sonuçları korunur');
 await p.fill(T('guide-search'), '');
-check((await p.$$(T('guide-category'))).length === 18, 'arama temizlenince kutular geri gelir');
+check((await p.$$(T('guide-category'))).length === N_KAT, 'arama temizlenince kutular geri gelir');
 
 // --- Her kategori, her rehber ---------------------------------------------------------
 const seen = new Set();
@@ -137,9 +138,9 @@ for (const c of data.cats) {
     check((await p.textContent('.rh-title')) === c.title, `${id}: geri ${c.id} kategorisine döner`);
   }
   await p.click(T('category-back'));
-  check((await p.$$(T('guide-category'))).length === 18, `kategori ${c.id}: geri ana ekran`);
+  check((await p.$$(T('guide-category'))).length === N_KAT, `kategori ${c.id}: geri ana ekran`);
 }
-check(seen.size === 168, `168 rehberin hepsi açıldı (${seen.size})`);
+check(seen.size === N_REHBER, `${N_REHBER} rehberin hepsi açıldı (${seen.size})`);
 
 // --- Fener'e sor ------------------------------------------------------------------------
 await p.goto(base + '?guide=yaralanma-kene', { waitUntil: 'networkidle' });
@@ -170,11 +171,11 @@ check((await p.textContent(T('guide-back'))).trim() === '← ' + data.cats.find(
 await deep('?cat=deprem&guide=kanama');
 check((await p.textContent(T('guide-back'))).trim() === '← Hayati ilk yardım', '?cat=deprem&guide=kanama: rehber o kategoride değilse ana kategorisine');
 await deep('?guide=boyle-bir-rehber-yok');
-check((await p.$$(T('guide-category'))).length === 18, '?guide=geçersiz → ana ekran');
+check((await p.$$(T('guide-category'))).length === N_KAT, '?guide=geçersiz → ana ekran');
 await deep('?cat=yok');
-check((await p.$$(T('guide-category'))).length === 18, '?cat=geçersiz → ana ekran');
+check((await p.$$(T('guide-category'))).length === N_KAT, '?cat=geçersiz → ana ekran');
 await deep('?tab=rehber');
-check((await p.$$(T('guide-category'))).length === 18, '?tab=rehber → ana ekran');
+check((await p.$$(T('guide-category'))).length === N_KAT, '?tab=rehber → ana ekran');
 
 // --- Denetim 2026-11 ----------------------------------------------------------------------------
 // Ana ekran sahnesi: geçiş, çizimin alt kenarından önce zemine karışmalı (kenar çizgisi görünmesin)

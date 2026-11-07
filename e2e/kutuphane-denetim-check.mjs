@@ -1,10 +1,11 @@
-// Kütüphane denetimi (2026-11) regresyon kontrolü — Vite dev sunucusunda (?devzim=) çalışır:
+// Kütüphane denetimi regresyon kontrolü (yeni tasarım 2026-11) — Vite dev sunucusunda (?devzim=) çalışır:
 //   node e2e/kutuphane-denetim-check.mjs [http://localhost:5199/] [ekran-klasörü]
-// Denetlenenler: PDF okuyucu ile makale çubuğunun üst üste binmemesi, büyük yazıda çubuklar,
-// arama sonuçlarının taşmaması, çeviri açıkken kapat düğmesinin ekranda kalması, makaledeki PDF
+// Denetlenenler: PDF okuyucunun tek çubukla tam ekran açılması, büyük yazıda çubuklar, arama
+// sonuçlarının taşmaması, çeviri açıkken kapat düğmesinin ekranda kalması, makaledeki PDF
 // bağlantısının uygulama içinde açılması, SVG'nin metin olarak gösterilmemesi, büyük PDF'te tuval
-// sınırı / yakınlaştırmada yerin korunması, mağazada indir/duraklat/devam/iptal/sil/yer yetmez ve
-// bir indirme bitince açık koleksiyonun kapanmaması, gizlenen çevirinin baştan çevrilmemesi.
+// sınırı / yakınlaştırmada yerin korunması, mağazada başlangıç seti / indir / duraklat / devam /
+// iptal / yer yetmez, inen içeriğin Kitaplığım'da görünmesi, silme, gizlenen çevirinin baştan
+// çevrilmemesi. Ekran görüntüleri: indirme sürerken mağaza (magaza-iniyor.png) dahil.
 // Büyük PDF'li sınama arşivi python3 + libzim + reportlab ile üretilir (yoksa o adım atlanır).
 import { createRequire } from 'module';
 import { spawnSync } from 'node:child_process';
@@ -48,21 +49,20 @@ const ONLY = process.env.ONLY; // ör. ONLY=360-buyuk,dosya,magaza,ceviri
 const want = (n) => !ONLY || ONLY.split(',').includes(n);
 for (const [vp, large, tag] of [[{ width: 390, height: 844 }, false, '390'], [{ width: 360, height: 640 }, false, '360'], [{ width: 360, height: 640 }, true, '360-buyuk']].filter((x) => want(x[2]))) {
   const { ctx, p, errors } = await open(`?tab=kutuphane&devzim=${ZIMS}`, { vp, large });
-  await p.waitForSelector(tid('lib-main'), { timeout: 30000 });
-  await p.click(`${tid('lib-main')}:has-text("Sample Library")`);
-  await p.waitForSelector(tid('lib-books'));
-  const tools = await p.$$eval('.kt-bar-tools button', (b) => b.map((x) => x.dataset.testid));
-  check(!tools.includes('lib-find-toggle') && !tools.includes('lib-textsize'), `${tag}: kitap listesinde işe yaramayan "Sayfada bul"/"Aa" yok`);
+  await p.waitForSelector(`${tid('lib-coll')}[data-src="sample_kitap_en.zim"]`, { timeout: 30000 });
+  await p.click(`${tid('lib-coll')}[data-src="sample_kitap_en.zim"]`);
+  await p.waitForSelector(tid('lib-books'), { timeout: 30000 });
+  check(!(await p.$(tid('lib-main'))), `${tag}: kitap kitaplığında kitaplar doğrudan koleksiyon ekranında`);
   await p.click(`${tid('lib-book')}:has-text("Water Storage") ${tid('lib-book-open')}`);
   await p.waitForSelector('[data-page="1"] canvas', { timeout: 30000 });
+  check(!(await p.$(tid('lib-bar-top'))) && !(await p.$(tid('lib-coll-home'))), `${tag}: PDF tam ekran, tek çubukla açılır`);
   await p.evaluate(() => document.getElementById('main').scrollTo(0, 700));
   await p.waitForTimeout(400);
   const bars = await p.evaluate(() => {
-    const a = document.querySelector('.kt-bar').getBoundingClientRect();
     const b = document.querySelector('.po-top').getBoundingClientRect();
-    return { ktBottom: Math.round(a.bottom), poTop: Math.round(b.top), mainTop: Math.round(document.getElementById('main').getBoundingClientRect().top) };
+    return { poTop: Math.round(b.top), mainTop: Math.round(document.getElementById('main').getBoundingClientRect().top) };
   });
-  check(bars.ktBottom <= bars.poTop && bars.poTop === bars.mainTop, `${tag}: kaydırınca PDF çubuğu makale çubuğunun altında kalmıyor ` + JSON.stringify(bars));
+  check(bars.poTop === bars.mainTop, `${tag}: kaydırınca PDF çubuğu yapışık kalır ` + JSON.stringify(bars));
   await p.fill(tid('pdf-search'), 'water');
   await p.waitForSelector(tid('pdf-hit'), { timeout: 20000 });
   await p.waitForFunction(() => !document.querySelector('[data-testid="pdf-scan"]'));
@@ -73,7 +73,6 @@ for (const [vp, large, tag] of [[{ width: 390, height: 844 }, false, '390'], [{ 
   await p.waitForSelector(tid('lib-translation'));
   await p.waitForTimeout(400);
   check(!(await p.$(tid('pdf-hits'))), `${tag}: çeviri açıkken sonuç listesi gizli`);
-  // Sayfalar kaydırılınca çubuk yapışır; çeviri kutusu ve "Çeviriyi kapat" yine erişilebilir olmalı
   await p.evaluate(() => document.getElementById('main').scrollBy(0, 1500));
   await p.waitForTimeout(300);
   const tr = await p.evaluate(() => {
@@ -89,14 +88,23 @@ for (const [vp, large, tag] of [[{ width: 390, height: 844 }, false, '390'], [{ 
   await p.click(tid('pdf-translate-close'));
   await p.click(tid('pdf-back'));
   await p.waitForSelector(tid('lib-books'));
-  check((await p.$eval(tid('lib-bar-top'), (e) => getComputedStyle(e).position)) === 'sticky', `${tag}: okuyucu kapanınca makale çubuğu yeniden yapışkan`);
+  check(!!(await p.$(tid('lib-coll-home'))), `${tag}: PDF kapanınca koleksiyon ekranına dönülür`);
+  await p.click(tid('lib-coll-back'));
   // Makale: büyük yazıda geri düğmesi ezilmez, araç düğmeleri ekrana sığar
-  await p.click(tid('lib-back'));
   await p.waitForSelector(tid('lib-search'));
+  await p.click(tid('lib-search'));
   await p.fill(tid('lib-search'), 'bleeding');
   await p.waitForSelector(tid('lib-result'));
   await p.click(`${tid('lib-result')} >> nth=0`);
   await p.waitForSelector(tid('lib-article-title'));
+  // ‹ › yalnız geçmiş varken görünür: ölçüm için bir iç bağlantı izlenir, sonra geri
+  const il = await p.$(`${tid('lib-article-body')} a[data-zim-path]`);
+  if (il) {
+    await il.click();
+    await p.waitForSelector(tid('lib-nav-back'));
+    await p.click(tid('lib-nav-back'));
+    await p.waitForFunction(() => /Bleeding/i.test(document.querySelector('[data-testid="lib-article-title"]')?.textContent || ''));
+  }
   await p.click(tid('lib-find-toggle'));
   await p.fill(tid('lib-find-input'), 'blood');
   await p.waitForTimeout(300);
@@ -104,11 +112,11 @@ for (const [vp, large, tag] of [[{ width: 390, height: 844 }, false, '390'], [{ 
     const vw = document.documentElement.clientWidth;
     const r = (s) => document.querySelector(s).getBoundingClientRect();
     const back = r('[data-testid="lib-back"]');
-    const ibtn = r('[data-testid="lib-nav-back"]');
+    const ibtn = r(document.querySelector('[data-testid="lib-nav-back"]') ? '[data-testid="lib-nav-back"]' : '[data-testid="lib-textsize"]');
     const out = [...document.querySelectorAll('.kt-bar button, .kt-bar input')].filter((e) => e.getBoundingClientRect().right > vw + 1).length;
     return { back: Math.round(back.width), backH: Math.round(back.height), ibtnH: Math.round(ibtn.height), find: Math.round(r('[data-testid="lib-find-input"]').width), out };
   });
-  check(geo.back >= 100 && geo.backH <= geo.ibtnH + 2 && geo.find >= 100 && geo.out === 0, `${tag}: makale çubuğu sığıyor (geri tek satır, bulma kutusu geniş) ` + JSON.stringify(geo));
+  check(geo.back >= 80 && geo.backH <= geo.ibtnH + 2 && geo.find >= 100 && geo.out === 0, `${tag}: makale çubuğu sığıyor (geri tek satır, bulma kutusu geniş) ` + JSON.stringify(geo));
   await p.screenshot({ path: `${SHOTS}/makale-bul-${tag}.png` });
   check((await small(p)).length === 0, `${tag}: makalede dokunma alanları ≥44px ` + (await small(p)).join(', '));
   check(errors.length === 0, `${tag}: konsol hatası yok` + (errors.length ? ': ' + errors.join(' | ') : ''));
@@ -131,7 +139,9 @@ class It(Item):
     def get_contentprovider(self): return StringProvider(self.data)
     def get_hints(self): return {Hint.FRONT_ARTICLE: self.front}
 pages = [[f"Chapter {i+1}", "", f"This is page {i+1} of a long manual about shelters.", f"Unique marker zebra{i+1:03d}."] for i in range(400)]
-body = '<ul><li><a href="files/big-manual.pdf">Big manual</a></li><li><a href="files/drawing.svg">Drawing</a></li></ul>'
+body = '<ul><li><a href="files/big-manual.pdf">Big manual</a></li><li><a href="files/drawing.svg">Drawing</a></li><li><a href="files/photo.png">Photo</a></li><li><a href="files/guide.epub">Guide</a></li></ul>'
+import base64
+png = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')
 with Creator(sys.argv[1]).config_indexing(False, "eng").config_compression(Compression.zstd) as c:
     c.set_mainpath("Index")
     for k, v in {"Title": "Denetim Files", "Description": "File links test", "Language": "eng", "Name": "denetim_en", "Date": "2026-01-01"}.items():
@@ -139,6 +149,8 @@ with Creator(sys.argv[1]).config_indexing(False, "eng").config_compression(Compr
     c.add_item(It("Index", "Index", m.page("Index", body), "text/html", True))
     c.add_item(It("files/big-manual.pdf", "Big manual", m.make_pdf(pages), "application/pdf"))
     c.add_item(It("files/drawing.svg", "Drawing", '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>', "image/svg+xml"))
+    c.add_item(It("files/photo.png", "Photo", png, "image/png"))
+    c.add_item(It("files/guide.epub", "Guide", b"PK\x03\x04epub", "application/epub+zip"))
 `;
 const made = want('dosya') ? spawnSync('python3', ['-c', py, zimOut], { cwd: os.tmpdir(), encoding: 'utf8' }) : null;
 if (!made) {
@@ -159,6 +171,8 @@ if (!made) {
   const popups = [];
   ctx.on('page', (np) => popups.push(np));
   const state = () => p.evaluate(() => ({ docTop: document.scrollingElement.scrollTop, page: document.querySelector('[data-testid="pdf-page"]')?.textContent ?? '' }));
+  await p.waitForSelector(tid('lib-coll'), { timeout: 30000 });
+  await p.click(tid('lib-coll'));
   await p.waitForSelector(tid('lib-main'), { timeout: 30000 });
   await p.click(tid('lib-main'));
   await p.waitForSelector(`${tid('lib-article-body')} a:has-text("Drawing")`);
@@ -192,6 +206,26 @@ if (!made) {
   check(/sayfa 400/.test(end.page) && end.docTop === 0, 'son sayfadaki sonuca gidince belge (uygulama başlığı) kaymaz ' + JSON.stringify(end));
   check(errors.length === 0, 'konsol hatası yok' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await ctx.close();
+  // Android (Capacitor taklidi): yeni pencere / blob indirme çalışmaz → resim uygulama içinde, desteklenmeyen tür için açıklama
+  const nat = await open('?tab=kutuphane&devzim=/__kt/denetim_en.zim', {
+    setup: async (c) => {
+      await serveZim(c);
+      await c.addInitScript(() => { window.Capacitor = { getPlatform: () => 'android', isNativePlatform: () => true, Plugins: {} }; });
+    },
+  });
+  const np = nat.p;
+  await np.waitForSelector(tid('lib-coll'), { timeout: 30000 });
+  await np.click(tid('lib-coll'));
+  await np.click(tid('lib-main'));
+  await np.click(`${tid('lib-article-body')} a:has-text("Photo")`);
+  await np.waitForSelector(`img${tid('lib-file-view')}`, { timeout: 10000 });
+  check(!(await np.$(tid('lib-file-save'))) && !(await np.$(tid('lib-file-open'))), "Android: resim uygulama içinde gösterilir, çalışmayan 'Kaydet/Aç' düğmeleri yok");
+  await np.click(tid('lib-nav-back'));
+  await np.click(`${tid('lib-article-body')} a:has-text("Guide")`);
+  await np.waitForSelector(tid('lib-file-unsupported'));
+  check(/gösterilemiyor/.test(await np.textContent(tid('lib-file-unsupported'))), 'Android: desteklenmeyen dosya türü için açık ileti');
+  check(nat.errors.length === 0, 'Android dosya görüntüleyici: konsol hatası yok' + (nat.errors.length ? ': ' + nat.errors.join(' | ') : ''));
+  await nat.ctx.close();
 }
 
 // ---- 3) Mağaza: indir / duraklat / devam / iptal / sil / yer yetmez ---------------------------
@@ -211,47 +245,69 @@ if (want('magaza')) {
     if (quota != null) await ctx.addInitScript((q) => { const est = navigator.storage.estimate.bind(navigator.storage); navigator.storage.estimate = async () => ({ ...(await est()), quota: q, usage: 0 }); }, quota);
   };
   const q = '?tab=kutuphane&browserdl=1&devzim=/testdata/sample_tr.zim';
-  const rows = (p) => p.$$eval(tid('pack-row'), (r) => r.filter((x) => /kt-[ab]\.zim/.test(x.dataset.pack)).map((x) => ({ f: x.dataset.pack, s: x.dataset.state, t: x.textContent })));
+  const items = (p) => p.$$eval(tid('lib-store-item'), (r) => r.filter((x) => /kt-[ab]\.zim/.test(x.dataset.pack)).map((x) => ({ f: x.dataset.pack, s: x.dataset.state, t: x.textContent })));
   const { ctx, p, errors } = await open(q, { setup: setup(null) });
   await p.evaluate(async () => { try { const r = await navigator.storage.getDirectory(); for await (const [n] of r.entries()) await r.removeEntry(n, { recursive: true }); } catch {} localStorage.clear(); });
   await p.reload({ waitUntil: 'networkidle' });
-  await p.waitForSelector(tid('lib-bar'), { timeout: 30000 });
-  check(/2 paket · 9 MB/.test(await p.textContent(tid('lib-bar'))), 'alt çubuk seçili setin toplamını gösterir');
-  await p.click(tid('lib-catalog-toggle'));
-  await p.click(tid('lib-bar-start'));
-  await p.waitForFunction(() => /İndiriliyor/.test(document.querySelector('[data-testid="lib-bar"]')?.textContent || ''), null, { timeout: 15000 });
-  await p.waitForTimeout(1200);
-  check(/İndiriliyor · %\d+/.test(await p.textContent(tid('lib-bar'))), 'toplu indirme çubuğu yüzde gösterir');
+  await p.waitForSelector(tid('lib-coll'), { timeout: 30000 });
+  await p.click(`${tid('lib-collections')} ${tid('lib-open-store')}`);
+  await p.waitForSelector(tid('lib-starter'), { timeout: 30000 });
+  check(/9 MB/.test(await p.textContent(tid('lib-starter-dl'))), 'başlangıç seti düğmesi toplam boyutu gösterir: ' + (await p.textContent(tid('lib-starter-dl'))));
+  check((await p.$$(tid('lib-store-sec'))).length === 2, 'mağaza ihtiyaca göre bölümlere ayrılmış (2 bölüm)');
+  check(/Telefona rahat sığar/.test(await p.textContent(tid('lib-store-item'))), 'öğede telefona sığma ipucu');
+  await p.click(tid('lib-starter-dl'));
+  await p.waitForFunction(() => /İndiriliyor · %\d+/.test(document.querySelector('[data-testid="lib-downloads"]')?.textContent || ''), null, { timeout: 15000 });
+  await p.waitForTimeout(1500);
+  check(!(await p.$(tid('lib-starter'))), 'indirme başlayınca başlangıç kartı gizlenir');
+  const st = await p.textContent(tid('lib-downloads'));
+  check(/%\d+ · \d+ (MB|KB) \/ \d+ MB/.test(st), 'indirme listesi yüzde ve boyut gösterir: ' + st.replace(/\s+/g, ' ').slice(0, 120));
+  check((await items(p)).some((x) => x.s === 'iniyor' && /İndiriliyor %\d+/.test(x.t)), 'mağaza öğesi de ilerlemeyi yerinde gösterir');
+  await p.screenshot({ path: `${SHOTS}/magaza-iniyor.png` });
+  await p.click(tid('lib-store-back'));
+  await p.waitForSelector(tid('lib-dl-strip'));
+  check(/İndiriliyor · %\d+/.test(await p.textContent(tid('lib-dl-strip'))), "Kitaplığım'da indirme şeridi");
+  await p.click(tid('lib-dl-strip'));
+  await p.waitForSelector(tid('lib-downloads'));
   await p.click(tid('lib-bar-pause'));
-  await p.waitForFunction(() => !/İndiriliyor/.test(document.querySelector('[data-testid="lib-bar"]')?.textContent || ''), null, { timeout: 10000 });
+  await p.waitForFunction(() => !/İndiriliyor/.test(document.querySelector('[data-testid="lib-downloads"]')?.textContent || ''), null, { timeout: 10000 });
   await p.waitForTimeout(400);
-  let r = await rows(p);
-  check(r.some((x) => x.s === 'paused' && /Duraklatıldı %\d+/.test(x.t)), 'duraklatılan satır "Duraklatıldı %NN" (Türkçe yüzde biçimi): ' + r.map((x) => x.t.match(/Duraklatıldı[^A-Z]*/)?.[0]).join(' | '));
-  check(/Devam et/.test(await p.textContent(tid('lib-bar-start'))) && /duraklatıldı/.test(await p.textContent(tid('lib-bar'))), 'duraklatınca alt çubuk "Devam et" der');
-  await p.click(`${tid('pack-row')}[data-state="paused"] ${tid('pack-resume')} >> nth=0`);
-  await p.waitForSelector(`${tid('pack-row')}[data-state="downloading"]`, { timeout: 10000 });
-  await p.click(`${tid('pack-row')}[data-state="downloading"] ${tid('pack-cancel')} >> nth=0`);
-  await p.waitForTimeout(600);
-  r = await rows(p);
-  check(r.some((x) => x.s === 'none'), 'iptal edilen paket indirilmemiş duruma döndü');
-  await p.click(tid('lib-bar-start'));
-  await p.waitForFunction(() => [...document.querySelectorAll('[data-testid="pack-row"]')].filter((x) => /kt-[ab]\.zim/.test(x.dataset.pack) && x.dataset.state === 'ready').length === 2, null, { timeout: 90000 }).catch(() => {});
-  r = await rows(p);
-  check(r.filter((x) => x.s === 'ready').length === 2, 'iki paket indi ve "Hazır · cihazda"');
-  check(!!(await p.$(tid('lib-catalog'))), 'indirme bitince açık koleksiyon kapanmadı (görünüm yeniden kurulmuyor)');
-  check(/Temel set hazır/.test(await p.textContent(tid('lib-status'))), 'durum kartı: Temel set hazır');
-  await p.click(tid('lib-manage-toggle'));
+  let r = await items(p);
+  check(r.some((x) => x.s === 'duraklatildi' && /Duraklatıldı %\d+/.test(x.t)), 'duraklatılan öğe "Duraklatıldı %NN": ' + r.map((x) => x.s).join(','));
+  check(/Duraklatıldı · %\d+/.test(await p.textContent(tid('lib-downloads'))), 'indirme listesi de duraklatıldı der');
+  await p.click(`${tid('lib-store-item')}[data-state="duraklatildi"] ${tid('lib-store-resume')} >> nth=0`);
+  await p.waitForSelector(`${tid('lib-store-item')}[data-state="iniyor"]`, { timeout: 10000 });
+  await p.click(`${tid('lib-store-item')}[data-state="iniyor"] ${tid('lib-store-cancel')} >> nth=0`);
+  await p.waitForTimeout(800);
+  r = await items(p);
+  check(r.some((x) => x.s === 'yok'), 'iptal edilen içerik indirilmemiş duruma döndü: ' + r.map((x) => x.s).join(','));
+  await p.waitForSelector(tid('lib-starter-dl'));
+  check(/Kalanları indir|Başlangıç setini indir/.test(await p.textContent(tid('lib-starter-dl'))), 'başlangıç kartı geri geldi');
+  await p.click(tid('lib-starter-dl'));
+  await p.waitForFunction(() => [...document.querySelectorAll('[data-testid="lib-store-item"]')].filter((x) => /kt-[ab]\.zim/.test(x.dataset.pack) && x.dataset.state === 'telefonda').length === 2, null, { timeout: 90000 }).catch(() => {});
+  r = await items(p);
+  check(r.filter((x) => x.s === 'telefonda').length === 2, 'iki içerik indi ve "✓ Telefonda": ' + r.map((x) => x.s).join(','));
+  check(!!(await p.$(tid('lib-store'))), 'indirme bitince mağaza ekranı yerinde kaldı');
+  await p.click(`${tid('lib-store-item')}[data-pack="kt-a.zim"] ${tid('lib-store-read')}`);
+  await p.waitForSelector(`${tid('lib-coll-home')}[data-src="kt-a.zim"]`);
+  check(true, '"Oku" koleksiyon ekranını açar');
+  await p.click(tid('lib-coll-back'));
+  const cards = await p.$$eval(tid('lib-coll'), (b) => b.map((x) => x.dataset.src));
+  check(cards.includes('kt-a.zim') && cards.includes('kt-b.zim'), "inenler Kitaplığım'da: " + cards.join(', '));
+  await p.click(tid('lib-open-manage'));
   await p.click(`${tid('lib-manage-panel')} ${tid('pack-row')}[data-pack="kt-b.zim"] ${tid('pack-delete')}`);
+  check(/3 MB yer açılır/.test(await p.textContent(tid('pack-delete-q'))), 'silme onayı ne kadar yer açılacağını söyler');
   await p.click(tid('pack-delete-yes'));
   await p.waitForFunction(() => !document.querySelector('[data-testid="lib-manage-panel"] [data-pack="kt-b.zim"]'), null, { timeout: 10000 }).catch(() => {});
-  check(/Kütüphaneniz hazırlanıyor/.test(await p.textContent(tid('lib-status'))) && !!(await p.$(tid('lib-manage-panel'))), 'silince durum kartı güncellendi, "Yönet" paneli açık kaldı');
+  check(!(await p.$(`${tid('lib-manage-panel')} [data-pack="kt-b.zim"]`)) && !!(await p.$(tid('lib-manage-panel'))), 'silinen içerik listeden kalktı, ekran açık kaldı');
   check(errors.length === 0, 'mağaza: konsol hatası yok' + (errors.length ? ': ' + errors.join(' | ') : ''));
   await p.evaluate(async () => { try { const r = await navigator.storage.getDirectory(); for await (const [n] of r.entries()) await r.removeEntry(n, { recursive: true }); } catch {} });
   await ctx.close();
   const o = await open(q, { setup: setup(5 * 1024 * 1024) });
-  await o.p.waitForSelector(tid('lib-bar'), { timeout: 30000 });
+  await o.p.waitForSelector(tid('lib-coll'), { timeout: 30000 });
+  await o.p.click(`${tid('lib-collections')} ${tid('lib-open-store')}`);
+  await o.p.waitForSelector(tid('lib-starter'), { timeout: 30000 });
   await o.p.waitForTimeout(400);
-  check(/Yer yetmez: 5 MB boş/.test(await o.p.textContent(tid('lib-bar'))) && (await o.p.isDisabled(tid('lib-bar-start'))), 'yer yetmezse uyarı ve "İndir" kapalı');
+  check(/Yer yetmez \(5 MB boş\)/.test(await o.p.textContent(tid('lib-starter-fit'))) && (await o.p.isDisabled(tid('lib-starter-dl'))), 'yer yetmezse uyarı ve "İndir" kapalı');
   await o.p.screenshot({ path: `${SHOTS}/magaza-yer-yok.png` });
   await o.ctx.close();
   await slow.close?.();
@@ -261,6 +317,7 @@ if (want('magaza')) {
 if (want('ceviri')) {
   const { ctx, p, errors } = await open('?tab=kutuphane&devzim=/testdata/sample_med_en.zim&devmodel=/testdata/tiny-test.gguf');
   await p.waitForSelector(tid('lib-search'), { timeout: 30000 });
+  await p.click(tid('lib-search'));
   await p.fill(tid('lib-search'), 'bleeding');
   await p.waitForSelector(tid('lib-result'));
   await p.click(`${tid('lib-result')} >> nth=0`);

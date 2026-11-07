@@ -9,7 +9,7 @@
 //   + (sıkıştırılmış olabilir) [ofset tablosu][bloblar].
 //   Yeni ad alanı düzeninde (minor ≥ 1) tüm içerik 'C' ad alanındadır ve
 //   ön makaleler listesi X/listing/titleOrdered/v1 içinde tutulur.
-import { HttpRangeSource, type RandomAccessSource } from '../source';
+import { HttpRangeSource, QueryRangeSource, type RandomAccessSource } from '../source';
 import { LRU, PagedReader, u16, u32, u64 } from './cache';
 import { decompress, MAX_CLUSTER_BYTES } from './decompress';
 import { caseVariants, foldTr } from './text';
@@ -114,8 +114,10 @@ export class ZimArchive {
   }
 
   static async open(src: RandomAccessSource): Promise<ZimArchive> {
-    // Ağ üzerinden (HTTP Range) her istek pahalıdır: daha büyük sayfalar, daha az istek
-    const remote = src instanceof HttpRangeSource;
+    // Ağ üzerinden (HTTP Range) her istek pahalıdır: daha büyük sayfalar, daha az istek.
+    // Android paket klasörü (/_paket/?aralik=) de öyle: her okuma WebView ile Java arasında ayrı
+    // bir istektir (gerçek dosyalarla Vikipedi araması ~%20 daha az istekle biter).
+    const remote = src instanceof HttpRangeSource || src instanceof QueryRangeSource;
     const reader = remote ? new PagedReader(src, 32 * 1024, 192) : new PagedReader(src);
     const h = await reader.read(0, 80);
     if (h.length < 80 || u32(h, 0) !== MAGIC) throw new Error('Geçerli bir ZIM dosyası değil');
@@ -440,7 +442,7 @@ export class ZimArchive {
         if (!d) return null;
         const loc = await this.blobLocation(d);
         if (!loc) return null;
-        return GlassDb.open(this.reader.src, loc.offset, loc.size, this.reader.src instanceof HttpRangeSource ? 2 : 1);
+        return GlassDb.open(this.reader.src, loc.offset, loc.size, this.reader.src instanceof HttpRangeSource || this.reader.src instanceof QueryRangeSource ? 2 : 1);
       })().catch((e) => {
         console.warn('Xapian dizini açılamadı', e);
         return null;
@@ -576,14 +578,14 @@ export class ZimArchive {
    * `contains` = false ise "içerir" yedeği atlanır (Xapian başlık dizini varken
    * gereksizdir ve ağ üzerinden en pahalı kısımdır).
    */
-  async searchTitles(query: string, limit = 20, contains = true): Promise<ZimHit[]> {
+  async searchTitles(query: string, limit = 20, contains = true): Promise<(ZimHit & { redirect: boolean })[]> {
     const tl = this.titleList;
     if (!tl || tl.hi <= tl.lo) return [];
     const q = query.replace(/[_\s]+/g, ' ').trim();
     const qn = foldTr(q);
     if (!qn) return [];
     const chars = [...q];
-    const found = new Map<number, ZimHit & { n: string }>();
+    const found = new Map<number, ZimHit & { n: string; redirect: boolean }>();
     let budget = 400; // ikili arama sayısı üst sınırı
     const SCAN = 48;
     // Toplanacak başlık sınırı. Bir harf varyantının dalı (ör. "Istanbul…")
@@ -595,7 +597,9 @@ export class ZimArchive {
 
     const add = (d: ZimDirent) => {
       if (found.has(d.index)) return;
-      found.set(d.index, { path: this.publicPath(d), title: d.title, n: foldTr(d.title) });
+      // Yönlendirme bilgisi sıralamada kullanılır: aynı katlanmış başlıktan asıl madde gösterilir
+      // ("Vikipedi" araması "Vıkıpedı" yönlendirmesini değil "Vikipedi" maddesini getirsin)
+      found.set(d.index, { path: this.publicPath(d), title: d.title, n: foldTr(d.title), redirect: d.mime === REDIRECT });
     };
 
     const scan = async (a: number, b: number, test: (n: string) => boolean, max: number) => {
@@ -660,6 +664,6 @@ export class ZimArchive {
         return ex - ey || x.n.localeCompare(y.n, 'tr');
       })
       .slice(0, limit)
-      .map(({ path, title }) => ({ path, title }));
+      .map(({ path, title, redirect }) => ({ path, title, redirect }));
   }
 }

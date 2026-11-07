@@ -303,6 +303,8 @@ export function usePackRows(refreshKey?: unknown) {
   const downloads = useDownloads();
   const [manifest, setManifest] = useState<Manifest | null>(null);
   const [installed, setInstalled] = useState<InstalledPack[]>([]);
+  /** Kurulu paketler en az bir kez okundu mu (boş liste ile "henüz bilinmiyor" ayrımı) */
+  const [installedLoaded, setInstalledLoaded] = useState(false);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
   const memGB: number | null = (navigator as any).deviceMemory ?? null;
 
@@ -321,7 +323,11 @@ export function usePackRows(refreshKey?: unknown) {
 
   useEffect(() => {
     let alive = true;
-    listPacks(true).then((p) => alive && setInstalled(p));
+    listPacks(true).then((p) => {
+      if (!alive) return;
+      setInstalled(p);
+      setInstalledLoaded(true);
+    });
     storageInfo().then((s) => alive && setStorage(s));
     return () => {
       alive = false;
@@ -389,7 +395,7 @@ export function usePackRows(refreshKey?: unknown) {
   const dlFor = (r: RowModel) => downloads[r.file] ?? (r.server ? downloads[r.server.id] : undefined) ?? (r.device ? downloads[r.device.id] : undefined);
 
 
-  return { manifest, rows, dlFor, rec, storage, memGB, installed };
+  return { manifest, rows, dlFor, rec, storage, memGB, installed, loaded: !!manifest && installedLoaded };
 }
 
 /** Kurulu paketlerden güncellemesi olanlar için tek satırlık uyarı ve "Hepsini güncelle" */

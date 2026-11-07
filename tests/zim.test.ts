@@ -64,7 +64,8 @@ describe('ZIM (zstd, yeni ad alanı)', () => {
   it('arama: harf duyarsız önek', async () => {
     for (const q of ['deprem', 'DEPREM', 'Deprem', 'dep']) {
       const hits = await zim.searchTitles(q);
-      expect(hits[0], q).toEqual({ path: 'Deprem', title: 'Deprem' });
+      // Önek araması yönlendirme bilgisini de taşır (sıralamada asıl madde öne alınır)
+      expect(hits[0], q).toEqual({ path: 'Deprem', title: 'Deprem', redirect: false });
     }
     const kuz = await zim.searchTitles('kuzey anadolu');
     expect(kuz.map((h) => h.title)).toContain('Kuzey Anadolu Fay Hattı');
@@ -170,7 +171,7 @@ describe('ZIM (xz, eski ad alanı, extended küme)', () => {
     expect(await zim.getMetadata('Description')).toBe('Örnek test arşivi');
     expect((await zim.getMainPage())?.title).toBe('Deprem');
     const hits = await zim.searchTitles('DEPREM');
-    expect(hits[0]).toEqual({ path: 'Deprem', title: 'Deprem' });
+    expect(hits[0]).toEqual({ path: 'Deprem', title: 'Deprem', redirect: false });
     expect((await zim.searchTitles('ısı'))[0].title).toBe('Isı çarpması');
     expect((await zim.getArticle('Zelzele'))?.path).toBe('Deprem');
     expect((await zim.getArticle('A/Çankaya'))?.title).toBe('Çankaya');

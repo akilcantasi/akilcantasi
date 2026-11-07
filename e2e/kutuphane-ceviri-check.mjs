@@ -23,12 +23,14 @@ const errors = [];
 p.on('pageerror', (e) => errors.push(e.message));
 await p.goto(base + '?tab=kutuphane&devzim=/testdata/sample_med_en.zim,/testdata/sample_tr.zim&devmodel=/testdata/tiny-test.gguf', { waitUntil: 'networkidle' });
 await p.waitForSelector(tid('lib-search'), { timeout: 30000 });
-check(!!(await p.$(tid('lib-store'))), 'kütüphane ana ekranında önerilen indirmeler var');
-await p.click(tid('lib-catalog-toggle'));
-check((await p.$$(tid('lib-catalog-group'))).length >= 5, 'tüm koleksiyon raflara ayrılmış açılır liste');
-await p.click(`${tid('lib-shelf')}[data-shelf="saglik"]`);
-const groups = await p.$$eval(tid('lib-catalog-group'), (els) => els.map((e) => e.dataset.shelf));
-check(JSON.stringify(groups) === '["saglik"]', 'raf filtresi: yalnız sağlık ' + JSON.stringify(groups));
+// Mağaza ihtiyaca göre bölümlü; "Sağlık ve ilk yardım" bölümüne atlanır
+await p.click(`${tid('lib-collections')} ${tid('lib-open-store')}`);
+await p.waitForSelector(tid('lib-store'));
+check((await p.$$(tid('lib-store-sec'))).length >= 5, 'mağaza ihtiyaca göre bölümlere ayrılmış');
+await p.click(`${tid('lib-need')}[data-need="saglik"]`);
+check(!!(await p.$(`${tid('lib-store-sec')}[data-need="saglik"] ${tid('lib-store-item')}`)), 'sağlık bölümünde içerik var');
+await p.click(tid('lib-store-back'));
+await p.click(tid('lib-search'));
 
 // İngilizce kaynaktan bir makale aç
 await p.fill(tid('lib-search'), 'Bleeding');
@@ -51,6 +53,7 @@ if (btn) {
 // Türkçe kaynakta düğme yok
 await p.goto(base + '?tab=kutuphane&devzim=/testdata/sample_tr.zim', { waitUntil: 'networkidle' });
 await p.waitForSelector(tid('lib-search'));
+await p.click(tid('lib-search'));
 await p.fill(tid('lib-search'), 'Ankara');
 await p.waitForSelector(tid('lib-result'), { timeout: 15000 });
 await p.click(tid('lib-result'));

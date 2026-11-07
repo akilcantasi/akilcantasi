@@ -3,6 +3,9 @@
 //   D=/tmp/qa-pdf; rm -rf $D; mkdir -p $D && cp testdata/sample_kitap_en.zim $D/
 //   node server/server.mjs --data $D --port 8099 &
 //   node e2e/pdf-okuyucu-check.mjs [ekran-klasörü]
+// İsteğe bağlı taranmış PDF denetimi: QA_TARANMIS=<taranmış PDF'li bir zimgit paketi sunan bilgi noktası>
+//   (ör. zimgit-knots / zimgit-water; gerçek paketleri geçici bir klasöre bağlantıyla koyun, sunucu
+//   veri klasörüne anahtar dosyası yazar)
 import { createRequire } from 'module';
 import assert from 'assert/strict';
 import { mkdirSync } from 'fs';
@@ -43,8 +46,8 @@ for (const vp of [{ width: 360, height: 740 }, { width: 1280, height: 800 }]) {
   await p.goto(BASE + '/?tab=kutuphane', { waitUntil: 'networkidle' });
 
   await step(`${vp.width}px: kitap listesinden PDF uygulama içinde açılır`, async () => {
-    await p.waitForSelector(tid('lib-main'), { timeout: 30000 });
-    await p.click(`${tid('lib-main')}:has-text("Sample Library")`);
+    await p.waitForSelector(`${tid('lib-coll')}[data-src="sample_kitap_en.zim"]`, { timeout: 30000 });
+    await p.click(`${tid('lib-coll')}[data-src="sample_kitap_en.zim"]`);
     await p.waitForSelector(tid('lib-books'));
     await p.click(`${tid('lib-book')}:has-text("Water Storage") ${tid('lib-book-open')}`);
     await p.waitForSelector(tid('pdf-reader'));
@@ -113,6 +116,45 @@ for (const vp of [{ width: 360, height: 740 }, { width: 1280, height: 800 }]) {
   await step(`${vp.width}px: geri dönünce kitap listesi`, async () => {
     await p.click(tid('pdf-back'));
     await p.waitForSelector(tid('lib-books'));
+  });
+  await ctx.close();
+}
+if (process.env.QA_TARANMIS) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+  const p = await ctx.newPage();
+  p.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  await p.goto(process.env.QA_TARANMIS + '/?tab=kutuphane', { waitUntil: 'networkidle' });
+  await step('taranmış PDF: sayfa çizilir, arama/çeviri yapılamayacağı sakince söylenir', async () => {
+    await p.waitForSelector(`${tid('lib-coll')}[data-src^="zimgit"]`, { timeout: 30000 });
+    const kols = await p.$$eval(`${tid('lib-coll')}[data-src^="zimgit"]`, (e) => e.map((x) => x.dataset.src));
+    let bulundu = false;
+    for (const k of kols) {
+      if (bulundu) break;
+      await p.click(`${tid('lib-coll')}[data-src="${k}"]`);
+      await p.waitForSelector(tid('lib-book-open'), { timeout: 30000 });
+      const n = (await p.$$(tid('lib-book-open'))).length;
+      for (let i = 0; i < n && !bulundu; i++) {
+        await p.click(`${tid('lib-book-open')} >> nth=${i}`);
+        await p.waitForSelector('[data-page="1"] canvas', { timeout: 60000 });
+        await p.fill(tid('pdf-search'), 'the');
+        await p.waitForFunction(() => !document.querySelector('[data-testid="pdf-scan"]') && /yok|\//.test(document.querySelector('[data-testid="pdf-count"]')?.textContent || ''), null, { timeout: 120000 });
+        await p.waitForTimeout(300);
+        if (await p.$(tid('pdf-scanned'))) {
+          bulundu = true;
+          assert.match(await p.textContent(tid('pdf-scanned')), /taranmış/);
+          assert.ok(!(await p.$(tid('pdf-translate'))), 'taranmış sayfada çeviri düğmesi yok');
+          assert.match(await p.textContent(tid('pdf-scanned')), /arama ve çeviri/);
+          const ink = await p.$eval('[data-page="1"] canvas', (c) => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let j = 0; j < d.length; j += 16) if (d[j] < 128) n++; return n; });
+          assert.ok(ink > 50, 'taranmış sayfa çizilmedi');
+          await p.screenshot({ path: `${SHOTS}/taranmis.png` });
+        }
+        await p.click(tid('pdf-back'));
+        await p.waitForSelector(tid('lib-books'));
+      }
+      await p.click(tid('lib-coll-back'));
+    }
+    assert.ok(bulundu, 'taranmış sayfalı kitap bulunamadı');
   });
   await ctx.close();
 }

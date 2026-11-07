@@ -4,6 +4,7 @@
 //  • Görünen sayfayı Fener ile Türkçeye çevirme (Türkçe olmayan belgelerde)
 //  • Yakınlaştırma, sayfa gezinme
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import type { ComponentChildren } from 'preact';
 import { itemsToText, loadPdfjs, pageParagraphs, searchPages, type PdfHit } from '../lib/pdf';
 import { ArticleTranslate, TRANSLATE_CSS, isTurkishLang } from './KutuphaneCeviri';
 import { useGeriKapat } from '../gecmis';
@@ -39,7 +40,7 @@ const CSS = `
 .po-tr { max-height: calc(34vh / var(--ui-scale, 1)); overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .po-msg { font-size: 14px; color: var(--text2); margin: 0; }
 .po-tr-close { align-self: flex-start; }
-.po-err { font-size: 14px; color: var(--danger); margin: 0; }
+.po-err { font-size: 14px; color: var(--accent2); margin: 0; line-height: 1.5; }
 .po-ib.po-nav { font-size: 22px; line-height: 1; }
 `;
 
@@ -73,6 +74,9 @@ export function PdfOkuyucu({
   docKey,
   load,
   onClose,
+  startPage,
+  onPage,
+  hataEki,
 }: {
   title: string;
   sub?: string;
@@ -81,6 +85,12 @@ export function PdfOkuyucu({
   docKey?: string;
   load: () => Promise<Uint8Array | null>;
   onClose: () => void;
+  /** Açılınca gidilecek sayfa (kaldığı yerden devam) */
+  startPage?: number;
+  /** Okunan sayfa değişince (sayfa, toplam) */
+  onPage?: (page: number, pages: number) => void;
+  /** Belge açılamazsa hata iletisinin altında (ör. "Başka uygulamada aç") */
+  hataEki?: ComponentChildren;
 }) {
   // Android geri tuşu önce okuyucuyu kapatır (kitap listesine / makaleye döner)
   useGeriKapat(true, onClose);
@@ -95,6 +105,8 @@ export function PdfOkuyucu({
   const [scan, setScan] = useState<{ done: number; total: number } | null>(null);
   const [trPage, setTrPage] = useState<{ page: number; paras: string[] } | null>(null);
   const [width, setWidth] = useState(360);
+  /** Sayfa metinleri alındıkça artar (taranmış sayfa iletisi güncellensin) */
+  const [, setMetinSurumu] = useState(0);
   const texts = useRef<(string | undefined)[]>([]);
   const folded = useRef<(string | undefined)[]>([]);
   const wrap = useRef<HTMLDivElement>(null);
@@ -205,7 +217,10 @@ export function PdfOkuyucu({
       rendered.current.set(n, s);
       tasks.current.delete(n);
       // Metni de al (arama ve çeviri için)
-      if (texts.current[n - 1] === undefined) texts.current[n - 1] = itemsToText((await p.getTextContent()).items);
+      if (texts.current[n - 1] === undefined) {
+        texts.current[n - 1] = itemsToText((await p.getTextContent()).items);
+        setMetinSurumu((v) => v + 1);
+      }
     } catch (e: any) {
       if (e?.name !== 'RenderingCancelledException') rendered.current.delete(n);
     }
@@ -329,6 +344,21 @@ export function PdfOkuyucu({
     void draw(n);
   };
 
+  // Kaldığı yerden: belge ve sayfa kutuları hazır olunca bir kez başlangıç sayfasına gidilir
+  const started = useRef(false);
+  useLayoutEffect(() => {
+    if (started.current || !doc || !sizes.length) return;
+    started.current = true;
+    const n = Math.min(sizes.length, Math.max(1, startPage ?? 1));
+    if (n > 1) goTo(n);
+  }, [doc, sizes.length]);
+  // Okunan sayfa bildirilir (kısa gecikmeyle: hızlı kaydırmada her sayfa için yazılmasın)
+  useEffect(() => {
+    if (!doc || !onPage || !started.current) return;
+    const t = setTimeout(() => onPage(page, doc.numPages), 600);
+    return () => clearTimeout(t);
+  }, [page, doc]);
+
   // Kitapta ara: metni henüz alınmamış sayfaları sırayla tarar
   useEffect(() => {
     if (!doc) return;
@@ -392,6 +422,12 @@ export function PdfOkuyucu({
   };
 
   const canTranslate = !isTurkishLang(language);
+  // Taranmış (yalnız resim) sayfalar: metin katmanı yok, arama ve çeviri yapılamaz
+  const metinsiz = (t: string | undefined) => t !== undefined && t.replace(/\s+/g, '').length < 8;
+  const bilinen = texts.current.filter((t) => t !== undefined).length;
+  const metinsizSayi = texts.current.filter(metinsiz).length;
+  const hepsiTaranmis = !!doc && bilinen === doc.numPages && metinsizSayi === bilinen;
+  const buSayfaTaranmis = metinsiz(texts.current[page - 1]);
   const hitPages = useMemo(() => new Set((hits ?? []).map((h) => h.page)), [hits]);
 
   return (
@@ -444,6 +480,13 @@ export function PdfOkuyucu({
             </span>
           )}
         </div>
+        {hits && !scan && !hits.length && metinsizSayi > 0 && (
+          <p class="po-msg" data-testid="pdf-scanned">
+            {hepsiTaranmis
+              ? 'Bu kitabın sayfaları taranmış resimlerden oluşuyor; içinde arama ve çeviri yapılamıyor. Sayfaları kaydırarak okuyabilirsiniz.'
+              : `${metinsizSayi} sayfa taranmış resim; o sayfalarda arama yapılamıyor.`}
+          </p>
+        )}
         {scan && (
           <p class="po-msg" data-testid="pdf-scan">
             Kitap taranıyor: {scan.done} / {scan.total} sayfa
@@ -470,10 +513,15 @@ export function PdfOkuyucu({
             {hits.length > 50 && <p class="po-msg">İlk 50 sonuç gösteriliyor; ‹ › ile hepsinde gezinebilirsiniz.</p>}
           </div>
         )}
-        {doc && canTranslate && !trPage && (
+        {doc && canTranslate && !trPage && !buSayfaTaranmis && (
           <button class="btn tr-btn" data-testid="pdf-translate" onClick={translateHere}>
             Bu sayfayı Türkçeye çevir (s. {page})
           </button>
+        )}
+        {doc && canTranslate && !trPage && buSayfaTaranmis && !(hepsiTaranmis && hits && !hits.length) && (
+          <p class="po-msg" data-testid="pdf-translate-scanned">
+            Bu sayfa taranmış bir resim; içindeki yazı okunamadığı için çevrilemiyor.
+          </p>
         )}
         {trPage && (
           // Üst çubukta kalır: hangi sayfada olunursa olunsun çeviri görünür, kendi içinde kayar.
@@ -490,7 +538,7 @@ export function PdfOkuyucu({
                   autoStart
                 />
               ) : (
-                <p class="po-msg">Bu sayfada çevrilecek metin yok (taranmış resim olabilir).</p>
+                <p class="po-msg">Bu sayfa taranmış bir resim; içindeki yazı okunamadığı için çevrilemiyor.</p>
               )}
             </div>
             <button class="btn po-tr-close" data-testid="pdf-translate-close" onClick={() => setTrPage(null)}>
@@ -505,6 +553,7 @@ export function PdfOkuyucu({
           {err}
         </p>
       )}
+      {err && hataEki}
       {!doc && !err && <p class="po-msg">Belge açılıyor…</p>}
 
       {doc && (

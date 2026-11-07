@@ -3,6 +3,45 @@
 
 let lib: Promise<any> | null = null;
 
+/**
+ * pdf.js'nin çalışma anında istediği ikili dosyalar (Vite bunları derlemeye özetli adla koyar).
+ * pdf.js 5+ taranmış belgelerin görsellerini (CCITT faks, JBIG2) ve JPEG 2000'i WebAssembly ile
+ * çözer; bu dosyalar verilmezse taranmış PDF sayfaları BOŞ (beyaz) görünür. Sembol yazı tipleri
+ * sistemde bulunmadığı için onlar da verilir.
+ */
+const PDF_IKILI: Record<string, Record<string, () => Promise<{ default: string }>>> = {
+  wasmUrl: {
+    // @ts-ignore Vite ?url içe aktarımı
+    'jbig2.wasm': () => import('pdfjs-dist/wasm/jbig2.wasm?url'),
+    // @ts-ignore Vite ?url içe aktarımı
+    'openjpeg.wasm': () => import('pdfjs-dist/wasm/openjpeg.wasm?url'),
+  },
+  standardFontDataUrl: {
+    // @ts-ignore Vite ?url içe aktarımı
+    'FoxitSymbol.pfb': () => import('pdfjs-dist/standard_fonts/FoxitSymbol.pfb?url'),
+    // @ts-ignore Vite ?url içe aktarımı
+    'FoxitDingbats.pfb': () => import('pdfjs-dist/standard_fonts/FoxitDingbats.pfb?url'),
+  },
+};
+
+/** pdf.js'nin dosya adı → adres eşlemesi (dosyalar ana iş parçacığında okunup işçiye verilir) */
+export class PdfIkiliVeri {
+  constructor(_opts?: unknown) {}
+  async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
+    const yukle = PDF_IKILI[kind]?.[filename];
+    if (!yukle) throw new Error(`PDF yardımcı dosyası yok: ${filename}`);
+    const url = (await yukle()).default;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`PDF yardımcı dosyası okunamadı: ${filename} (${res.status})`);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+}
+
+/** getDocument'e her zaman eklenen ayarlar (çağıranın verdikleri önceliklidir) */
+export function pdfBelgeAyarlari(): Record<string, unknown> {
+  return { BinaryDataFactory: PdfIkiliVeri, useWorkerFetch: false, useWasm: true };
+}
+
 /** pdf.js'yi (ve arka plan işçisini) yükler */
 export function loadPdfjs(): Promise<any> {
   lib ??= (async () => {
@@ -11,7 +50,9 @@ export function loadPdfjs(): Promise<any> {
     // @ts-ignore Vite ?url içe aktarımı
     const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
     m.GlobalWorkerOptions.workerSrc = worker;
-    return m;
+    // getDocument, yardımcı dosyaları (wasm, sembol yazı tipleri) kendiliğinden bulsun diye sarılır;
+    // okuyucu bileşeninin ayrıca bir şey vermesi gerekmez
+    return { ...m, getDocument: (src: Record<string, unknown>) => m.getDocument({ ...pdfBelgeAyarlari(), ...src }) };
   })();
   return lib;
 }

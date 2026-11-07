@@ -14,7 +14,7 @@ Altı sekme:
 - **Fener** — cihazda çalışan yapay zekâ asistanı (GGUF modeli, wllama/llama.cpp). Rehberlerden ve
   Kütüphane'deki ZIM arşivlerinden kaynak göstererek cevap verir. Model yoksa rehberden cevap verir.
   İsteğe bağlı **sesli sor** (Whisper, cihazda) ve **sesli oku**.
-- **Rehber** — 18 kategoride **168 resimli rehber** (deprem, ilk yardım, yangın, sel, su ve gıda,
+- **Rehber** — 19 kategoride **189 resimli rehber** (deprem, ilk yardım, yangın, sel, su ve gıda, enerji ve şarj,
   barınma, psikolojik destek, özel gruplar…). Yapay zekâ kullanmaz; arama ve kategori listesiyle çalışır.
 - **Harita** — çevrimdışı Türkiye haritası (PMTiles), GPS konumu, toplanma alanı / sağlık / eczane
   noktaları, en yakın toplanma alanı, pusula ile hedefe yön, iz kaydı, yer işaretleri, "konumumu söyle".
