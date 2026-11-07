@@ -11,6 +11,8 @@ import { extractParagraphs, foldCharwise } from '../../lib/zim';
 import { IconChat } from '../../icons';
 import { sanitize } from '../../lib/sanitize';
 import { loadNautilus, type NautilusBook } from '../../lib/zim/nautilus';
+import { sayfaKabukMu } from '../../lib/zim/dizin';
+import { KoleksiyonDizini } from './Dizin';
 import { ArticleTranslate, isTurkishLang } from '../KutuphaneCeviri';
 import { PdfOkuyucu } from '../PdfOkuyucu';
 import { nav, syncNav, bekleyenKonumuAl, acMakale } from './gezinme';
@@ -136,7 +138,9 @@ type ArticleState =
   | { status: 'missing' }
   | { status: 'ok'; src: LibrarySource; title: string; html: string; text: string; path: string }
   | { status: 'file'; src: LibrarySource; title: string; path: string; mime: string }
-  | { status: 'books'; src: LibrarySource; title: string; path: string; books: NautilusBook[] };
+  | { status: 'books'; src: LibrarySource; title: string; path: string; books: NautilusBook[] }
+  /** Giriş sayfası betikle çiziliyor (Gutenberg vb.): onun yerine uygulamanın kendi dizini */
+  | { status: 'dizin'; src: LibrarySource; title: string; path: string };
 
 type Panel = null | 'find' | 'toc' | 'size';
 
@@ -151,6 +155,8 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
   const [findN, setFindN] = useState(0);
   const [toc, setToc] = useState<{ id: string; text: string; sub: boolean }[]>([]);
   const [toast, setToast] = useState('');
+  /** Gövdesi tamamen yerleşen HTML (büyük sayfalar parça parça eklenir; bkz. ArticleBody) */
+  const [hazirHtml, setHazirHtml] = useState<string | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const findRef = useRef<HTMLInputElement>(null);
   const marks = useRef<HTMLElement[]>([]);
@@ -181,24 +187,31 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
       const r = await resolveRef(refStr);
       if (!r) return null;
       // PDF gibi dosyalar metin olarak çözülmez; dosya kartı gösterilir
-      if (isFilePath(r.path)) return { r, a: null, books: null };
+      if (isFilePath(r.path)) return { r, a: null, books: null, dizin: false };
       const a = await r.source.zim.getArticle(r.path);
       if (!a) return null;
       // Nautilus kitaplığının ana sayfası: kitap listesini kendimiz çizeriz
       let books: NautilusBook[] | null = null;
       if (a.mime.startsWith('text/html') && /\bhome(\.html)?$|^index\.html$/i.test(a.path)) books = await loadNautilus(r.source.zim);
-      return { r, a, books };
+      // Betikle çizilen giriş sayfası (betik çalıştırılmaz, boş kalır): yalnız koleksiyonun ana sayfası
+      let dizin = false;
+      if (!books && a.mime.startsWith('text/html') && (r.source.kind === 'gutenberg' || /<script/i.test(a.html))) {
+        const anaYol = ustVeri(r.source.id)?.main ?? (await r.source.zim.getMainPage().catch(() => null))?.path;
+        dizin = anaYol === a.path && (r.source.kind === 'gutenberg' || sayfaKabukMu(a.html));
+      }
+      return { r, a, books, dizin };
     })()
       .then((x) => {
         if (!alive) return;
         if (!x) return setLocal({ status: 'missing' });
-        const { r, a, books } = x;
+        const { r, a, books, dizin } = x;
         if (!a) {
           // Kitap listesinden açılmış bir PDF'in adı (dosya adı yerine kitabın adı) son okunanlarda
           const name = okunanlar().find((o) => o.ref === refStr)?.title ?? safeDecode(r.path.split('/').pop() || r.path);
           return setLocal({ status: 'file', src: r.source, title: name, path: r.path, mime: '' });
         }
         if (books) return setLocal({ status: 'books', src: r.source, title: r.source.title, path: a.path, books });
+        if (dizin) return setLocal({ status: 'dizin', src: r.source, title: r.source.title, path: a.path });
         // Görseller (SVG dahil: türünde "xml" geçer) metin olarak değil dosya olarak gösterilir
         if (a.mime.startsWith('image/') || (!a.mime.startsWith('text/') && !/json|xml|javascript/.test(a.mime))) {
           return setLocal({ status: 'file', src: r.source, title: a.title || a.path, path: a.path, mime: a.mime });
@@ -207,7 +220,9 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
         const html = isHtml
           ? sanitize(a.html, r.source.zim, a.path, a.title)
           : `<pre>${a.html.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!)}</pre>`;
-        const text = isHtml ? extractParagraphs(a.html, 1500).join('\n\n') : a.html.slice(0, 1500);
+        // Fener'e sor / Paylaş için ilk 1500 karakter yeter: çok büyük sayfalarda (Gutenberg'de
+        // birkaç MB'lık tek sayfalık kitaplar) bütün metni çıkarmak saniyelerce donduruyordu
+        const text = isHtml ? extractParagraphs(a.html.length > METIN_ONEK ? a.html.slice(0, METIN_ONEK) : a.html, 1500).join('\n\n') : a.html.slice(0, 1500);
         setLocal({ status: 'ok', src: r.source, title: a.title, html, text, path: a.path });
       })
       .catch((e) => {
@@ -219,6 +234,8 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
     };
   }, [refStr]);
 
+  /** Makale gövdesi tamamen yerleşti mi (konum geri yükleme, içindekiler, sayfada bul bunu bekler) */
+  const hazir = state.status === 'ok' && hazirHtml === state.html;
   const kol = state.status !== 'loading' && state.status !== 'missing' ? koleksiyonlar.find((k) => k.id === state.src.id) : undefined;
   const kolAd = kol?.ad ?? (state.status !== 'loading' && state.status !== 'missing' ? state.src.label : '');
   const kategori = kol?.kategori ?? 'diger';
@@ -233,23 +250,18 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
 
   // Okunan oranı kaydet + "kaldığın yerden" konuma git
   useEffect(() => {
-    if (state.status !== 'ok') return;
+    if (state.status !== 'ok' || !hazir) return;
     const main = document.getElementById('main');
     if (!main) return;
     const y = bekleyenKonumuAl(refStr);
-    if (y) {
-      requestAnimationFrame(() => {
-        const max = main.scrollHeight - main.clientHeight;
-        if (max > 0) main.scrollTo({ top: y * max });
-      });
-    }
+    if (y) requestAnimationFrame(() => bodyRef.current && konumaGit(main, bodyRef.current, y));
     let t = 0;
     const on = () => {
       if (t) return;
       t = window.setTimeout(() => {
         t = 0;
-        const max = main.scrollHeight - main.clientHeight;
-        if (max > 0) okunanKonum(refStr, { y: Math.min(1, main.scrollTop / max) });
+        const v = bodyRef.current ? konumOku(main, bodyRef.current) : null;
+        if (v !== null) okunanKonum(refStr, { y: v });
       }, 500);
     };
     main.addEventListener('scroll', on, { passive: true });
@@ -257,11 +269,11 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
       main.removeEventListener('scroll', on);
       if (t) clearTimeout(t);
     };
-  }, [state]);
+  }, [state, hazir]);
 
   // Görselleri arşivden yükle + içindekiler
   useEffect(() => {
-    if (state.status !== 'ok' || !bodyRef.current) return;
+    if (state.status !== 'ok' || !hazir || !bodyRef.current) return;
     const urls: string[] = [];
     let alive = true;
     const zim = state.src.zim;
@@ -293,17 +305,17 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
       alive = false;
       urls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [state]);
+  }, [state, hazir]);
 
   // Sayfada bul: eşleşmeleri işaretle
   useEffect(() => {
     const root = bodyRef.current;
-    if (!root || state.status !== 'ok') return;
+    if (!root || state.status !== 'ok' || !hazir) return;
     clearMarks(root);
     marks.current = findOpen ? markMatches(root, findQ) : [];
     setFindN(marks.current.length);
     setFindCur(0);
-  }, [findQ, findOpen, state]);
+  }, [findQ, findOpen, state, hazir]);
 
   useEffect(() => {
     marks.current.forEach((m, i) => m.classList.toggle('cur', i === findCur));
@@ -391,7 +403,7 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
   const isText = state.status === 'ok';
 
   return (
-    <article class="pad" data-testid="lib-article" aria-labelledby="kt-title" style={{ '--kt-fs': YAZI_PX[size] + 'px' } as any}>
+    <article class="pad" data-testid="lib-article" data-hazir={hazir ? '1' : undefined} aria-labelledby="kt-title" style={{ '--kt-fs': YAZI_PX[size] + 'px' } as any}>
       {/* PDF okuyucunun kendi çubuğu var (geri, sayfa, yakınlaştırma): okuyucu açıkken bu çubuk gizlenir */}
       {!reader && (
       <div class="kt-bar" data-testid="lib-bar-top">
@@ -558,7 +570,7 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
             </button>
           </div>
           <ArticleTranslate key={refStr} refStr={refStr} html={state.html} language={state.src.language} />
-          <ArticleBody html={state.html} bodyRef={bodyRef} onClick={onClick} />
+          <ArticleBody html={state.html} bodyRef={bodyRef} onClick={onClick} onHazir={setHazirHtml} />
           <div class="kt-end">
             <p class="kt-note">
               Bu sayfa "{kolAd}" koleksiyonundan, bu cihazdan okunuyor; internet gerekmez.
@@ -571,6 +583,14 @@ export function Okuyucu({ refStr, geriAdi, koleksiyonlar }: { refStr: string; ge
       )}
       {state.status === 'file' && <FileCard key={state.path} src={state.src} title={state.title} path={state.path} refStr={refStr} kolAd={kolAd} onReader={setReader} onClose={() => (canBack ? back() : close())} />}
       {state.status === 'books' && <BookList key={state.path} src={state.src} kolAd={kolAd} books={state.books} onReader={setReader} />}
+      {state.status === 'dizin' && (
+        <div class="kt" style="gap:12px" data-testid="lib-dizin-sayfa">
+          <h1 class="kt-title" id="kt-title" data-testid="lib-article-title">
+            {kolAd || state.title}
+          </h1>
+          <KoleksiyonDizini key={state.src.id} src={state.src} anaYol={state.path} ara />
+        </div>
+      )}
       {toast && (
         <div class="kt-toast" role="status" data-testid="lib-toast">
           {toast}
@@ -871,10 +891,143 @@ export function BookList({
   );
 }
 
-/** HTML yalnızca değişince yeniden yazılır (sayfada bul işaretleri korunur). */
-function ArticleBody({ html, bodyRef, onClick }: { html: string; bodyRef: { current: HTMLDivElement | null }; onClick: (e: MouseEvent) => void }) {
-  const inner = useMemo(() => ({ __html: html }), [html]);
-  return <div class="kt-body" data-testid="lib-article-body" ref={bodyRef} onClick={onClick} dangerouslySetInnerHTML={inner} />;
+type BuyukGovde = HTMLElement & { bloklar?: HTMLElement[] };
+
+/**
+ * Okunan yer (0..1). Küçük sayfalarda kaydırma oranı. Büyük sayfalarda ekran dışındaki bloklar
+ * yerleştirilmediği için (content-visibility) toplam yükseklik tahminidir; oran blok sırasıyla
+ * tutulur: (ekranın üstündeki blok + bloğun okunan kısmı) / blok sayısı. Aynı sayfa hep aynı
+ * yolla açıldığından kaydedilen ve geri yüklenen değer tutarlıdır.
+ */
+export function konumOku(main: HTMLElement, body: HTMLElement): number | null {
+  const bl = (body as BuyukGovde).bloklar;
+  if (bl?.length) {
+    const ust = main.getBoundingClientRect().top;
+    let a = 0;
+    let b = bl.length - 1;
+    // Alt kenarı ekranın üstünden aşağıda olan ilk blok (ikili arama)
+    while (a < b) {
+      const m = (a + b) >> 1;
+      if (bl[m].getBoundingClientRect().bottom <= ust) a = m + 1;
+      else b = m;
+    }
+    const r = bl[a].getBoundingClientRect();
+    const pay = r.height > 0 ? Math.min(1, Math.max(0, (ust - r.top) / r.height)) : 0;
+    return Math.min(1, (a + pay) / bl.length);
+  }
+  const max = main.scrollHeight - main.clientHeight;
+  return max > 0 ? Math.min(1, main.scrollTop / max) : null;
+}
+
+/** konumOku'nun tersi: okunan yere kaydırır */
+export function konumaGit(main: HTMLElement, body: HTMLElement, y: number) {
+  const bl = (body as BuyukGovde).bloklar;
+  if (bl?.length) {
+    const t = Math.min(bl.length - 1e-6, Math.max(0, y * bl.length));
+    const i = Math.floor(t);
+    const hedef = bl[i];
+    const r0 = hedef.getBoundingClientRect();
+    main.scrollTop += r0.top - main.getBoundingClientRect().top;
+    // content-visibility: blok ekrana gelince gerçek yüksekliği ölçülür; okunan kısım ona göre
+    requestAnimationFrame(() => {
+      const r = hedef.getBoundingClientRect();
+      main.scrollTop += r.top - main.getBoundingClientRect().top + (t - i) * r.height;
+    });
+    return;
+  }
+  const max = main.scrollHeight - main.clientHeight;
+  if (max > 0) main.scrollTo({ top: y * max });
+}
+
+/** Bu boyuttan büyük sayfalarda Fener/Paylaş özeti yalnız baştan çıkarılır */
+const METIN_ONEK = 150_000;
+/** Bu boyuttan büyük gövdeler parça parça yerleştirilir */
+const PARCALI_ESIK = 200_000;
+/** Bir karede gövdeye eklenen en çok iş süresi (ms) */
+const KARE_BUTCE = 12;
+
+/**
+ * Makale gövdesi. HTML yalnızca değişince yeniden yazılır (sayfada bul işaretleri korunur).
+ * Büyük sayfalar (Gutenberg'in tek sayfalık kitapları birkaç MB olabilir) tek seferde
+ * yazılınca telefon saniyelerce donuyordu: önce ilk parça gösterilir, kalanı her karede kısa
+ * dilimlerle eklenir (kaydırma ve dokunma bu sırada çalışır). Bitince onHazir(html) çağrılır;
+ * okuma konumu, içindekiler ve sayfada bul tam gövdeyi bekler.
+ */
+function ArticleBody({
+  html,
+  bodyRef,
+  onClick,
+  onHazir,
+}: {
+  html: string;
+  bodyRef: { current: HTMLDivElement | null };
+  onClick: (e: MouseEvent) => void;
+  onHazir: (html: string) => void;
+}) {
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    if (html.length <= PARCALI_ESIK) {
+      el.classList.remove('kt-buyuk');
+      (el as BuyukGovde).bloklar = undefined;
+      el.innerHTML = html;
+      onHazir(html);
+      return;
+    }
+    let alive = true;
+    el.textContent = '';
+    el.classList.add('kt-buyuk');
+    // <template> içinde ayrıştırılır: henüz belgeye bağlı değil, yerleşim/çizim maliyeti yok
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    // Yığın: [hedef, sıradaki düğümler]. Çok büyük tek kap (kitabın tamamını saran <div>)
+    // bölünür: kabın sığ kopyası eklenir, çocukları onun içine sırayla taşınır.
+    const yigin: [Node, Node[]][] = [[el, Array.from(tpl.content.childNodes)]];
+    const BUYUK = 40_000;
+    /** Eklenen bloklar (okuma konumu bunlara göre tutulur; bkz. konumOku) */
+    const bloklar: HTMLElement[] = [];
+    (el as BuyukGovde).bloklar = bloklar;
+    const ekle = (butce: number) => {
+      const bas = performance.now();
+      while (yigin.length && performance.now() - bas < butce) {
+        const ust = yigin[yigin.length - 1];
+        const n = ust[1].shift();
+        if (!n) {
+          yigin.pop();
+          continue;
+        }
+        if (n.nodeType === 1 && n.childNodes.length > 1 && (n.textContent?.length ?? 0) > BUYUK) {
+          const kab = n.cloneNode(false);
+          ust[0].appendChild(kab);
+          yigin.push([kab, Array.from(n.childNodes)]);
+        } else {
+          ust[0].appendChild(n);
+          if (n.nodeType === 1) {
+            (n as HTMLElement).classList.add('kt-blok');
+            bloklar.push(n as HTMLElement);
+          }
+        }
+      }
+      return !yigin.length;
+    };
+    // İlk ekran: hemen (bu karede) biraz daha geniş bütçeyle
+    if (ekle(30)) {
+      onHazir(html);
+      return;
+    }
+    let raf = 0;
+    const adim = () => {
+      if (!alive) return;
+      if (ekle(KARE_BUTCE)) onHazir(html);
+      else raf = requestAnimationFrame(adim);
+    };
+    raf = requestAnimationFrame(adim);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [html]);
+  return <div class="kt-body" data-testid="lib-article-body" ref={bodyRef} onClick={onClick} />;
 }
 
 /** Koleksiyonun ana sayfa yolunu önbelleğe yazar (okuyucuda başlık için) */

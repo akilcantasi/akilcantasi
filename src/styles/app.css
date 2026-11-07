@@ -55,8 +55,22 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-variant-numeric: tabular-nums; }
+/* Sabit kabuk: belge (html/body) hiç kaymaz, yalnız içerik alanı (.app-main ve iç kaydırıcılar)
+   kayar. Android WebView'da iç alan sonuna gelince kaydırma köke zincirleniyordu; kök kayamayınca
+   Android 12+ "esneme" (stretch) efekti bütün sayfayı, alttaki menüyle birlikte yukarı çekiyordu.
+   overscroll-behavior yalnız kök öğede (html) görünüme uygulanır; body'deki etkisizdi.
+   overflow: clip bir kaydırma kabı oluşturmaz: scrollIntoView bile body/#app'i kaydıramaz.
+   html.kabuk: main.tsx uygulamayı çizerken ekler (?art çizim galerisi uzun bir belgedir, kayar). */
+html { overscroll-behavior: none; }
 body { -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+html.kabuk { overflow: hidden; }
+html.kabuk body { overflow: hidden; overflow: clip; }
+/* Yükseklik: önce % (eski WebView), destekleyen yerde dinamik görünüm (100dvh: telefon
+   tarayıcısında adres çubuğu açılıp kapanınca güncellenir, kabuk görünür alana tam oturur). */
 #app { height: 100%; }
+html.kabuk #app { height: 100dvh; overflow: hidden; overflow: clip; }
+/* İç kaydırıcılar sona gelince kaydırmayı dışarı (köke) aktarmaz: menü kıpırdamaz */
+.app-main, .fener-list, .ku, .sheet, .map-fallback, .map-panels { overscroll-behavior: contain; }
 button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
 button { cursor: pointer; }
 code, kbd, pre { font-family: var(--code); }

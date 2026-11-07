@@ -10,6 +10,7 @@
 // yatay telefon + çentik, büyük yazıda menü ve üst çubuk, masaüstü kaydırma çubuğu, hata sınırı
 // (?qa-cokme=<sekme>), bozuk doğrudan bağlantılar, bozuk/engelli localStorage, geri tuşu (popstate),
 // Kurulum penceresinde odak/inert/geri, açılış ekranı ve çevrimiçi gezintide dış istekler.
+// Sabit kabuk (Android, 412×915 dokunmatik): sonuna kadar kaydırınca menü ve üst çubuk yerinde.
 import { createRequire } from 'module';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -729,6 +730,68 @@ const ayakta = (page) => page.evaluate(() => !!document.querySelector('.app-nav'
   const bad = external.filter((u) => !ALLOWED_EXTERNAL.some((a) => u.startsWith(a)));
   check(bad.length === 0, 'çevrimiçi gezintide katalog dışında dış istek yok' + (bad.length ? ' → ' + [...new Set(bad)].join(', ') : ''));
   if (external.length) console.log('     (bilgi: kendiliğinden dış istek — src/lib/packs-ui.tsx usePackRows → refreshRemoteManifest: ' + [...new Set(external)].join(', ') + ')');
+  await ctx.close();
+}
+// h) Sabit kabuk (Android hatası: "çok kaydırınca alttaki menü yukarı kayıyor"). Android benzeri
+// öykünme (412×915, dokunmatik); dokunarak ve fare tekerleğiyle sonuna kadar ve ötesine kaydırılır:
+// alttaki menünün ve üst çubuğun konumu değişmez, belge kaymaz, yalnız içerik alanı kayar.
+// Ayrıca içeriğe bilerek taşan bir öğe eklenir: kabuk yine kıpırdamaz (overflow: clip).
+{
+  const ctx = await browser.newContext({ ...pw.devices['Galaxy S9+'], viewport: { width: 412, height: 915 } });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (r) => r.abort());
+  const page = await ctx.newPage();
+  const errs = watch(page);
+  const cdp = await ctx.newCDPSession(page);
+  const kutu = (s) => page.evaluate((q) => { const r = document.querySelector(q)?.getBoundingClientRect(); return r ? [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10).join(',') : null; }, s);
+  const ekranlar = ['?tab=fener', '?tab=rehber', '?guide=deprem-aninda', '?cat=deprem', '?tab=harita', '?tab=kutuphane', '?tab=iletisim', '?comm=pano', '?tab=araclar', '?tool=ayarlar', '?tool=radyo', '?tool=canta'];
+  for (const u of ekranlar) {
+    await page.goto(base + u, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(400);
+    const nav0 = await kutu('.app-nav');
+    const bas0 = await kutu('.app-header');
+    const kok = await page.evaluate(() => { const h = getComputedStyle(document.documentElement); return h.overflowY + '/' + h.overscrollBehaviorY + '/' + getComputedStyle(document.getElementById('main')).overscrollBehaviorY; });
+    // Dokunarak hızlı kaydırma (fırlatma), sonra tekerlekle sınırın ötesine
+    for (let i = 0; i < 3; i++) await cdp.send('Input.synthesizeScrollGesture', { x: 200, y: 640, yDistance: -2500, speed: 5000, gestureSourceType: 'touch' }).catch(() => {});
+    await page.mouse.move(200, 500);
+    for (let i = 0; i < 8; i++) await page.mouse.wheel(0, 2500);
+    await page.waitForTimeout(250);
+    for (let i = 0; i < 2; i++) await cdp.send('Input.synthesizeScrollGesture', { x: 200, y: 300, yDistance: 2500, speed: 5000, gestureSourceType: 'touch' }).catch(() => {});
+    for (let i = 0; i < 2; i++) await cdp.send('Input.synthesizeScrollGesture', { x: 200, y: 640, yDistance: -2500, speed: 5000, gestureSourceType: 'touch' }).catch(() => {});
+    await page.waitForTimeout(250);
+    const nav1 = await kutu('.app-nav');
+    const bas1 = await kutu('.app-header');
+    const d = await page.evaluate(() => ({ doc: document.scrollingElement.scrollTop + window.scrollY, govde: document.body.scrollTop, app: document.getElementById('app').scrollTop }));
+    check(kok === 'hidden/none/contain', `kabuk ${u}: html kaymaz, aşırı kaydırma kapalı (${kok})`);
+    check(!!nav0 && nav0 === nav1 && bas0 === bas1 && d.doc === 0 && d.govde === 0 && d.app === 0,
+      `kabuk ${u}: sonuna kadar kaydırınca menü ve üst çubuk yerinde (${nav0} → ${nav1}; belge ${JSON.stringify(d)})`);
+  }
+  // Bilerek taşan içerik (ör. bir eklentinin konumlandırdığı öğe) belgeyi büyütmez
+  await page.goto(base + '?guide=deprem-aninda', { waitUntil: 'networkidle' });
+  const nav0 = await kutu('.app-nav');
+  await page.evaluate(() => { const x = document.createElement('div'); x.style.cssText = 'position:absolute;top:900px;left:0;height:3000px;width:10px'; document.querySelector('.app').appendChild(x); x.scrollIntoView(); });
+  await page.mouse.move(200, 500);
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, 3000);
+  await cdp.send('Input.synthesizeScrollGesture', { x: 200, y: 640, yDistance: -3000, speed: 5000, gestureSourceType: 'touch' }).catch(() => {});
+  await page.waitForTimeout(250);
+  const nav1 = await kutu('.app-nav');
+  check(nav0 === nav1 && (await page.evaluate(() => document.scrollingElement.scrollTop + document.body.scrollTop + document.getElementById('app').scrollTop)) === 0,
+    `kabuk: taşan öğe + scrollIntoView belgeyi/menüyü kaydırmıyor (${nav0} → ${nav1})`);
+  // Uzun rehberde içerik alanı gerçekten kayıyor (yalnız #main)
+  await page.goto(base + '?guide=deprem-aninda', { waitUntil: 'networkidle' });
+  await page.mouse.move(200, 500);
+  for (let i = 0; i < 4; i++) await page.mouse.wheel(0, 2000);
+  await page.waitForTimeout(250);
+  check(await page.evaluate(() => { const m = document.getElementById('main'); return m.scrollTop > 200 && Math.abs(m.scrollTop + m.clientHeight - m.scrollHeight) < 2; }), 'kabuk: uzun rehberde içerik alanı sonuna kadar kayıyor');
+  check(errs.length === 0, 'kabuk denetiminde konsol hatası yok' + (errs.length ? ' → ' + errs.join(' | ') : ''));
+  await ctx.close();
+}
+// i) ?art çizim galerisi uzun bir belgedir: sabit kabuk ona uygulanmaz, kayar
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await ctx.newPage();
+  await page.goto(base + '?art=1', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(500);
+  check(await page.evaluate(() => !document.documentElement.classList.contains('kabuk') && getComputedStyle(document.documentElement).overflowY !== 'hidden'), 'çizim galerisi (?art): belge kaydırılabilir kalıyor');
   await ctx.close();
 }
 

@@ -72,6 +72,11 @@ const readText = (p) => read(p).toString('utf8');
   check(readText('android/capacitor.settings.gradle').includes(':capacitor-community-text-to-speech'), 'TTS eklentisi Gradle ayarlarında');
   const main = readText('android/app/src/main/java/org/akilcantasi/app/MainActivity.java');
   check(/registerPlugin\(AkilCantasiPlugin\.class\)/.test(main) && /registerPlugin\(AkilMeshPlugin\.class\)/.test(main), 'yerel eklentiler kayıtlı');
+  // "Çok kaydırınca alttaki menü yukarı kayıyor": Android 12+ esneme efekti bütün WebView'ı çekiyordu
+  check(/setOverScrollMode\(View\.OVER_SCROLL_NEVER\)/.test(main), 'WebView aşırı kaydırma (esneme) efekti kapalı');
+  const appCss = readText('src/styles/app.css');
+  check(/html\.kabuk\s*\{[^}]*overflow:\s*hidden/.test(appCss) && /html\s*\{[^}]*overscroll-behavior:\s*none/.test(appCss) && /\.app-main[^{]*\{[^}]*overscroll-behavior:\s*contain/.test(appCss),
+    'sabit kabuk: html kaymaz, kökte aşırı kaydırma yok, içerik alanı kaydırmayı dışarı aktarmaz');
   const ips = readText('android/app/src/main/java/org/akilcantasi/app/InfoPointServer.java');
   check(ips.includes('".tar"') && ips.includes('Content-Security-Policy'), 'telefon bilgi noktası .tar ve CSP destekli');
 }

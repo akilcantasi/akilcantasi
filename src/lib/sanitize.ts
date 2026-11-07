@@ -1,5 +1,6 @@
 // ZIM makale HTML'i için izin listesi tabanlı temizleyici.
 import type { ZimArchive } from './zim';
+import { yukleniyorMu } from './zim/dizin';
 
 // İçeriğiyle birlikte atılan öğeler
 const DROP = new Set(
@@ -48,7 +49,7 @@ export function safeUrl(v: string): boolean {
 
 /**
  * ZIM'den gelen makale HTML'ini güvenli hâle getirir (izin listesi): betik,
- * SVG/MathML, olay işleyicileri ve http(s) dışı bağlantılar atılır; iç
+ * SVG/MathML, olay işleyicileri, "yükleniyor" göstergeleri ve http(s) dışı bağlantılar atılır; iç
  * bağlantılar data-zim-path ile işaretlenir; görseller src'siz bırakılıp
  * sonradan arşivden blob URL ile yüklenir.
  */
@@ -59,6 +60,12 @@ export function sanitize(html: string, lib: Pick<ZimArchive, 'resolveLink'>, pat
     for (const el of Array.from(parent.children)) {
       const tag = el.tagName.toLowerCase();
       if (DROP.has(tag) || el.namespaceURI !== 'http://www.w3.org/1999/xhtml') {
+        el.remove();
+        continue;
+      }
+      // "Yükleniyor" göstergeleri (dönen GIF, #spinner kutusu): betik çalışmadığı için hiç
+      // kaybolmaz, sayfa sonsuza dek yükleniyormuş gibi görünürdü (Gutenberg giriş sayfası)
+      if (yukleniyorMu(el)) {
         el.remove();
         continue;
       }

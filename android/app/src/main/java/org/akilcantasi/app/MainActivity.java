@@ -2,6 +2,7 @@ package org.akilcantasi.app;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -60,6 +61,11 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GuncellemePlugin.class);
         hedefKoy(getIntent());
         super.onCreate(savedInstanceState);
+
+        // Android 12+ esneme (stretch) / parıltı efekti kapalı: içerik sonuna gelince bütün WebView
+        // (alttaki menüyle birlikte) yukarı esnemesin. Kaydırma yalnız sayfanın içinde olur (app.css).
+        WebView wv = bridge == null ? null : bridge.getWebView();
+        if (wv != null) wv.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
         // Geri tuşu: uygulama içi geçmişte bir adım geri (src/gecmis.ts her ekranı history'ye yazar).
         // Geçmiş bitince Android'in olağan davranışı (uygulamadan çık / arka plana al).

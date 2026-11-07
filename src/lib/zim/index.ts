@@ -479,11 +479,30 @@ export class ZimArchive {
   }
 
   /** Başlık listesindeki j. girdi (0 ≤ j < articleCount) — küçük arşivlerde tam tarama için. */
-  async titleEntry(j: number): Promise<(ZimHit & { redirect: boolean }) | null> {
+  async titleEntry(j: number): Promise<(ZimHit & { redirect: boolean; mime: string }) | null> {
     const tl = this.titleList;
     if (!tl || j < 0 || j >= tl.hi - tl.lo) return null;
     const d = await this.titleDirent(tl.lo + j);
-    return { path: this.publicPath(d), title: d.title, redirect: d.mime === REDIRECT };
+    const redirect = d.mime === REDIRECT;
+    return { path: this.publicPath(d), title: d.title, redirect, mime: redirect ? '' : this.mimeOf(d) };
+  }
+
+  /**
+   * Başlık listesinde `prefix` ile başlayan (ya da ondan sonra gelen) ilk girdinin sırası
+   * (0 ≤ j ≤ articleCount). Liste bayt sırasıyla sıralıdır (harf duyarlı); koleksiyon
+   * dizinindeki A–Z atlaması için.
+   */
+  async titleLowerBound(prefix: string): Promise<number> {
+    const tl = this.titleList;
+    if (!tl || tl.hi <= tl.lo) return 0;
+    let a = tl.lo;
+    let b = tl.hi;
+    while (a < b) {
+      const m = mid(a, b);
+      if (cmp((await this.titleDirent(m)).title, prefix) < 0) a = m + 1;
+      else b = m;
+    }
+    return a - tl.lo;
   }
 
   // ---------------------------------------------------------------- arama

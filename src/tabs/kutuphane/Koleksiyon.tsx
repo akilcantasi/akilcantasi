@@ -10,6 +10,8 @@ import { AramaKutusu, AramaSonuclari } from './Arama';
 import { acMakale, listeKonumuAl } from './gezinme';
 import { IcoBack, IcoDice, IcoTrash, IcoWifi, IcoDownload, KategoriIkon, IcoHome } from './ikonlar';
 import { BookList } from './Okuyucu';
+import { KoleksiyonDizini } from './Dizin';
+import { sayfaKabukMu } from '../../lib/zim/dizin';
 import { anaSayfaYaz, fmt, okunanlariSil, ustVeri, zamanOnce } from './veri';
 import { setEkran, type Koleksiyon as Kol, type useKoleksiyonlar } from './durum';
 import { randomLibraryArticle } from '../../lib/library';
@@ -96,10 +98,15 @@ export function Koleksiyon({ id, k, sources }: { id: string; k: K; sources: Libr
   );
 }
 
-/** "Okumaya başla" + rastgele madde; kitap kitaplıklarında kitap listesi */
+/**
+ * "Okumaya başla" + rastgele madde; kitap kitaplıklarında kitap listesi. Giriş sayfası betikle
+ * çizilen koleksiyonlarda (Gutenberg vb.) o boş sayfa yerine uygulamanın kendi dizini.
+ */
 function Baslangic({ c, src, hazir }: { c: Kol; src?: LibrarySource; hazir: boolean }) {
   const [ana, setAna] = useState<{ path: string } | null | undefined>(undefined);
   const [books, setBooks] = useState<NautilusBook[] | null>(null);
+  /** Kendi dizinimiz gösterilecekse giriş sayfasının yolu (dizinden çıkarılır) */
+  const [dizin, setDizin] = useState<{ ana: string | null } | null>(null);
   const [rnd, setRnd] = useState<'idle' | 'busy' | 'none'>('idle');
   useEffect(() => {
     if (!src) return;
@@ -113,6 +120,11 @@ function Baslangic({ c, src, hazir }: { c: Kol; src?: LibrarySource; hazir: bool
         const b = await loadNautilus(src.zim).catch(() => null);
         if (!alive) return;
         if (b?.length) setBooks(b);
+      }
+      // Gutenberg ve betikle çizilen öteki giriş sayfaları: betik çalışmadığından boş kalırlar
+      if (src.kind === 'gutenberg' || (m && m.mime.startsWith('text/html') && sayfaKabukMu(m.html))) {
+        if (!alive) return;
+        setDizin({ ana: m?.path ?? null });
       }
       setAna(m ? { path: m.path } : null);
     })();
@@ -135,6 +147,20 @@ function Baslangic({ c, src, hazir }: { c: Kol; src?: LibrarySource; hazir: bool
     setRnd('idle');
     acMakale(r.ref, { yeni: true });
   };
+  if (dizin && !books) {
+    return (
+      <>
+        <div class="kt-actions">
+          <button class="btn" data-testid="lib-random" disabled={rnd === 'busy'} onClick={rastgele}>
+            <IcoDice />
+            {rnd === 'busy' ? 'Seçiliyor…' : src.kind === 'gutenberg' ? 'Rastgele bir kitap' : 'Rastgele bir sayfa'}
+          </button>
+        </div>
+        {rnd === 'none' && <p class="kt-note">Açılabilecek bir sayfa bulunamadı.</p>}
+        <KoleksiyonDizini src={src} anaYol={dizin.ana} />
+      </>
+    );
+  }
   if (books) {
     return (
       <section class="kt" style="gap:10px" aria-label="Kitaplar">

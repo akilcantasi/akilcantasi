@@ -181,3 +181,13 @@ Bilgi noktasından (Windows / Raspberry Pi) tarayıcıyla bir kez açılan uygul
 ```
 npm run build && node e2e/sw-check.mjs          # ya da: npx vite build --outDir /tmp/d && node e2e/sw-check.mjs /tmp/d
 ```
+
+## Android geri bildirimi (v0.2.9): çok kaydırınca alttaki menü kayıyor
+
+**Hata:** Herhangi bir sayfada sonuna kadar (ve ötesine) kaydırınca alttaki menü yukarı doğru kayıyordu.
+
+**Kök neden:** İç kaydırma alanı (`.app-main`) sonuna gelince kaydırma köke zincirleniyordu; kök kayamayınca Android 12+ WebView'ın "esneme" (stretch) efekti bütün sayfayı menüyle birlikte yukarı çekiyordu. `overscroll-behavior: none` yalnız `body`'deydi (görünüme yalnız `html`'deki uygulanır); `html`/`body` de taşan bir içerikte ya da `scrollIntoView` ile kaydırılabiliyordu.
+
+**Düzeltmeler:** `src/styles/app.css` sabit kabuk (`html.kabuk`: html/body/#app kaymaz, `overflow: clip`; kökte `overscroll-behavior: none`; `.app-main` ve iç kaydırıcılarda `contain`; `#app` 100dvh), `src/main.tsx` (`kabuk` sınıfı; `?art` galerisi kaymaya devam eder), `MainActivity.java` (`setOverScrollMode(OVER_SCROLL_NEVER)`).
+
+**Sınama:** `e2e/qa-a11y.mjs` bölüm h–i (Galaxy S9+ öykünmesi, 412×915, dokunarak ve tekerlekle sınırın ötesine: 12 ekranda menü ve üst çubuk aynı yerde; taşan öğe + scrollIntoView belgeyi kaydırmıyor), `e2e/kutuphane-gutenberg-check.mjs` (okuyucu, 4 MB kitap, kitap listesi, PDF okuyucu), `e2e/qa-platform.mjs` (yapısal). Not: masaüstü Chromium esneme efektini çizmez; asıl doğrulama telefonda yapılmalı.

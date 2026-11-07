@@ -21,6 +21,7 @@ import {
   type RankedHit,
   type TextHit,
 } from './zim/search';
+import { gutenbergNo } from './zim/dizin';
 
 export type { ZimArchive, ZimHit, ZimArticle } from './zim';
 
@@ -333,7 +334,11 @@ export async function searchLibrary(query: string, opts: { sourceId?: string | n
     srcs.map((s, i) =>
       searchArchive(s.zim, query, { limit })
         .then((hits) =>
-          hits.map((h) => ({ ...h, score: h.score + i * 0.5, sourceId: s.id, sourceLabel: s.label, ref: makeRef(s.id, h.path) })),
+          hits
+            // Gutenberg: her kitabın aynı başlıklı bir kapak sayfası ve betikli giriş sayfası var;
+            // sonuçlarda yalnız kitabın kendisi (aynı kitap iki kez görünmesin)
+            .filter((h) => s.kind !== 'gutenberg' || gutenbergNo(h.path) !== null)
+            .map((h) => ({ ...h, score: h.score + i * 0.5, sourceId: s.id, sourceLabel: s.label, ref: makeRef(s.id, h.path) })),
         )
         .catch((e) => {
           console.warn('Arama hatası', s.id, e);
@@ -394,8 +399,10 @@ export async function randomLibraryArticle(sourceId?: string | null): Promise<Li
       break;
     }
   }
-  const h = await s.zim.randomArticle();
-  if (!h) return null;
+  let h = await s.zim.randomArticle();
+  // Gutenberg: kapak ya da giriş sayfası değil, bir kitap
+  for (let k = 0; h && s.kind === 'gutenberg' && gutenbergNo(h.path) === null && k < 12; k++) h = await s.zim.randomArticle();
+  if (!h || (s.kind === 'gutenberg' && gutenbergNo(h.path) === null)) return null;
   return { ...h, rank: 0, score: 0, sourceId: s.id, sourceLabel: s.label, ref: makeRef(s.id, h.path) };
 }
 

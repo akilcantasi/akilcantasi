@@ -1,4 +1,5 @@
 // ZIM makale temizleyicisinin gerçek tarayıcıda XSS denetimi:  node e2e/sanitize-check.mjs
+// Ayrıca: "yükleniyor" göstergelerinin atılması ve betiksiz kabuk giriş sayfası algısı (src/lib/zim/dizin.ts).
 import { createRequire } from 'module';
 import { buildSync } from 'esbuild';
 const require = createRequire(import.meta.url);
@@ -92,7 +93,36 @@ const clobOk = clob.capacitor === 'undefined' && clob.main === 'main' && clob.co
 const kept = res.includes('data-zim-path="A/Kedi"') && res.includes('href="https://tr.wikipedia.org/"');
 console.log('clobbering:', JSON.stringify(clob));
 if (bad.length) console.log('yasak öğe/öznitelik:', bad);
-const ok = hit === 0 && !bad.length && kept && clobOk;
-console.log(ok ? 'TÜMÜ OK' : `HATA hit=${hit} bad=${bad.length} kept=${kept} clobbering=${clobOk}`);
+// "Yükleniyor" göstergeleri ve betiksiz kabuk sayfalar (Gutenberg giriş sayfası: dönen GIF görünüyor,
+// sayfa hiç açılmıyordu). Madde görselleri ve "Loading" adlı bölüm başlıkları korunmalı.
+const dizinKod = buildSync({ entryPoints: [new URL('../src/lib/zim/dizin.ts', import.meta.url).pathname], bundle: true, format: 'iife', globalName: 'D', write: false }).outputFiles[0].text;
+await p.addScriptTag({ content: dizinKod });
+const gut = `<html><head><script src="jquery.js"></script><script src="full_by_popularity.js"></script></head><body><h1>Project Gutenberg Library</h1>
+<select><option>All languages</option></select><div id="spinner" class="loading"><img src="images/load.gif" alt="Loading..."></div>
+<table id="books_table"><thead><tr><th>Title</th><th>Author</th></tr></thead><tbody></tbody></table><script>init()</script></body></html>`;
+const yuk = await p.evaluate((gut) => {
+  const lib = { resolveLink: (_f, h) => (/^https?:/.test(h) ? null : h) };
+  const temiz = S.sanitize(gut, lib, 'index.html', 'x');
+  const madde = S.sanitize('<h2 id="Loading">Loading</h2><p>Loading a muzzle-loader takes time.</p><figure><img src="Loading_dock.gif" alt="Loading"><figcaption>Bir yükleme rampası</figcaption></figure><p><img src="ajax-loader.gif"> <img src="img/spinner.svg" alt=""> <img src="Kedi.jpg" alt="Kedi"></p><div class="lds-ring"></div><span class="dataTables_processing">Processing...</span>', lib, 'a', 'b');
+  const uzunMetin = '<p>' + 'Uzun bir madde metni. '.repeat(30) + '</p>';
+  return {
+    gifYok: !/load\.gif|spinner/.test(temiz),
+    kabuk: D.sayfaKabukMu(gut),
+    maddeBaslikVar: /<h2 id="zim-Loading">Loading<\/h2>/.test(madde),
+    figurVar: madde.includes('data-zim-src="Loading_dock.gif"'),
+    kediVar: madde.includes('data-zim-src="Kedi.jpg"'),
+    gostergeYok: !/ajax-loader|spinner\.svg|lds-ring|Processing/.test(madde),
+    // Kabuk sayılmamalı: betiksiz sayfa; betikli ama içerikli sayfa; çok bağlantılı giriş sayfası
+    betiksiz: D.sayfaKabukMu('<body><p>Kısa.</p></body>'),
+    icerikli: D.sayfaKabukMu('<script src="a.js"></script><body>' + uzunMetin + '</body>'),
+    baglantili: D.sayfaKabukMu('<script src="a.js"></script><body>' + Array.from({ length: 20 }, (_, i) => `<a href="s${i}.html">S${i}</a>`).join(' ') + '</body>'),
+    // Kabuk: betikli, neredeyse boş gövde (SPA)
+    bos: D.sayfaKabukMu('<head><script src="app.js"></script></head><body><div id="app"></div></body>'),
+  };
+}, gut);
+console.log('yükleniyor/kabuk:', JSON.stringify(yuk));
+const yukOk = yuk.gifYok && yuk.kabuk && yuk.maddeBaslikVar && yuk.figurVar && yuk.kediVar && yuk.gostergeYok && !yuk.betiksiz && !yuk.icerikli && !yuk.baglantili && yuk.bos;
+const ok = hit === 0 && !bad.length && kept && clobOk && yukOk;
+console.log(ok ? 'TÜMÜ OK' : `HATA hit=${hit} bad=${bad.length} kept=${kept} clobbering=${clobOk} yükleniyor=${yukOk}`);
 await b.close();
 process.exit(ok ? 0 : 1);

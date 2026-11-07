@@ -225,3 +225,18 @@ Tasarım belgesi: `docs/qa/kutuphane-tasarim.md`. Ekran görüntüleri: `docs/im
 - Arama sıralaması `src/lib/library.ts`/`zim` kapsamında: "su" aramasında "Şu" ilk sırada (katlanmış eşleşme).
 - Kiwix sayfalarının kendi gezinme öğeleri (ör. NHS "Skip to main content") makalede görünür.
 - Kuyruktaki tek bir bekleyen indirme ayrı iptal edilemez (yalnız "Hepsini duraklat"); `indirme-kuyrugu.ts` kapsamı.
+
+## Android geri bildirimi (v0.2.9): Gutenberg açılmıyor
+
+**Hata:** Kütüphanede Project Gutenberg koleksiyonu açılınca yalnız dönen bir "loading" GIF'i görünüyor, sayfa hiç açılmıyordu.
+
+**Kök neden:** gutenberg2zim'in giriş sayfası (`index.html`) kitap listesini jQuery + DataTables ile bir JS veri dosyasından (`full_by_popularity.js`) çizer. Uygulama ZIM betiklerini güvenlik için çalıştırmaz (doğru); bu yüzden sayfa boş kalıyor, yalnız yükleniyor GIF'i görünüyordu. Kitapların kendisi sıradan HTML girdileridir (`<Başlık>.<no>.html`, kapak: `<Başlık>_cover.<no>.html`).
+
+**Düzeltmeler:**
+- `src/lib/zim/dizin.ts` (yeni): betikle çizilen giriş sayfası algısı (`sayfaKabukMu`: betik var + çok az metin/bağlantı ya da yükleniyor göstergesi; yalnız giriş sayfasına uygulanır), Gutenberg kitap yolu kuralları (kapaklar, JS, epub atlanır), JS veri dosyasından yazarlar, başlık dizinini parça parça okuyan `DizinOkuyucu` (harfe atlama: `ZimArchive.titleLowerBound`).
+- `src/tabs/kutuphane/Dizin.tsx` (yeni): uygulamanın kendi alfabetik kitap/sayfa listesi (kaydırdıkça devamı, A–Z, yazar, süzme; kitaptan dönünce liste yerinde). Koleksiyon ekranında Gutenberg'de "Okumaya başla" yerine bu liste ve "Rastgele bir kitap"; okuyucuda eski "giriş sayfası" kaydı açılırsa da liste gösterilir.
+- `src/lib/sanitize.ts`: "yükleniyor" göstergeleri (load.gif, ajax-loader, spinner, `#spinner`, `.dataTables_processing`…) atılır; madde görselleri ve "Loading" adlı başlıklar korunur.
+- `src/lib/library.ts`: Gutenberg aramasında kapak/giriş sayfaları elenir (aynı kitap iki kez çıkmaz); "Rastgele" bir kitap seçer.
+- Büyük sayfalar (`Okuyucu.tsx`): 4 MB'lık tek sayfalık kitap 4× yavaş işlemcide ~14 s donduruyordu (bütün metinden özet çıkarımı + tek parça innerHTML). Özet yalnız baştan çıkarılır; 200 KB üstü gövde parça parça (her karede ~12 ms) yerleşir, ekran dışı bloklar `content-visibility: auto`. Okuma konumu büyük sayfalarda blok sırasıyla tutulur (aynı paragrafa döner). İlk görünüm ~1,9 s, sonra en uzun kare ~250 ms.
+
+**Sınama:** `testdata/sample_gutenberg_en.zim` (tools/make_sample_zim.py `gutenberg`; büyük kitap: `gutenberg-buyuk`), `tests/dizin.test.ts`, `e2e/kutuphane-gutenberg-check.mjs` (koleksiyon listesi, harf, arama, kitap, GIF yok, büyük kitap hızı ve konumu, Android öykünmesinde okuyucu ve PDF okuyucuda menü yerinde), `e2e/sanitize-check.mjs` (yükleniyor göstergeleri, kabuk algısı). Gerçek paketlerde (Vikipedi, NHS/zimit, zimgit, Vikikitap, Vikikaynak, Vikidia, sahra tıbbı) giriş sayfası değişmedi.

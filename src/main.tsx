@@ -73,6 +73,8 @@ if (new URLSearchParams(location.search).has('art')) {
   if (gecerliKimlik(comm)) go.comm(comm);
   else if (comm) go.tab('iletisim');
   initGecmis();
+  // Sabit kabuk (app.css html.kabuk): belge kaymaz, yalnız içerik alanı kayar
+  document.documentElement.classList.add('kabuk');
   render(<App />, root);
   // Kurulu rehber paketlerini (.rehber.json) yükle; ?guide= paket rehberi ise yüklenince açılır
   initPackGuides();

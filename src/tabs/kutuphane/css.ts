@@ -240,6 +240,9 @@ export const OKUYUCU_CSS = `
 .kt-body pre { padding: 10px; overflow-x: auto; white-space: pre-wrap; }
 .kt-body .mw-editsection, .kt-body .noprint, .kt-body .subpages { display: none; }
 .kt-body details > summary { cursor: pointer; }
+/* Çok büyük sayfalar (Okuyucu.tsx ArticleBody): ekran dışındaki bölümlerin yerleşimi atlanır;
+   "auto" bir kez çizilen bölümün gerçek yüksekliğini hatırlar (kaydırma çubuğu oturur) */
+.kt-body.kt-buyuk .kt-blok { content-visibility: auto; contain-intrinsic-size: auto 3.5em; }
 .kt-body mark.kt-mark { background: rgba(245, 165, 36, 0.28); color: inherit; border-radius: 3px; }
 .kt-body mark.kt-mark.cur { background: var(--accent); color: var(--on-accent); }
 .kt-end { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line2); }
@@ -256,4 +259,7 @@ export const OKUYUCU_CSS = `
 .kt-media { display: block; max-width: 100%; border-radius: 12px; background: var(--bg2); }
 audio.kt-media { width: 100%; }
 .kt-pre { padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--code); font-size: 13px; color: var(--text2); max-height: 70vh; overflow: auto; }
+/* Koleksiyon dizini (Dizin.tsx): harf şeridi ve "devamını göster" */
+.kt-harfler .chip { min-width: 44px; justify-content: center; padding: 0 12px; }
+.kt-dizin-alt { display: flex; justify-content: center; padding: 4px 0 8px; }
 `;

@@ -16,7 +16,13 @@
                        İngilizce tıbbi arşiv (WikiMed benzeri). Çoklu kaynak ve
                        saf-TS Xapian okuyucusunun testleri için.
 
-Kullanım:  pip install libzim && python3 tools/make_sample_zim.py [all|tr|xz|med|kitap]
+  sample_gutenberg_en.zim  python-libzim ile, gutenberg2zim düzeninde (JS ile çizilen ana
+                       sayfa + "loading" GIF'i, "<Başlık>_cover.<no>.html" ve "<Başlık>.<no>.html")
+                       40 kitaplık örnek. Betiksiz ana sayfa yerine uygulamanın kendi kitap
+                       listesinin testleri için. `gutenberg-buyuk <yol> [bayt]`: başarım için
+                       tek sayfası çok büyük bir kitap (testdata'ya konmaz).
+
+Kullanım:  pip install libzim && python3 tools/make_sample_zim.py [all|tr|xz|med|kitap|gutenberg]
 İçerik yalnızca test amaçlı, kısa ve genel ansiklopedik metinlerdir.
 """
 import hashlib
@@ -529,6 +535,159 @@ def build_nautilus(path):
     print("yazıldı:", path, os.path.getsize(path), "bayt")
 
 
+# ---------------------------------------------------------------------------
+# 4) python-libzim, Gutenberg benzeri kitaplık (gutenberg2zim düzeni)
+# ---------------------------------------------------------------------------
+# Kiwix gutenberg_* paketlerinin yapısı: ana sayfa (index.html) kitap listesini jQuery +
+# DataTables ile JS dosyasından (full_by_popularity.js: var json_data = [[başlık, yazar, no, …]])
+# çizer ve yüklenirken dönen bir "loading" GIF'i gösterir. Her kitap için iki HTML girdisi var:
+# "<Başlık>_cover.<no>.html" (kapak: biçimler, indirme bağlantıları) ve "<Başlık>.<no>.html"
+# (kitabın kendisi); ayrıca .epub dosyaları, CSS, JS ve görseller. Uygulama betik çalıştırmadığı
+# için ana sayfa boş kalıyordu; testler bu düzeni sınar. Kitaplar telifi düşmüş klasiklerdir,
+# metinleri kısa yer tutucu paragraflardır.
+
+GUTENBERG_BOOKS = [
+    (1342, "Pride and Prejudice", "Jane Austen"),
+    (84, "Frankenstein", "Mary Wollstonecraft Shelley"),
+    (11, "Alice's Adventures in Wonderland", "Lewis Carroll"),
+    (1661, "The Adventures of Sherlock Holmes", "Arthur Conan Doyle"),
+    (2701, "Moby Dick", "Herman Melville"),
+    (98, "A Tale of Two Cities", "Charles Dickens"),
+    (1952, "The Yellow Wallpaper", "Charlotte Perkins Gilman"),
+    (345, "Dracula", "Bram Stoker"),
+    (174, "The Picture of Dorian Gray", "Oscar Wilde"),
+    (76, "Adventures of Huckleberry Finn", "Mark Twain"),
+    (1260, "Jane Eyre", "Charlotte Brontë"),
+    (768, "Wuthering Heights", "Emily Brontë"),
+    (2600, "War and Peace", "Leo Tolstoy"),
+    (1400, "Great Expectations", "Charles Dickens"),
+    (120, "Treasure Island", "Robert Louis Stevenson"),
+    (43, "The Strange Case of Dr. Jekyll and Mr. Hyde", "Robert Louis Stevenson"),
+    (35, "The Time Machine", "H. G. Wells"),
+    (36, "The War of the Worlds", "H. G. Wells"),
+    (219, "Heart of Darkness", "Joseph Conrad"),
+    (1080, "A Modest Proposal", "Jonathan Swift"),
+    (829, "Gulliver's Travels", "Jonathan Swift"),
+    (158, "Emma", "Jane Austen"),
+    (161, "Sense and Sensibility", "Jane Austen"),
+    (996, "Don Quixote", "Miguel de Cervantes Saavedra"),
+    (2554, "Crime and Punishment", "Fyodor Dostoyevsky"),
+    (1184, "The Count of Monte Cristo", "Alexandre Dumas"),
+    (5200, "Metamorphosis", "Franz Kafka"),
+    (64317, "The Great Gatsby", "F. Scott Fitzgerald"),
+    (16328, "Beowulf", ""),
+    (100, "The Complete Works of William Shakespeare", "William Shakespeare"),
+    (4300, "Ulysses", "James Joyce"),
+    (1232, "The Prince", "Niccolò Machiavelli"),
+    (215, "The Call of the Wild", "Jack London"),
+    (55, "The Wonderful Wizard of Oz", "L. Frank Baum"),
+    (16, "Peter Pan", "J. M. Barrie"),
+    (730, "Oliver Twist", "Charles Dickens"),
+    (205, "Walden, and On The Duty Of Civil Disobedience", "Henry David Thoreau"),
+    (3207, "Leviathan", "Thomas Hobbes"),
+    (1497, "The Republic", "Plato"),
+    (2591, "Grimms' Fairy Tales", "Jacob Grimm and Wilhelm Grimm"),
+]
+
+# 1×1 saydam GIF ("loading" dönen simgesi yerine)
+GIF_1PX = bytes.fromhex("47494638396101000100800000000000ffffff21f90401000000002c00000000010001000002024401003b")
+
+
+def gutenberg_index_html():
+    return """<!DOCTYPE html><html><head><meta charset="utf-8"><title>Project Gutenberg Library</title>
+<link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="datatables/datatables.min.css">
+<script src="jquery/jquery-1.11.1.min.js"></script><script src="datatables/jquery.dataTables.min.js"></script>
+<script src="full_by_popularity.js"></script><script src="l10n.js"></script><script src="tools.js"></script></head>
+<body><div id="main"><header><h1 id="lang_title">Project Gutenberg Library</h1>
+<form id="filters"><select id="language_filter"><option value="">All languages</option></select>
+<input id="author_filter" placeholder="Author"></form></header>
+<div id="spinner" class="loading"><img src="images/load.gif" alt="Loading..." class="loader"></div>
+<noscript>This page needs JavaScript.</noscript>
+<table id="books_table" class="display"><thead><tr><th>Title</th><th>Author</th></tr></thead><tbody></tbody></table>
+<footer><p>Library generated by gutenberg2zim.</p></footer></div>
+<script>$(document).ready(function(){ init(); });</script></body></html>"""
+
+
+def gutenberg_book_html(no, title, author, chapters=3):
+    parts = ['<!DOCTYPE html><html><head><meta charset="utf-8"><title>%s</title>'
+             '<link rel="stylesheet" href="css/book.css"><script src="tools.js"></script></head><body>' % title,
+             '<div class="pg-boilerplate"><a href="%s_cover.%d.html">Back to cover</a></div>' % (title, no),
+             '<h1>%s</h1>' % title]
+    if author:
+        parts.append('<h2 class="author">by %s</h2>' % author)
+    for c in range(1, chapters + 1):
+        parts.append('<h2 id="chap%02d">Chapter %d</h2>' % (c, c))
+        for k in range(1, 4):
+            parts.append('<p>Placeholder paragraph %d of chapter %d of “%s”. The original public domain text '
+                         'is replaced by this short sample so the test archive stays small.</p>' % (k, c, title))
+    parts.append('</body></html>')
+    return "".join(parts)
+
+
+def gutenberg_cover_html(no, title, author):
+    return ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>%s</title><script src="tools.js"></script></head><body>'
+            '<div id="cover"><img src="covers/%d_cover_image.jpg" alt="cover"><h1>%s</h1><p class="author">%s</p>'
+            '<ul><li><a href="%s.%d.html">HTML</a></li><li><a href="%s.%d.epub">EPUB</a></li></ul></div></body></html>'
+            % (title, no, title, author or "Anonymous", title, no, title, no))
+
+
+def build_gutenberg(path, books=None, big_book_bytes=0):
+    books = GUTENBERG_BOOKS if books is None else books
+    from libzim.writer import Creator, Item, StringProvider, Hint, Compression
+    import json
+
+    class It(Item):
+        def __init__(self, p, t, data, mime, front=False):
+            super().__init__()
+            self.p, self.t, self.data, self.mime, self.front = p, t, data, mime, front
+
+        def get_path(self):
+            return self.p
+
+        def get_title(self):
+            return self.t
+
+        def get_mimetype(self):
+            return self.mime
+
+        def get_contentprovider(self):
+            return StringProvider(self.data)
+
+        def get_hints(self):
+            return {Hint.FRONT_ARTICLE: self.front}
+
+    js = "var json_data = " + json.dumps([[t, a, no, "110", a.lower().replace(" ", "-")] for no, t, a in books]) + ";"
+    if os.path.exists(path):
+        os.remove(path)
+    creator = Creator(path).config_indexing(False, "eng").config_compression(Compression.zstd)
+    with creator as c:
+        c.set_mainpath("index.html")
+        for k, v in {"Title": "Project Gutenberg Library", "Description": "Sample Gutenberg-like library for tests",
+                     "Language": "eng", "Creator": "gutenberg2zim", "Publisher": "Akil Cantasi",
+                     "Name": "gutenberg_en_sample", "Date": "2026-01-01"}.items():
+            c.add_metadata(k, v)
+        c.add_item(It("index.html", "Project Gutenberg Library", gutenberg_index_html(), "text/html", True))
+        c.add_item(It("full_by_popularity.js", "", js, "application/javascript"))
+        for f in ("jquery/jquery-1.11.1.min.js", "datatables/jquery.dataTables.min.js", "l10n.js", "tools.js"):
+            c.add_item(It(f, "", "/* örnek betik */ function init(){}", "application/javascript"))
+        c.add_item(It("css/style.css", "", "body{font-family:serif}", "text/css"))
+        c.add_item(It("css/book.css", "", "body{max-width:40em}", "text/css"))
+        c.add_item(It("datatables/datatables.min.css", "", "table{width:100%}", "text/css"))
+        c.add_item(It("images/load.gif", "", GIF_1PX, "image/gif"))
+        for no, t, a in books:
+            chapters = 3
+            html = gutenberg_book_html(no, t, a, chapters)
+            if big_book_bytes and no == books[0][0]:
+                # Başarım sınaması: çok büyük tek sayfalık kitap
+                n = max(3, big_book_bytes // 1400)
+                html = gutenberg_book_html(no, t, a, n)
+            c.add_item(It("%s.%d.html" % (t, no), t, html, "text/html", True))
+            c.add_item(It("%s_cover.%d.html" % (t, no), t, gutenberg_cover_html(no, t, a), "text/html", True))
+            c.add_item(It("%s.%d.epub" % (t, no), "", b"PK\x03\x04 epub", "application/epub+zip"))
+            c.add_item(It("covers/%d_cover_image.jpg" % no, "", GIF_1PX, "image/gif"))
+    print("yazıldı:", path, os.path.getsize(path), "bayt")
+
+
 if __name__ == "__main__":
     os.makedirs(OUT_DIR, exist_ok=True)
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
@@ -541,11 +700,17 @@ if __name__ == "__main__":
                      main="Bleeding", index_lang="eng", image=False)
     if what in ("all", "kitap"):
         build_nautilus(os.path.join(OUT_DIR, "sample_kitap_en.zim"))
+    if what in ("all", "gutenberg"):
+        build_gutenberg(os.path.join(OUT_DIR, "sample_gutenberg_en.zim"))
+    if what == "gutenberg-buyuk":
+        # Başarım sınaması için (testdata'ya konmaz): ilk kitap ~N bayt tek HTML sayfası
+        build_gutenberg(sys.argv[2], big_book_bytes=int(sys.argv[3]) if len(sys.argv) > 3 else 4_000_000)
+        sys.exit(0)
     # Doğrulama: libzim ile geri oku
     try:
         from libzim.reader import Archive
 
-        for n in ("sample_tr.zim", "sample_xz_oldns.zim", "sample_med_en.zim", "sample_kitap_en.zim"):
+        for n in ("sample_tr.zim", "sample_xz_oldns.zim", "sample_med_en.zim", "sample_kitap_en.zim", "sample_gutenberg_en.zim"):
             if not os.path.exists(os.path.join(OUT_DIR, n)):
                 continue
             a = Archive(os.path.join(OUT_DIR, n))
