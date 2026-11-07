@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { AppLogo } from '../Logo';
 import QRCode from 'qrcode';
 import '../styles/paylas.css';
-import { setState, useAppState } from '../lib/store';
+import { go, setState, useAppState } from '../lib/store';
 import { formatSize, importFile, kindOf, type PackKind } from '../lib/packs';
 import { importRehberPack } from '../content/pack-guides';
 import { KIND_LABEL, TIER_LABEL } from '../lib/manifest';
@@ -230,6 +230,12 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
           <li>Telefonda erişim noktası: Ayarlar → Erişim noktası (Android) / Kişisel Erişim Noktası (iPhone).</li>
           <li>Diğer telefonlar QR kodu kamerayla okutsun ya da adresi tarayıcıya yazsın.</li>
         </ol>
+        <p class="sh-small">
+          Evdeki Wi-Fi ya da mesh sistemiyle bütün evi kapsamak için:{' '}
+          <button type="button" class="link-btn" data-testid="infopoint-ev-agi" onClick={() => go.guide('hazirlik-ev-agi-bilgi-noktasi')}>
+            Ev ağında bilgi noktası rehberi
+          </button>
+        </p>
         {status.local && (
           <p class="sh-small" data-testid="infopoint-packs-hint">
             Telefondan yalnızca uygulama ve APK yayınlanır. Paket de yayınlamak için dosyaları USB ile telefondaki{' '}
@@ -287,6 +293,12 @@ function InfoPointCard({ status }: { status: ServerStatus | null | undefined }) 
       <p class="sh-p">
         Bilgi noktası, bir bilgisayarın ya da telefonun uygulamayı ve tüm paketleri yakındaki herkese Wi-Fi üzerinden sunmasıdır.
         İnternet gerekmez; diğer telefonlarda uygulama kurulu olması da gerekmez.
+      </p>
+      <p class="sh-small">
+        Evdeki Wi-Fi ya da mesh sistemiyle bütün evi kapsamak için:{' '}
+        <button type="button" class="link-btn" data-testid="infopoint-ev-agi-kapali" onClick={() => go.guide('hazirlik-ev-agi-bilgi-noktasi')}>
+          Ev ağında bilgi noktası rehberi
+        </button>
       </p>
       <div class="sh-switch-row">
         <button

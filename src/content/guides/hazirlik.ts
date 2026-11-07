@@ -542,5 +542,71 @@ export const GUIDES: Guide[] = [
       null,
       null
     ]
+  },
+  {
+    "id": "hazirlik-ev-agi-bilgi-noktasi",
+    "title": "Ev ağında bilgi noktası (Wi-Fi ve mesh)",
+    "tag": "İLETİŞİM",
+    "summary": "İnternet kesilse de evdeki Wi-Fi ya da mesh sistemi elektrik aldıkça çalışır; bilgi noktasını bu ağa bağlarsanız ağın kapsadığı her yerden Akıl Çantası'na ulaşılır.",
+    "steps": [
+      "Bilgi noktası olacak cihazı seçin: Akıl Çantası kurulu bir telefon, bir bilgisayar ya da Raspberry Pi. Mümkünse ağa kabloyla bağlayın; kablo Wi-Fi'dan daha sağlamdır.",
+      "Cihazı evdeki Wi-Fi ağına bağlayın ve bilgi noktasını başlatın (Araçlar → Paketler ve paylaşım → Bilgi noktası). Ekranda http://192.168.x.x:8080 gibi bir adres ve QR kod görünür.",
+      "Router'ın ayar sayfasına girin. Adres çoğu zaman 192.168.1.1 ya da 192.168.50.1'dir; ASUS'ta router.asus.com da açılır. Giriş bilgisi router'ın altındaki etikettedir.",
+      "Bilgi noktası cihazına sabit adres verin. ASUS'ta LAN → DHCP Sunucusu bölümünde cihazı listeden seçip \"elle atanan IP\" olarak ekleyin; diğer markalarda bu ayar \"DHCP rezervasyonu\" ya da \"statik kiralama\" adıyla geçer. Böylece adres hiç değişmez.",
+      "Adresi ve QR kodu yazdırın ya da kâğıda yazın. Evdekilere ve bina girişine bırakın: internet olmasa da herkes bu adresi tarayıcıda açarak rehberlere, haritaya, kütüphaneye ve panoya ulaşır.",
+      "Komşulara ayrı bir misafir ağı açacaksanız, misafirlerin yerel ağa erişimine izin verin. ASUS'ta misafir ağı ayarlarındaki \"Access Intranet\" (yerel ağa erişim) varsayılan olarak kapalıdır; açmazsanız misafirler bilgi noktasını göremez. Mesh kullanıyorsanız misafir ağını uydu cihazlara da yayınlayın (ASUS: \"Guest network on AiMesh\").",
+      "\"AP yalıtımı\" (AP Isolation / istemci yalıtımı) ayarı açıksa kapatın. Açıkken Wi-Fi'a bağlı cihazlar birbirini göremez.",
+      "Router'ı ve mesh uydularını elektrik kesintisine hazırlayın: küçük bir kesintisiz güç kaynağına (UPS) ya da uygun DC çıkışlı bir güç istasyonuna bağlayın. Adaptör etiketindeki voltajı (ör. 12 V, 19 V) kontrol edin; uymayan voltaj cihazı bozar.",
+      "Telefon bilgi noktasıysa şarja takılı tutun, pil tasarrufu ayarlarında Akıl Çantası'nın arka planda çalışmasına izin verin.",
+      "Şimdi deneyin: internet bağlantısını (modem kablosunu) çıkarın, başka bir telefondan adresi açın ve panoya bir deneme mesajı yazın. Her şey çalışıyorsa kablolarını geri takın."
+    ],
+    "dont": [
+      "Misafir ağına parola koymadan yerel ağ erişimini açmayın; ağdaki diğer cihazlarınız da görünür olur. Afette paylaşmak için kolay hatırlanan bir parola belirleyin.",
+      "Router'ı uymayan voltajlı bir adaptör ya da powerbank ile beslemeyin.",
+      "Bilgi noktası adresini yalnız telefonunuzda tutmayın; kâğıda da yazın."
+    ],
+    "keywords": [
+      "ev ağı",
+      "wifi",
+      "wi-fi",
+      "mesh",
+      "asus",
+      "aimesh",
+      "router",
+      "modem",
+      "bilgi noktası",
+      "yerel ağ",
+      "internet yokken wifi",
+      "misafir ağı",
+      "sabit ip",
+      "dhcp",
+      "ups",
+      "kesintisiz güç kaynağı",
+      "komşularla paylaşım",
+      "ev agi",
+      "bilgi noktasi"
+    ],
+    "sources": [
+      "ASUS — Kablosuz router'da misafir ağı kurulumu (Access Intranet, AiMesh)",
+      "ASUS — Misafir ağının yerel ağa erişimini ayarlama",
+      "Akıl Çantası — Bilgi noktası belgesi (server/README)"
+    ],
+    "reviewed": false,
+    "checked": {
+      "date": "2026-11-07",
+      "note": "ASUS SSS 1042732 ve 1009857: misafir ağında Access Intranet varsayılan kapalı, yalnız kablosuz router modunda var; misafir ağı AiMesh uydularına eşitlenebilir. Sabit IP ve AP yalıtımı genel router ayarlarıdır."
+    },
+    "art": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
   }
 ];

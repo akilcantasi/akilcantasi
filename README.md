@@ -1,7 +1,15 @@
 # Akıl Çantası
 
 İnternet ve şebeke yokken de çalışan, açık kaynak afet bilgi uygulaması. Telefonda
-(Android APK ya da tarayıcı), bilgisayarda ya da bir Raspberry Pi'de çalışır. Altı sekme:
+(Android APK ya da tarayıcı), bilgisayarda ya da bir Raspberry Pi'de çalışır.
+
+![Akıl Çantası kullanımda: Fener, Rehber, Harita, İletişim, Kütüphane, Araçlar](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/onizleme.webp)
+
+**Kurulum:** Android APK'yı [Releases](https://github.com/akilcantasi/akilcantasi/releases) sayfasından
+indirip kurun. Bilgisayarda ya da Raspberry Pi'de bilgi noktası olarak çalıştırmak için
+[aşağıya](#1-bilgisayarda-çalıştırma--bilgi-noktası-windows--macos--linux) bakın.
+
+Altı sekme:
 
 - **Fener** — cihazda çalışan yapay zekâ asistanı (GGUF modeli, wllama/llama.cpp). Rehberlerden ve
   Kütüphane'deki ZIM arşivlerinden kaynak göstererek cevap verir. Model yoksa rehberden cevap verir.
@@ -19,6 +27,22 @@
 - **Araçlar** — afet çantası kontrol listesi, su ve yiyecek hesabı, stok listesi, pil ve şarj, pusula,
   çocuk köşesi, acil durum cümleleri (çok dilli), radyo rehberi, **Paketler ve paylaşım**
   (indirme, içe aktarma, bilgi noktası), ayarlar.
+
+### Harita: yer adı araması ve yön
+
+İlçe, mahalle ya da köy adını yazın (Türkçe harf yazmadan da bulur); harita oraya gider, **Yön göster**
+pusulayla kuş uçuşu yönü ve uzaklığı gösterir. Hepsi internetsiz, telefondaki haritadan.
+
+![Harita: yer adı araması, sonuç ve Yön göster](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/harita.webp)
+
+### Enkaz modu ve enkaz arama
+
+Enkaz altında kalan kişi **Enkaz modu**nu tek dokunuşla başlatır: 112'ye ve yakınlarına konumlu SMS
+gider, telefon `AK-XXXXXX` kodlu Bluetooth işareti yayar, aralıklı SOS sesi ve ışığı verir. Kurtarıcı
+**Enkaz arama** ile yakındaki işaretleri duyar, sinyal gücüne bakarak yaklaşır ve enkazdaki telefona
+şebekesiz kısa mesaj gönderir; yanıt geri gelir. Ayrıntı: [docs/ENKAZ.md](docs/ENKAZ.md).
+
+![Enkaz modu ve kurtarıcı tarafında Enkaz arama](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/enkaz.webp)
 
 Lisans: GPL-3.0-or-later. İçerik lisansları uygulamada *Araçlar → Paketler ve paylaşım → Kaynaklar
 ve lisanslar* bölümündedir.
@@ -241,6 +265,16 @@ Ezilme (crush) sendromu, turnike kullanımı, çamaşır suyuyla su arıtma daml
 süreleri, sıcak çarpması, hipotermi, burun kanaması, jeneratör mesafesi (karbonmonoksit), düdük
 işaretleri ve 112 yönlendirmeleri, ilaç ve zehirlenme rehberleri, kaynak gösterimleri. Rehberler:
 `src/content/guides/*.ts`; kaynak karşılaştırmaları: `docs/dogrulama/`.
+
+## Ekran görüntüleri
+
+| Fener | Rehber | Harita |
+|---|---|---|
+| ![Fener: kaynaklı cevap](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/fener.png) | ![Rehber: çizimli adımlar](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/rehber.png) | ![Harita: afet noktaları](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/harita.png) |
+| **İletişim** | **Kütüphane** | **Araçlar** |
+| ![İletişim: mesaj panosu ve kayıp ilanı](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/iletisim.png) | ![Kütüphane: makale okuma](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/kutuphane.png) | ![Araçlar](https://raw.githubusercontent.com/akilcantasi/akilcantasi/main/docs/images/araclar.png) |
+
+Görüntüler örnek verilerle üretildi; yeniden üretmek için: [tools/onizleme/](tools/onizleme/README.md).
 
 ## Teşekkür
 
