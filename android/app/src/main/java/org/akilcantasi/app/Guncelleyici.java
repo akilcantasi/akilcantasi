@@ -138,6 +138,8 @@ public final class Guncelleyici {
             d.put("kurulumIzni", Build.VERSION.SDK_INT < 26 || c.getPackageManager().canRequestPackageInstalls());
             d.put("olculuAg", olculu(c));
             d.put("enkazAcik", EnkazServisi.aktif(c));
+            // Samsung'un "Otomatik Engelleyici"si (One UI 6+) mağaza dışından kurulumu sessizce engeller
+            d.put("samsung", "samsung".equalsIgnoreCase(Build.MANUFACTURER));
         } catch (Exception ignored) {}
         return d;
     }

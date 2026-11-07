@@ -93,6 +93,12 @@ export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?
         </p>
       )}
       {d.hata && !msg && <p class="bad">{HATA_YAZI[d.hata] ?? d.hata}</p>}
+      {y.hazir && d.samsung && (yedek || d.hata) && (
+        <p data-testid="gn-samsung">
+          Samsung telefonlarda <b>Otomatik Engelleyici</b> açıksa kurulum sessizce engellenir. Ayarlar → Güvenlik ve gizlilik →
+          Otomatik Engelleyici'yi kurulum için kapatın, "Kur"a yeniden basın, sonra isterseniz yeniden açın.
+        </p>
+      )}
       {msg && <p class={msg.bad ? 'bad' : ''}>{msg.t}</p>}
       <div class="gn-btns">
         {y.hazir ? (

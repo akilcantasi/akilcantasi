@@ -13,6 +13,8 @@ export interface GuncellemeDurum {
   hata?: string;
   yeni?: { surum: string; boyut: number; notlar: string; sayfa: string; hazir: boolean };
   kurulumIzni: boolean;
+  /** Samsung telefon: Otomatik Engelleyici kurulumu engelleyebilir */
+  samsung?: boolean;
   olculuAg: boolean;
   enkazAcik: boolean;
 }
