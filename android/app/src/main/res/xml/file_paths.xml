@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Yalnızca APK paylaşım kopyası (cache/share/) dışarı verilir -->
+<!-- Dışarı verilenler: APK paylaşım kopyası (cache/share/) ve güncelleme APK'sı (cache/guncelleme/) -->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <cache-path name="share" path="share/" />
+    <!-- İndirilen güncelleme APK'sı: yalnız "Sistem yükleyicisiyle kur" düğmesinde yükleyiciye verilir -->
+    <cache-path name="guncelleme" path="guncelleme/" />
 </paths>

@@ -1,5 +1,6 @@
 package org.akilcantasi.app;
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -10,7 +11,10 @@ import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.net.ConnectivityManager;
+import android.net.Uri;
 import android.os.Build;
+
+import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -20,6 +24,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
@@ -59,6 +64,10 @@ public final class Guncelleyici {
     private static volatile String hata = null;
     /** "" | "denetleniyor" | "indiriliyor" | "kuruluyor" */
     private static volatile String is = "";
+    /** "kuruluyor"a geçilen an: sonuç hiç gelmezse durum takılı kalmasın */
+    private static volatile long kurZamani = 0;
+    /** Öndeki etkinlik (GuncellemePlugin günceller): onay penceresi buradan açılır */
+    static volatile WeakReference<Activity> onde = new WeakReference<>(null);
 
     private Guncelleyici() {}
 
@@ -108,6 +117,9 @@ public final class Guncelleyici {
             String kur = kurulu(c);
             d.put("kurulu", kur);
             d.put("sonDenetim", s.getLong("sonDenetim", 0));
+            // Kurulum sonucu 45 sn içinde gelmediyse (onay penceresi açılamadı ya da sistem
+            // yanıt vermedi) "kuruluyor" takılı kalmasın: düğme yeniden kullanılabilsin
+            if ("kuruluyor".equals(is) && System.currentTimeMillis() - kurZamani > 45_000) is = "";
             d.put("is", is);
             d.put("alinan", alinan);
             d.put("toplam", toplam);
@@ -386,6 +398,7 @@ public final class Guncelleyici {
                 ss.commit(PendingIntent.getBroadcast(c, 31, i, fl).getIntentSender());
             }
             is = "kuruluyor";
+            kurZamani = System.currentTimeMillis();
             hata = null;
             bildir(c);
             return null;
@@ -403,18 +416,67 @@ public final class Guncelleyici {
             int st = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
             if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 Intent onay = i.getParcelableExtra(Intent.EXTRA_INTENT);
-                if (onay != null) {
-                    onay.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    try {
-                        c.startActivity(onay);
-                    } catch (Exception ignored) {}
-                }
+                if (onay != null && onayAc(c, onay)) return;
+                // Onay penceresi açılamadı (Android'in arka plan kısıtları): kullanıcı "Sistem
+                // yükleyicisiyle kur" düğmesine basabilsin
+                is = "";
+                hata = "onay-acilamadi";
+                bildir(c);
                 return;
             }
             is = "";
             // Başarılıysa uygulama zaten yeniden başlar; buraya genelde hata durumunda gelinir
             if (st != PackageInstaller.STATUS_SUCCESS) hata = st == PackageInstaller.STATUS_FAILURE_ABORTED ? "iptal" : "kurulamadi";
             bildir(c);
+        }
+    }
+
+    /**
+     * Sistemin onay penceresini açar. Önce öndeki etkinlikten (alıcının bağlamından açmak yeni
+     * Android'lerde arka plan kısıtına takılabilir), olmazsa uygulama bağlamından.
+     */
+    static boolean onayAc(Context c, Intent onay) {
+        Activity a = onde.get();
+        if (a != null && !a.isFinishing()) {
+            try {
+                a.startActivity(onay);
+                return true;
+            } catch (Exception ignored) {}
+        }
+        try {
+            onay.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(onay);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Yedek yol: indirilen APK'yı Android'in kendi yükleyicisiyle açar (her zamanki "Yükle"
+     * ekranı). Yalnız kullanıcı düğmeye basınca çağrılır; APK aynı denetimlerden geçer.
+     */
+    public static String sistemleKur(Activity a) {
+        Context c = a.getApplicationContext();
+        if (EnkazServisi.aktif(c)) return "enkaz-acik";
+        if (Build.VERSION.SDK_INT >= 26 && !c.getPackageManager().canRequestPackageInstalls()) return "izin-gerekli";
+        File f = apk(c);
+        if (!f.isFile() || p(c).getString("hazirSurum", "").isEmpty()) return "hazir-degil";
+        if (apkDenetle(c, f) != null) {
+            f.delete();
+            p(c).edit().remove("hazirSurum").apply();
+            return "hazir-degil";
+        }
+        try {
+            Uri u = FileProvider.getUriForFile(c, c.getPackageName() + ".fileprovider", f);
+            Intent i = new Intent(Intent.ACTION_VIEW).setDataAndType(u, "application/vnd.android.package-archive");
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            a.startActivity(i);
+            hata = null;
+            bildir(c);
+            return null;
+        } catch (Exception e) {
+            return "kurulamadi";
         }
     }
 

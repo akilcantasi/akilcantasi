@@ -46,6 +46,7 @@ function kopru() {
         },
         async indir() { window.__calls.push(['indir']); st.yeni.hazir = true; setTimeout(emit, 50); return st; },
         async kur() { window.__calls.push(['kur']); if (st.enkazAcik) return { hata: 'enkaz-acik' }; if (!st.kurulumIzni) return { hata: 'izin-gerekli' }; st.is = 'kuruluyor'; setTimeout(emit, 20); return {}; },
+        async kurSistem() { window.__calls.push(['kurSistem']); return {}; },
         async kurulumIzni() { window.__calls.push(['kurulumIzni']); st.kurulumIzni = true; return { acildi: true }; },
         async addListener(ev, fn) { subs.push(fn); return { remove() {} }; },
       },
@@ -77,6 +78,13 @@ const yeni = async (opt) => {
     await p.click(tid('gn-kur'));
     await p.waitForFunction(() => /Kuruluyor/.test(document.querySelector('[data-testid="gn-bant"]')?.textContent || ''));
     assert.equal((await calls('kur')).length, 1);
+  });
+  await step('Onay ekranı açılmazsa yedek "Sistem yükleyicisiyle kur" çıkar ve yalnız basınca çağrılır', async () => {
+    await p.waitForSelector(tid('gn-kur-sistem'), { timeout: 12000 });
+    assert.equal((await calls('kurSistem')).length, 0, 'yedek kendiliğinden çağrılmamalı');
+    await p.click(tid('gn-kur-sistem'));
+    await p.waitForFunction(() => window.__calls.some((c) => c[0] === 'kurSistem'));
+    assert.match(await p.textContent(tid('gn-bant')), /Güncelle/);
   });
   await step('Ayarlar: bölüm görünür, bant orada gizlenir', async () => {
     await p.goto(base + '?tab=araclar&tool=ayarlar');

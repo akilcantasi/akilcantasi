@@ -35,6 +35,21 @@ public class GuncellemePlugin extends Plugin {
     }
 
     @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        // Onay penceresi öndeki etkinlikten açılsın; "Bu kaynaktan izin ver" ekranından dönünce
+        // izin durumu JS'e hemen yansısın
+        Guncelleyici.onde = new java.lang.ref.WeakReference<>(getActivity());
+        Guncelleyici.bildir(getContext());
+    }
+
+    @Override
+    protected void handleOnPause() {
+        Guncelleyici.onde = new java.lang.ref.WeakReference<>(null);
+        super.handleOnPause();
+    }
+
+    @Override
     protected void handleOnDestroy() {
         Guncelleyici.dinleyiciler.remove(dinleyici);
         super.handleOnDestroy();
@@ -71,6 +86,16 @@ public class GuncellemePlugin extends Plugin {
     public void kur(PluginCall call) {
         String h = Guncelleyici.kur(getContext());
         JSObject r = new JSObject();
+        if (h != null) r.put("hata", h);
+        call.resolve(r);
+    }
+
+    /** Yedek: Android'in kendi yükleyicisiyle kur (kullanıcı düğmeye basınca) → { hata? } */
+    @PluginMethod
+    public void kurSistem(PluginCall call) {
+        JSObject r = new JSObject();
+        android.app.Activity a = getActivity();
+        String h = a == null ? "kurulamadi" : Guncelleyici.sistemleKur(a);
         if (h != null) r.put("hata", h);
         call.resolve(r);
     }

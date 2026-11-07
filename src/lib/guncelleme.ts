@@ -40,6 +40,8 @@ export const guncelleme = {
   denetle: (kendiliginden = false) => call<GuncellemeDurum>('denetle', { kendiliginden }),
   indir: () => call<GuncellemeDurum>('indir'),
   kur: () => call<{ hata?: string }>('kur'),
+  /** Yedek: Android'in kendi yükleyicisiyle kur (onay penceresi açılmazsa) */
+  kurSistem: () => call<{ hata?: string }>('kurSistem'),
   kurulumIzni: () => call<{ acildi: boolean }>('kurulumIzni'),
   dinle(fn: (d: GuncellemeDurum) => void): () => void {
     const p = plugin();
@@ -75,6 +77,7 @@ export const HATA_YAZI: Record<string, string> = {
   'eski-surum': 'İnen dosya kurulu sürümden yeni değil.',
   'apk-okunamadi': 'İnen dosya okunamadı.',
   kurulamadi: 'Kurulum tamamlanamadı.',
+  'onay-acilamadi': 'Kurulum onay ekranı açılamadı. "Sistem yükleyicisiyle kur" düğmesini deneyin.',
   iptal: 'Kurulum iptal edildi.',
   'enkaz-acik': 'Enkaz modu açıkken güncelleme kurulmaz.',
   'izin-gerekli': 'Önce bu uygulamaya "uygulama yükleme" izni verin.',

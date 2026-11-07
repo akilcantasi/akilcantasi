@@ -31,6 +31,8 @@ export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?
   const [gizlendi, setGizli] = useState(false);
   // Çift dokunuşta iki kurulum oturumu açılmasın (durum "kuruluyor"a geçene kadar)
   const [basildi, setBasildi] = useState(false);
+  // "Kur"dan sonra bir şey olmazsa (onay penceresi açılmadı) yedek yol görünür
+  const [yedek, setYedek] = useState(false);
   const y = d.yeni;
   // Sürüm bilgisi sonradan gelebilir: erteleme her çizimde denetlenir
   if (!y || (bant && (gizlendi || ertelendi(y.surum)))) return null;
@@ -47,11 +49,24 @@ export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?
     setBasildi(true);
     try {
       const r = await guncelleme.kur();
-      if (r?.hata) setMsg({ t: HATA_YAZI[r.hata] ?? 'Kurulamadı.', bad: true });
-      else setMsg({ t: 'Kuruluyor… Uygulama birkaç saniye içinde kapanıp yeni sürümle açılacak.' });
+      if (r?.hata) {
+        setMsg({ t: HATA_YAZI[r.hata] ?? 'Kurulamadı.', bad: true });
+        if (r.hata !== 'enkaz-acik' && r.hata !== 'hazir-degil') setYedek(true);
+      } else {
+        setMsg({ t: 'Kuruluyor… Bir onay ekranı çıkarsa "Güncelle"ye basın. Uygulama kapanıp yeni sürümle açılır.' });
+        // Birkaç saniye içinde ne onay ekranı ne de kapanma olduysa yedek yolu göster
+        setTimeout(() => setYedek(true), 8000);
+      }
     } finally {
       setBasildi(false);
     }
+  };
+
+  const kurSistem = async () => {
+    setMsg(null);
+    const r = await guncelleme.kurSistem();
+    if (r?.hata) setMsg({ t: HATA_YAZI[r.hata] ?? 'Kurulamadı.', bad: true });
+    else setMsg({ t: 'Android\'in yükleme ekranında "Güncelle"ye basın.' });
   };
 
   return (
@@ -81,9 +96,16 @@ export function GuncellemeKarti({ d, bant = false }: { d: GuncellemeDurum; bant?
       {msg && <p class={msg.bad ? 'bad' : ''}>{msg.t}</p>}
       <div class="gn-btns">
         {y.hazir ? (
-          <button class="btn primary" data-testid="gn-kur" disabled={d.enkazAcik || d.is === 'kuruluyor' || basildi} onClick={kur}>
-            {d.is === 'kuruluyor' || basildi ? 'Kuruluyor…' : 'Kur'}
-          </button>
+          <>
+            <button class="btn primary" data-testid="gn-kur" disabled={d.enkazAcik || (d.is === 'kuruluyor' && !yedek) || basildi} onClick={kur}>
+              {(d.is === 'kuruluyor' && !yedek) || basildi ? 'Kuruluyor…' : 'Kur'}
+            </button>
+            {(yedek || d.hata === 'onay-acilamadi' || d.hata === 'kurulamadi') && !d.enkazAcik && (
+              <button class="btn" data-testid="gn-kur-sistem" onClick={kurSistem}>
+                Sistem yükleyicisiyle kur
+              </button>
+            )}
+          </>
         ) : (
           !iniyor && (
             <button class="btn primary" data-testid="gn-indir" onClick={() => guncelleme.indir()}>
